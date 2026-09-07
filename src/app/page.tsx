@@ -8,7 +8,7 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(isAuthenticated() ? '/inspections' : '/login');
+    router.replace(isAuthenticated() ? '/dashboard' : '/login');
   }, [router]);
 
   return null;

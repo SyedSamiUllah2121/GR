@@ -147,6 +147,102 @@ export interface Inspection {
   itemIds?: number[];
 }
 
+// ---------------------------------------------------------------------------
+// Maintenance
+// ---------------------------------------------------------------------------
+
+/**
+ * What kind of kit or fabric a maintenance job concerns. Deliberately its own
+ * taxonomy rather than the checklist's reason groups: those describe why a
+ * check failed, these describe what needs a technician.
+ */
+export type MaintenanceCategory =
+  | 'REFRIGERATION'
+  | 'AC_VENTILATION'
+  | 'ELECTRICAL'
+  | 'PLUMBING'
+  | 'GAS'
+  | 'COOKING_EQUIPMENT'
+  | 'FIRE_SAFETY'
+  | 'STRUCTURAL'
+  | 'PEST_CONTROL'
+  | 'OTHER';
+
+export const MAINTENANCE_CATEGORY_KEYS: MaintenanceCategory[] = [
+  'REFRIGERATION',
+  'AC_VENTILATION',
+  'ELECTRICAL',
+  'PLUMBING',
+  'GAS',
+  'COOKING_EQUIPMENT',
+  'FIRE_SAFETY',
+  'STRUCTURAL',
+  'PEST_CONTROL',
+  'OTHER',
+];
+
+export const MAINTENANCE_CATEGORY_LABEL: Record<MaintenanceCategory, string> = {
+  REFRIGERATION: 'Refrigeration',
+  AC_VENTILATION: 'AC & ventilation',
+  ELECTRICAL: 'Electrical',
+  PLUMBING: 'Plumbing & drainage',
+  GAS: 'Gas',
+  COOKING_EQUIPMENT: 'Cooking equipment',
+  FIRE_SAFETY: 'Fire safety',
+  STRUCTURAL: 'Building & fabric',
+  PEST_CONTROL: 'Pest control',
+  OTHER: 'Other',
+};
+
+/**
+ * Where a job has got to. Never stored — it is read off the timestamps by
+ * `statusOf`, so the two can never contradict each other.
+ */
+export type MaintenanceStatus = 'reported' | 'in-progress' | 'completed';
+
+export const MAINTENANCE_STATUS_LABEL: Record<MaintenanceStatus, string> = {
+  reported: 'Reported',
+  'in-progress': 'In progress',
+  completed: 'Completed',
+};
+
+/** One problem raised at a branch, and the work done about it. */
+export interface MaintenanceJob {
+  id: string;
+  branchName: string;
+  /** One line naming the problem, e.g. "Dining area AC not cooling". */
+  title: string;
+  /** What is wrong, in the reporter's own words. */
+  details: string;
+  /** The unit or place concerned, e.g. "Split AC 2 — dining area". */
+  equipment: string;
+  category: MaintenanceCategory;
+  /** How urgent, on the same scale the checklist uses. */
+  priority: Severity;
+
+  reportedBy: string;
+  /** ISO timestamp the problem was logged. */
+  reportedAt: string;
+
+  /** ISO timestamp work began. Null until someone starts it. */
+  startedAt: string | null;
+  /** ISO timestamp work finished. Null until someone ends it. */
+  completedAt: string | null;
+
+  /** Who carried out the work — engineer, contractor or staff member. */
+  attendedBy: string | null;
+  /** What was actually done, recorded when the job is ended. */
+  resolutionNote: string | null;
+  /** What it cost, when that is known. Left out of totals when null. */
+  cost: number | null;
+  /** Photo of the fault or the repair. */
+  photo: string | null;
+
+  /** The inspection finding that raised this, when it came from one. */
+  sourceInspectionId?: string;
+  sourceItemId?: number;
+}
+
 export const REASON_GROUPS: Record<ReasonGroup, string[]> = {
   STAFF: [
     'Staff not provided with the item',
