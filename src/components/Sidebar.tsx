@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import {usePathname, useRouter} from 'next/navigation';
-import {ClipboardList, Plus, LogOut} from 'lucide-react';
+import {ClipboardList, ListChecks, Plus, LogOut} from 'lucide-react';
 import {setAuthenticated} from '../services/storage';
 
 export const Sidebar: React.FC = () => {
@@ -12,6 +12,7 @@ export const Sidebar: React.FC = () => {
 
   const isRecordsActive = pathname === '/' || pathname === '/inspections';
   const isNewActive = pathname === '/inspections/new';
+  const isChecklistActive = pathname === '/checklist';
 
   const handleSignOut = () => {
     setAuthenticated(false);
@@ -99,6 +100,18 @@ export const Sidebar: React.FC = () => {
           >
             <Plus className="w-4 h-4 shrink-0" />
             <span>New Inspection</span>
+          </Link>
+          <Link
+            id="sidebar-nav-checklist"
+            href="/checklist"
+            className={`flex items-center gap-3 px-4 py-3 rounded-md text-sm font-medium transition-all cursor-pointer text-left ${
+              isChecklistActive
+                ? 'bg-[#ffffff15] border-l-4 border-[#F5F3EC] text-[#F5F3EC]'
+                : 'opacity-60 hover:opacity-100 text-[#F5F3EC] transition-opacity'
+            }`}
+          >
+            <ListChecks className="w-4 h-4 shrink-0" />
+            <span>Checklist</span>
           </Link>
         </div>
       </nav>

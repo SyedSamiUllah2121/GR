@@ -1,19 +1,33 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Calendar, Clock, ChevronRight, AlertCircle, PlayCircle, Trash2, Edit3, FileText } from 'lucide-react';
-import { Inspection, TemplateKey } from '../types';
-import { getInspections, getActiveDraft, clearActiveDraft, subscribeToStorage } from '../services/storage';
-import { TEMPLATES } from '../data/templates';
+import { Search, Plus, Calendar, Clock, ChevronRight, AlertCircle, PlayCircle, Trash2, Edit3, FileText, LayoutList } from 'lucide-react';
+import { Inspection, Item } from '../types';
+import {
+  clearActiveDraft,
+  deleteInspection,
+  getActiveDraft,
+  getInspections,
+  subscribeToStorage,
+} from '../services/storage';
+import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
+import { useChecklist } from '../hooks/useChecklist';
+import {
+  buildFailureHistory,
+  computePriority,
+  countBySeverity,
+} from '../services/priority';
+import { PriorityBadge } from './PriorityBadge';
 import { useRouter } from 'next/navigation';
 import { ScorePill } from './ScorePill';
+import { formatDate } from '../services/reportModel';
 
 export const RecordsListScreen: React.FC = () => {
   const router = useRouter();
+  const checklist = useChecklist();
   const [inspections, setInspections] = useState<Inspection[]>(() => getInspections());
   const [activeDraft, setActiveDraft] = useState<Inspection | null>(() => getActiveDraft());
   const [searchQuery, setSearchQuery] = useState('');
-  const [templateFilter, setTemplateFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
@@ -25,26 +39,51 @@ export const RecordsListScreen: React.FC = () => {
     return subscribeToStorage(update);
   }, []);
 
-  // Filter submitted inspections
-  const submittedInspections = inspections.filter((i) => i.status === 'submitted');
+  // Submitted records only, newest visit first. The store keeps insertion
+  // order, which drifts from date order as soon as a record is edited.
+  const submittedInspections = inspections
+    .filter((i) => i.status === 'submitted')
+    .sort((a, b) => (a.date === b.date ? b.id.localeCompare(a.id) : b.date.localeCompare(a.date)));
 
-  const filteredInspections = submittedInspections.filter((item) => {
-    const matchesSearch = item.branchName.toLowerCase().includes(searchQuery.toLowerCase().trim());
-    const matchesTemplate = templateFilter === 'all' || item.templateKey === templateFilter;
-    return matchesSearch && matchesTemplate;
-  });
+  const filteredInspections = submittedInspections.filter((item) =>
+    item.branchName.toLowerCase().includes(searchQuery.toLowerCase().trim())
+  );
+
+  // The items a record covered — frozen on submit, so a checklist edit does
+  // not change what a past record counts
+  const itemsFor = (inspection: Inspection) =>
+    inspection.itemIds && inspection.itemIds.length > 0
+      ? inspection.itemIds.map((id) => checklist.getItem(id)).filter((i): i is Item => !!i)
+      : checklist.items;
+
+  // Priority mix for one record, scored against that branch's earlier visits
+  const prioritiesFor = (inspection: Inspection) => {
+    const history = buildFailureHistory(inspections, inspection.branchName, inspection);
+    return countBySeverity(
+      itemsFor(inspection).flatMap((item) => {
+        const answer = inspection.answers[item.id];
+        if (answer?.status !== 'no') return [];
+        return [{ item, answer, priority: computePriority(item, answer, history) }];
+      })
+    );
+  };
 
   const totalPages = Math.max(1, Math.ceil(filteredInspections.length / pageSize));
+  // Deleting a draft or narrowing a search can leave currentPage past the end,
+  // which rendered an empty table reading "no records found"
+  const page = Math.min(currentPage, totalPages);
   const paginatedInspections = filteredInspections.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
+    (page - 1) * pageSize,
+    page * pageSize
   );
 
   const handleDiscardDraft = () => {
-    if (window.confirm('Discard the unfinished draft?')) {
-      clearActiveDraft();
-      setActiveDraft(null);
-    }
+    if (!activeDraft || !window.confirm('Discard the unfinished draft?')) return;
+    // A draft is written to the records store as it is answered, so clearing
+    // the draft slot alone would leave the half-finished row behind
+    deleteInspection(activeDraft.id);
+    clearActiveDraft();
+    setActiveDraft(null);
   };
 
   return (
@@ -73,19 +112,9 @@ export const RecordsListScreen: React.FC = () => {
             />
           </div>
 
-          <select
-            id="records-template-filter"
-            value={templateFilter}
-            onChange={(e) => {
-              setTemplateFilter(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="bg-white border border-[#DEDACB] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#2F5233] text-[#635E4F] font-medium"
-          >
-            <option value="all">All Templates</option>
-            <option value="kitchen">Kitchen</option>
-            <option value="frontofhouse">Front of House</option>
-          </select>
+          <span className="text-xs text-[#635E4F] font-medium whitespace-nowrap">
+            {FULL_CHECKLIST_LABEL} • {checklist.total} items
+          </span>
         </div>
       </header>
 
@@ -107,7 +136,7 @@ export const RecordsListScreen: React.FC = () => {
                   <span className="font-bold text-[#8A6318]">{activeDraft.branchName}</span>
                 </p>
                 <p className="text-xs text-[#635E4F]">
-                  {TEMPLATES[activeDraft.templateKey]?.label} • Started {activeDraft.date} at{' '}
+                  {FULL_CHECKLIST_LABEL} • Started {formatDate(activeDraft.date)} at{' '}
                   {activeDraft.time}
                 </p>
               </div>
@@ -143,7 +172,7 @@ export const RecordsListScreen: React.FC = () => {
                     Branch Name
                   </th>
                   <th className="px-6 py-4 text-[10px] uppercase tracking-wider text-[#635E4F] font-bold border-b border-[#DEDACB]">
-                    Checklist Template
+                    Flagged Items
                   </th>
                   <th className="px-6 py-4 text-[10px] uppercase tracking-wider text-[#635E4F] font-bold border-b border-[#DEDACB]">
                     Date &amp; Time
@@ -162,26 +191,25 @@ export const RecordsListScreen: React.FC = () => {
                     <td colSpan={5} className="py-12 px-6 text-center text-sm text-[#635E4F]">
                       <p className="font-medium text-[#242217]">No inspection records found</p>
                       <p className="text-xs text-[#635E4F] mt-1">
-                        {searchQuery || templateFilter !== 'all'
-                          ? 'Try adjusting your search query or checklist filter.'
+                        {searchQuery
+                          ? 'Try adjusting your search query.'
                           : 'Start a new weekly inspection to begin logging records.'}
                       </p>
-                      {searchQuery || templateFilter !== 'all' ? (
+                      {searchQuery ? (
                         <button
-                          onClick={() => {
-                            setSearchQuery('');
-                            setTemplateFilter('all');
-                          }}
+                          onClick={() => setSearchQuery('')}
                           className="mt-3 text-xs text-[#2F5233] font-semibold hover:underline cursor-pointer"
                         >
-                          Clear filters
+                          Clear search
                         </button>
                       ) : null}
                     </td>
                   </tr>
                 ) : (
                   paginatedInspections.map((item) => {
-                    const tplLabel = TEMPLATES[item.templateKey]?.label || item.templateKey;
+                    const counts = prioritiesFor(item);
+                    const flagged =
+                      counts.critical + counts.high + counts.medium + counts.low;
                     return (
                       <tr
                         key={item.id}
@@ -190,7 +218,7 @@ export const RecordsListScreen: React.FC = () => {
                           if (item.status === 'draft') {
                             router.push(`/inspections/${item.id}/checklist`);
                           } else {
-                            router.push(`/inspections/${item.id}`);
+                            router.push(`/inspections/${item.id}/summary`);
                           }
                         }}
                         className="hover:bg-[#F9F8F4] transition-colors group cursor-pointer"
@@ -204,10 +232,29 @@ export const RecordsListScreen: React.FC = () => {
                           )}
                         </td>
                         <td className="px-6 py-5 text-sm text-[#635E4F]">
-                          {tplLabel}
+                          {flagged === 0 ? (
+                            <span className="text-[#2F5233] font-semibold">None</span>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {(['critical', 'high', 'medium', 'low'] as const)
+                                .filter((severity) => counts[severity] > 0)
+                                .map((severity) => (
+                                  <span
+                                    key={severity}
+                                    className="inline-flex items-center gap-1"
+                                    title={`${counts[severity]} ${severity}`}
+                                  >
+                                    <PriorityBadge severity={severity} size="sm" />
+                                    <span className="text-xs font-bold text-[#242217] tabular-nums">
+                                      {counts[severity]}
+                                    </span>
+                                  </span>
+                                ))}
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-5 text-sm text-[#635E4F]">
-                          {item.date} · {item.time}
+                          {formatDate(item.date)} · {item.time}
                         </td>
                         <td className="px-6 py-5 text-right">
                           <ScorePill score={item.score} />
@@ -226,10 +273,20 @@ export const RecordsListScreen: React.FC = () => {
                             </button>
                             <button
                               type="button"
+                              id={`view-summary-btn-${item.id}`}
+                              onClick={() => router.push(`/inspections/${item.id}/summary`)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#635E4F] hover:bg-[#DEDACB]/40 rounded-md transition-colors cursor-pointer"
+                              title="View the sectioned inspection summary"
+                            >
+                              <LayoutList className="w-3.5 h-3.5" />
+                              <span>Summary</span>
+                            </button>
+                            <button
+                              type="button"
                               id={`view-report-btn-${item.id}`}
                               onClick={() => router.push(`/inspections/${item.id}`)}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#635E4F] hover:bg-[#DEDACB]/40 rounded-md transition-colors cursor-pointer"
-                              title="View inspection summary report"
+                              title="View the full printable report"
                             >
                               <FileText className="w-3.5 h-3.5" />
                               <span>Report</span>
@@ -251,10 +308,10 @@ export const RecordsListScreen: React.FC = () => {
             </span>
             <div className="flex gap-2">
               <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(Math.max(1, page - 1))}
+                disabled={page <= 1}
                 className={`px-3 py-1 border border-[#DEDACB] rounded-md bg-white text-xs text-[#635E4F] transition-colors ${
-                  currentPage <= 1
+                  page <= 1
                     ? 'opacity-50 cursor-not-allowed'
                     : 'hover:bg-[#F5F3EC] cursor-pointer'
                 }`}
@@ -262,10 +319,10 @@ export const RecordsListScreen: React.FC = () => {
                 Previous
               </button>
               <button
-                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage >= totalPages}
+                onClick={() => setCurrentPage(Math.min(totalPages, page + 1))}
+                disabled={page >= totalPages}
                 className={`px-3 py-1 border border-[#DEDACB] rounded-md bg-white text-xs text-[#635E4F] transition-colors ${
-                  currentPage >= totalPages
+                  page >= totalPages
                     ? 'opacity-50 cursor-not-allowed'
                     : 'hover:bg-[#F5F3EC] cursor-pointer'
                 }`}

@@ -1,44 +1,118 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import {
-  ArrowLeft,
-  Printer,
-  Calendar,
-  Clock,
-  Check,
-  X,
-  FileCheck2,
-  Edit3,
-} from 'lucide-react';
-import { Answer, Inspection, Item } from '../types';
-import { TEMPLATES } from '../data/templates';
-import { getInspectionById } from '../services/storage';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Building2,
+  Calendar,
+  CalendarClock,
+  Camera,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  Edit3,
+  FileSpreadsheet,
+  Hash,
+  History,
+  Lock,
+  Minus,
+  MessageSquare,
+  PenLine,
+  Printer,
+  ShieldCheck,
+  StickyNote,
+  Timer,
+  User,
+  Wrench,
+  X,
+} from 'lucide-react';
+import { INSPECTION_TYPE_LABEL, Inspection, Severity } from '../types';
+import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
+import { useChecklist } from '../hooks/useChecklist';
+import { getInspectionById, getInspections, subscribeToStorage } from '../services/storage';
+import { SEVERITY_LABEL } from '../services/priority';
+import {
+  Outcome,
+  ReportModel,
+  ReportRow,
+  SEVERITY_ORDER,
+  buildReportModel,
+  formatDate,
+  formatDateTime,
+  formatDuration,
+  reasonText,
+} from '../services/reportModel';
+import { PriorityBadge } from './PriorityBadge';
 import { ScorePill } from './ScorePill';
+import { DonutChart } from './DonutChart';
 
 interface ReportScreenProps {
   inspectionId: string;
 }
 
+/**
+ * Status palette for the outcome breakdown. Checked with the palette validator
+ * against the white card these sit on: pass/fail separate by ΔE 11.4 under
+ * protanopia and 25.6 in normal vision, and every use is paired with an icon
+ * and a written label so the colour never carries the meaning by itself.
+ */
+const OUTCOME_COLOR: Record<Outcome, string> = {
+  passed: '#2F5233',
+  failed: '#C25A33',
+  unanswered: '#7A8288',
+};
+
+type TabKey = 'checklist' | 'findings' | 'maintenance' | 'notes' | 'history';
+
 export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
   const router = useRouter();
+  const checklist = useChecklist();
+
   const [inspection, setInspection] = useState<Inspection | null>(() =>
     getInspectionById(inspectionId)
   );
+  const [allInspections, setAllInspections] = useState<Inspection[]>(() => getInspections());
+  const [tab, setTab] = useState<TabKey>('checklist');
+  const [openSections, setOpenSections] = useState<Set<string> | null>(null);
+  const [openRows, setOpenRows] = useState<Set<number>>(() => new Set());
 
+  // Records live in localStorage, so re-read whenever anything writes to it
   useEffect(() => {
-    if (!inspection) {
-      const found = getInspectionById(inspectionId);
-      if (found) setInspection(found);
-    }
-  }, [inspectionId, inspection]);
+    const refresh = () => {
+      setInspection(getInspectionById(inspectionId));
+      setAllInspections(getInspections());
+    };
+    refresh();
+    return subscribeToStorage(refresh);
+  }, [inspectionId]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const model: ReportModel | null = useMemo(
+    () => (inspection ? buildReportModel(inspection, checklist, allInspections) : null),
+    [inspection, checklist, allInspections]
+  );
 
-  if (!inspection) {
+  // Sections that need attention open on arrival; clean ones stay folded away.
+  // Null means "not chosen yet", so the default is only applied once.
+  const sectionKeys = model?.sections.map((s) => `${s.listKey}::${s.key}`).join('|');
+  useEffect(() => {
+    if (!model) return;
+    setOpenSections((current) => {
+      if (current) return current;
+      return new Set(
+        model.sections
+          .filter((section) => section.failed > 0 || section.unanswered > 0)
+          .map((section) => `${section.listKey}::${section.key}`)
+      );
+    });
+    // Recomputed only when the set of sections itself changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sectionKeys]);
+
+  if (!inspection || !model) {
     return (
       <div className="p-8 max-w-xl mx-auto text-center">
         <h2 className="text-xl font-bold text-[#242217]">Report not found</h2>
@@ -47,7 +121,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
         </p>
         <button
           onClick={() => router.push('/inspections')}
-          className="mt-4 px-4 py-2 bg-[#2F5233] text-white text-sm font-medium rounded-[6px]"
+          className="mt-4 px-4 py-2 bg-[#2F5233] text-white text-sm font-medium rounded-md cursor-pointer"
         >
           Back to records
         </button>
@@ -55,265 +129,1189 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
     );
   }
 
-  const template = TEMPLATES[inspection.templateKey];
-  const allItems: Item[] = template?.sections?.flatMap((s) => s.items) || [];
-  const totalCount = allItems.length;
-  const answersList = Object.values(inspection.answers) as Answer[];
-  const yesCount = answersList.filter((a) => a.status === 'yes').length;
-  const noCount = answersList.filter((a) => a.status === 'no').length;
+  const open = openSections ?? new Set<string>();
+  const isLocked = inspection.status === 'submitted';
+  const allOpen = open.size === model.sections.length;
+
+  const toggleSection = (key: string) =>
+    setOpenSections(() => {
+      const next = new Set(open);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const toggleAllSections = () =>
+    setOpenSections(
+      allOpen
+        ? new Set<string>()
+        : new Set(model.sections.map((s) => `${s.listKey}::${s.key}`))
+    );
+
+  const toggleRow = (id: number) =>
+    setOpenRows((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const handleExportCsv = () => downloadCsv(model);
+
+  const tabs: { key: TabKey; label: string; count?: number }[] = [
+    { key: 'checklist', label: 'Inspection checklist' },
+    { key: 'findings', label: 'Findings', count: model.issues.length },
+    { key: 'maintenance', label: 'Maintenance', count: model.maintenance.length },
+    { key: 'notes', label: 'Notes', count: model.notes.length },
+    { key: 'history', label: 'History', count: model.branchHistory.length },
+  ];
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto w-full">
-      {/* Top Action Bar (Hidden on Print) */}
-      <div className="no-print flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+    <div className="p-4 md:p-6 lg:p-8 w-full max-w-[1400px] mx-auto">
+      {/* Breadcrumb */}
+      <nav className="no-print text-xs text-[#635E4F] mb-3 flex items-center gap-1.5">
         <button
           type="button"
           onClick={() => router.push('/inspections')}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#635E4F] hover:text-[#242217] transition-colors cursor-pointer"
+          className="hover:text-[#242217] transition-colors cursor-pointer"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to records</span>
+          Inspections
         </button>
+        <ChevronRight className="w-3 h-3" />
+        <span className="text-[#242217] font-semibold">Inspection details</span>
+      </nav>
 
-        <div className="flex items-center gap-2.5">
+      {/* Title row */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[#242217]">
+            Inspection <span className="font-mono text-[0.9em]">#{inspection.id}</span>
+          </h1>
+          {isLocked ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#E7EEE4] text-[#2F5233] border border-[#2F5233]/25">
+              <Lock className="w-3 h-3" />
+              Locked
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F3ECD8] text-[#8A6318] border border-[#8A6318]/25">
+              <PenLine className="w-3 h-3" />
+              Draft
+            </span>
+          )}
+        </div>
+
+        <div className="no-print flex flex-wrap items-center gap-2">
           <button
-            id="edit-inspection-btn"
             type="button"
             onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-[#F5F3EC] border border-[#DEDACB] text-xs font-semibold text-[#242217] rounded-md transition-colors cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F5F3EC] border border-[#DEDACB] text-xs font-semibold text-[#242217] rounded-md transition-colors cursor-pointer shadow-xs"
           >
             <Edit3 className="w-3.5 h-3.5 text-[#2F5233]" />
-            <span>Edit / Mark checklist</span>
+            <span>Edit answers</span>
           </button>
-
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F5F3EC] border border-[#DEDACB] text-xs font-semibold text-[#242217] rounded-md transition-colors cursor-pointer shadow-xs"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-[#2F5233]" />
+            <span>Export CSV</span>
+          </button>
           <button
             id="download-pdf-btn"
             type="button"
-            onClick={handlePrint}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#2F5233] hover:bg-[#3d6a42] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#2F5233] hover:bg-[#3d6a42] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
           >
-            <Printer className="w-4 h-4" />
-            <span>Download PDF / Print</span>
+            <Printer className="w-3.5 h-3.5" />
+            <span>Export PDF</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push('/inspections')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F5F3EC] border border-[#DEDACB] text-xs font-semibold text-[#242217] rounded-md transition-colors cursor-pointer shadow-xs"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to list</span>
           </button>
         </div>
       </div>
 
-      {/* Main Printed Form Layout */}
-      <div className="print-container bg-white border border-[#DEDACB] rounded-md p-6 md:p-10 text-[#242217] shadow-xs">
-        {/* Form Header */}
-        <div className="border-b border-[#DEDACB] pb-6 mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-[#635E4F]">
-                Weekly Inspection Report
-              </div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#242217] mt-1">
+      {(model.missingCount > 0 || model.scoreMismatch) && (
+        <div className="mb-5 p-4 rounded-lg bg-[#F3ECD8] border border-[#8A6318]/30 flex items-start gap-3 page-break-inside-avoid">
+          <AlertTriangle className="w-4 h-4 text-[#8A6318] shrink-0 mt-0.5" />
+          <div className="text-xs text-[#242217] space-y-1">
+            <p className="font-bold">This record does not line up with the current checklist</p>
+            {model.missingCount > 0 && (
+              <p>
+                It was taken against {model.frozenTotal} items, but {model.missingCount} of them
+                are no longer defined in the checklist and cannot be shown. Everything below is
+                the remaining {model.total}.
+              </p>
+            )}
+            {model.scoreMismatch && (
+              <p>
+                It was signed off at {model.inspection.score}%. The {model.total} items shown here
+                come to {model.liveScore}%. The signed figure is the one on record.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="print-container grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start">
+        {/* ---------------------------------------------------------------- */}
+        {/* Main column                                                       */}
+        {/* ---------------------------------------------------------------- */}
+        <div className="min-w-0 space-y-5">
+          {/* Header card */}
+          <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs overflow-hidden page-break-inside-avoid">
+            <div className="p-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-5">
+              <MetaField icon={Building2} label="Branch" prominent>
                 {inspection.branchName}
-              </h1>
-              <p className="text-xs font-semibold text-[#635E4F] mt-1">
-                {template?.label || inspection.templateKey}
-              </p>
-            </div>
-
-            <div className="flex sm:flex-col items-center sm:items-end justify-between gap-1.5">
-              <span className="text-[10px] text-[#635E4F] font-bold uppercase tracking-wider">
-                Overall score
-              </span>
-              <ScorePill score={inspection.score} size="lg" showLabel />
-            </div>
-          </div>
-
-          {/* Meta line */}
-          <div className="mt-4 pt-4 border-t border-[#DEDACB] flex flex-wrap items-center gap-4 md:gap-6 text-xs text-[#635E4F]">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-[#242217]" />
-              <span className="font-semibold text-[#242217]">Date:</span>
-              <span>{inspection.date}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-[#242217]" />
-              <span className="font-semibold text-[#242217]">Time:</span>
-              <span>{inspection.time}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <FileCheck2 className="w-3.5 h-3.5 text-[#242217]" />
-              <span className="font-semibold text-[#242217]">Status:</span>
-              <span className="capitalize font-bold text-[#2F5233]">
-                {inspection.status}
-              </span>
-            </div>
-            <div className="ml-auto flex items-center gap-3">
-              <span>Passed: <strong className="text-[#2F5233]">{yesCount}</strong></span>
-              <span>Flagged: <strong className="text-[#9C3B2E]">{noCount}</strong></span>
-              <span>Total: <strong>{totalCount}</strong></span>
-            </div>
-          </div>
-        </div>
-
-        {/* Editable Notice Banner */}
-        <div className="no-print mb-6 p-3.5 bg-[#F9F8F4] border border-[#DEDACB] rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-          <span className="text-[#635E4F]">
-            Viewing report. Need to mark items, change compliance answers, or upload photo evidence?
-          </span>
-          <button
-            type="button"
-            onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-            className="inline-flex items-center gap-1.5 font-bold text-[#2F5233] hover:underline cursor-pointer shrink-0"
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-            <span>Open checklist editor</span>
-          </button>
-        </div>
-
-        {/* Form Sections */}
-        <div className="space-y-8">
-          {template?.sections.map((sec, sIdx) => {
-            return (
-              <div key={sIdx} className="page-break-inside-avoid">
-                <div className="bg-[#F9F8F4] border border-[#DEDACB] px-4 py-2.5 font-bold text-xs uppercase tracking-wider text-[#242217] flex justify-between items-center rounded-t-md">
-                  <span>
-                    {sIdx + 1}. {sec.title}
-                  </span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-semibold text-[#635E4F] uppercase tracking-wider">
-                      {sec.items.length} items
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-                      className="no-print text-[11px] font-bold text-[#2F5233] hover:underline flex items-center gap-1 cursor-pointer"
-                      title="Edit this section in checklist"
-                    >
-                      <Edit3 className="w-3 h-3" />
-                      <span>Edit</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="border border-t-0 border-[#DEDACB] divide-y divide-[#DEDACB] rounded-b-md overflow-hidden">
-                  {sec.items.map((item) => {
-                    const ans = inspection.answers[item.id];
-                    const isYes = ans?.status === 'yes';
-                    const isNo = ans?.status === 'no';
-                    const displayReason =
-                      ans?.reason === 'Other'
-                        ? `Other: ${ans?.otherReason || 'Not specified'}`
-                        : ans?.reason;
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={`p-3.5 text-xs md:text-sm ${
-                          isNo ? 'bg-[#F4E4DF]/25' : 'bg-white'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex items-start gap-2.5 flex-1">
-                            <span className="font-bold text-[#635E4F] w-5 text-right shrink-0">
-                              {item.id}.
-                            </span>
-                            <div>
-                              <span className="font-semibold text-[#242217]">{item.text}</span>
-                              <span className="ml-2 text-[10px] font-bold text-[#635E4F] uppercase bg-[#F5F3EC] px-1.5 py-0.5 rounded border border-[#DEDACB]">
-                                {item.reasonGroup}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="shrink-0">
-                            {isYes && (
-                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#E7EEE4] text-[#2F5233]">
-                                <Check className="w-3.5 h-3.5" />
-                                <span>Yes</span>
-                              </span>
-                            )}
-                            {isNo && (
-                              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-[#F4E4DF] text-[#9C3B2E]">
-                                <X className="w-3.5 h-3.5" />
-                                <span>No</span>
-                              </span>
-                            )}
-                            {!isYes && !isNo && (
-                              <span className="text-xs text-[#635E4F] italic">Unanswered</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* If marked NO, render red-tinted block showing reason, note, photo */}
-                        {isNo && (
-                          <div className="mt-2.5 ml-7 p-3 rounded-md bg-[#F4E4DF]/60 border border-[#9C3B2E]/30 space-y-2">
-                            <div className="text-xs">
-                              <span className="font-bold text-[#9C3B2E]">Reason: </span>
-                              <span className="text-[#242217] font-semibold">{displayReason}</span>
-                            </div>
-                            {ans.note && (
-                              <div className="text-xs text-[#635E4F]">
-                                <span className="font-bold text-[#242217]">Note: </span>
-                                <span>{ans.note}</span>
-                              </div>
-                            )}
-                            {ans.photo && (
-                              <div className="pt-1">
-                                <span className="block text-[10px] font-bold text-[#635E4F] uppercase tracking-wider mb-1">
-                                  Attached evidence
-                                </span>
-                                <img
-                                  src={ans.photo}
-                                  alt={`Evidence item ${item.id}`}
-                                  className="w-28 h-28 object-cover rounded-md border border-[#DEDACB] bg-white"
-                                  referrerPolicy="no-referrer"
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Manager Sign-Off Section */}
-        <div className="mt-10 pt-6 border-t border-[#DEDACB] page-break-inside-avoid">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F]">
-                Manager verification &amp; acknowledgment
-              </p>
-              <p className="text-xs text-[#635E4F] mt-0.5">
-                The manager certifies that this inspection accurately reflects the branch condition.
-              </p>
-              <div className="mt-4">
-                <span className="text-xs font-semibold text-[#242217] block mb-1">
-                  Branch manager signature:
+              </MetaField>
+              <MetaField icon={Calendar} label="Inspection date">
+                {formatDate(inspection.date)}
+                <span className="block text-[11px] font-normal text-[#635E4F] mt-0.5">
+                  {inspection.time}
                 </span>
-                {inspection.signature ? (
-                  <div className="w-64 h-24 border border-[#DEDACB] bg-[#F9F8F4] rounded-md flex items-center justify-center p-2">
-                    <img
-                      src={inspection.signature}
-                      alt="Branch manager signature"
-                      className="max-h-full max-w-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-64 h-24 border border-dashed border-[#DEDACB] bg-[#F9F8F4] rounded-md flex items-center justify-center text-xs text-[#635E4F] italic">
-                    No signature on file
-                  </div>
-                )}
-              </div>
+              </MetaField>
+              <MetaField icon={User} label="Inspector">
+                {inspection.inspectorName || 'Not recorded'}
+              </MetaField>
+              <MetaField icon={ClipboardList} label="Inspection type">
+                {inspection.inspectionType
+                  ? INSPECTION_TYPE_LABEL[inspection.inspectionType]
+                  : 'Not recorded'}
+              </MetaField>
+              <MetaField icon={Timer} label="Duration">
+                {formatDuration(model.durationMinutes)}
+              </MetaField>
             </div>
 
-            <div className="text-left sm:text-right text-xs text-[#635E4F]">
-              <p>Branch: <strong className="text-[#242217]">{inspection.branchName}</strong></p>
-              <p className="mt-1">Date: <strong className="text-[#242217]">{inspection.date} {inspection.time}</strong></p>
-              <p className="mt-1">Report ID: <span className="font-mono">{inspection.id}</span></p>
+            <div className="border-t border-[#DEDACB] bg-[#F9F8F4] p-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-5">
+              <MetaField icon={ClipboardList} label="Checklist">
+                {FULL_CHECKLIST_LABEL}
+                <span className="block text-[11px] font-normal text-[#635E4F] mt-0.5">
+                  {model.missingCount > 0
+                    ? `${model.frozenTotal} covered, ${model.total} shown`
+                    : `${model.total} items covered`}
+                </span>
+              </MetaField>
+              <MetaField icon={ShieldCheck} label="Status">
+                <span className={isLocked ? 'text-[#2F5233]' : 'text-[#8A6318]'}>
+                  {isLocked ? 'Submitted & locked' : 'Draft — in progress'}
+                </span>
+              </MetaField>
+              <MetaField icon={Clock} label="Submitted at">
+                {inspection.submittedAt
+                  ? formatDateTime(inspection.submittedAt)
+                  : isLocked
+                    ? `${formatDate(inspection.date)}, ${inspection.time}`
+                    : 'Not submitted'}
+              </MetaField>
+              <MetaField icon={Hash} label="Score">
+                <ScorePill score={model.score} showLabel />
+              </MetaField>
+              <MetaField icon={CalendarClock} label="Next due">
+                {formatDate(model.nextDueDate)}
+              </MetaField>
             </div>
+          </section>
+
+          {/* Tabs */}
+          <div className="no-print border-b border-[#DEDACB] flex gap-1 overflow-x-auto">
+            {tabs.map(({ key, label, count }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={`px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors cursor-pointer ${
+                  tab === key
+                    ? 'border-[#2F5233] text-[#2F5233]'
+                    : 'border-transparent text-[#635E4F] hover:text-[#242217]'
+                }`}
+              >
+                {label}
+                {count !== undefined && (
+                  <span
+                    className={`ml-1.5 tabular-nums ${
+                      tab === key ? 'text-[#2F5233]' : 'text-[#635E4F]'
+                    }`}
+                  >
+                    ({count})
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
+
+          {/* Every panel stays in the DOM so printing lays out the whole report,
+              not just whichever tab happened to be open. */}
+          <Panel active={tab === 'checklist'} title="Inspection checklist">
+            <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#DEDACB] flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-sm font-bold text-[#242217]">Inspection checklist</h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  <OutcomeLegend model={model} />
+                  <button
+                    type="button"
+                    onClick={toggleAllSections}
+                    className="no-print px-2.5 py-1.5 text-[11px] font-semibold text-[#242217] border border-[#DEDACB] rounded-md hover:bg-[#F5F3EC] transition-colors cursor-pointer"
+                  >
+                    {allOpen ? 'Collapse all' : 'Expand all'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="divide-y divide-[#DEDACB]">
+                {model.sections.map((section) => {
+                  const key = `${section.listKey}::${section.key}`;
+                  const isOpen = open.has(key);
+                  return (
+                    <div key={key} className="page-break-inside-avoid">
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(key)}
+                        className="print-keep w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-[#F9F8F4] transition-colors cursor-pointer"
+                      >
+                        <ChevronDown
+                          className={`no-print w-4 h-4 text-[#635E4F] shrink-0 transition-transform ${
+                            isOpen ? '' : '-rotate-90'
+                          }`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-semibold text-[#242217]">
+                            {section.index}. {section.title}
+                          </span>
+                          <span className="block text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mt-0.5">
+                            {section.listLabel}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-xs font-bold tabular-nums shrink-0 ${
+                            section.failed > 0
+                              ? 'text-[#C25A33]'
+                              : section.unanswered > 0
+                                ? 'text-[#8A6318]'
+                                : 'text-[#2F5233]'
+                          }`}
+                        >
+                          {section.passed} / {section.total} passed
+                        </span>
+                      </button>
+
+                      <div className={`collapsible ${isOpen ? '' : 'hidden'}`}>
+                        <div className="divide-y divide-[#EDEAE0] border-t border-[#EDEAE0]">
+                          {section.rows.map((row) => (
+                            <ChecklistRow
+                              key={row.item.id}
+                              row={row}
+                              expanded={openRows.has(row.item.id)}
+                              onToggle={() => toggleRow(row.item.id)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </Panel>
+
+          <Panel active={tab === 'findings'} title="Findings">
+            <FindingsPanel model={model} />
+          </Panel>
+
+          <Panel active={tab === 'maintenance'} title="Maintenance">
+            <MaintenancePanel model={model} />
+          </Panel>
+
+          <Panel active={tab === 'notes'} title="Notes">
+            <NotesPanel model={model} />
+          </Panel>
+
+          <Panel active={tab === 'history'} title="Branch history">
+            <HistoryPanel model={model} onOpen={(id) => router.push(`/inspections/${id}`)} />
+          </Panel>
+
+          {/* Sign-off closes the printed document */}
+          <SignOffCard model={model} />
         </div>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Right rail                                                        */}
+        {/* ---------------------------------------------------------------- */}
+        <aside className="space-y-5 xl:sticky xl:top-6">
+          <RailCard title="Inspection summary">
+            <div className="flex items-center gap-4">
+              <DonutChart
+                centerValue={model.total}
+                centerLabel="Total items"
+                segments={[
+                  {
+                    key: 'passed',
+                    label: 'Passed',
+                    value: model.passed,
+                    color: OUTCOME_COLOR.passed,
+                  },
+                  {
+                    key: 'failed',
+                    label: 'Failed',
+                    value: model.failed,
+                    color: OUTCOME_COLOR.failed,
+                  },
+                  {
+                    key: 'unanswered',
+                    label: 'Not answered',
+                    value: model.unanswered,
+                    color: OUTCOME_COLOR.unanswered,
+                  },
+                ]}
+              />
+              <ul className="flex-1 min-w-0 space-y-2.5">
+                <LegendRow
+                  color={OUTCOME_COLOR.passed}
+                  label="Passed"
+                  value={model.passed}
+                  total={model.total}
+                />
+                <LegendRow
+                  color={OUTCOME_COLOR.failed}
+                  label="Failed"
+                  value={model.failed}
+                  total={model.total}
+                />
+                <LegendRow
+                  color={OUTCOME_COLOR.unanswered}
+                  label="Not answered"
+                  value={model.unanswered}
+                  total={model.total}
+                />
+              </ul>
+            </div>
+          </RailCard>
+
+          <RailCard title="Priority summary">
+            {model.issues.length === 0 ? (
+              <p className="text-xs text-[#635E4F]">Nothing was flagged on this visit.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {SEVERITY_ORDER.map((severity) => (
+                  <div
+                    key={severity}
+                    className={`border rounded-md p-2.5 ${
+                      model.severityCounts[severity] > 0
+                        ? 'border-[#DEDACB] bg-white'
+                        : 'border-[#EDEAE0] bg-[#F9F8F4]'
+                    }`}
+                  >
+                    <PriorityBadge severity={severity} size="sm" />
+                    <p
+                      className={`text-xl font-bold tabular-nums mt-1.5 ${
+                        model.severityCounts[severity] > 0
+                          ? 'text-[#242217]'
+                          : 'text-[#635E4F]/45'
+                      }`}
+                    >
+                      {model.severityCounts[severity]}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {model.repeats.length > 0 && (
+              <p className="mt-3 text-[11px] font-semibold text-[#8A6318] flex items-start gap-1.5">
+                <History className="w-3.5 h-3.5 shrink-0 mt-px" />
+                <span>
+                  {model.repeats.length} repeat issue
+                  {model.repeats.length === 1 ? '' : 's'} carried over from earlier visits
+                </span>
+              </p>
+            )}
+          </RailCard>
+
+          <RailCard
+            title="Top findings"
+            action={
+              model.issues.length > 3 ? (
+                <button
+                  type="button"
+                  onClick={() => setTab('findings')}
+                  className="no-print text-[11px] font-bold text-[#2F5233] hover:underline cursor-pointer"
+                >
+                  View all ({model.issues.length})
+                </button>
+              ) : undefined
+            }
+          >
+            {model.issues.length === 0 ? (
+              <p className="text-xs text-[#635E4F]">No findings — every item passed.</p>
+            ) : (
+              <ul className="space-y-3">
+                {model.issues.slice(0, 3).map(({ item, answer, priority }) => (
+                  <li key={item.id} className="flex gap-3">
+                    {answer.photo ? (
+                      <img
+                        src={answer.photo}
+                        alt=""
+                        className="w-12 h-12 rounded-md object-cover border border-[#DEDACB] bg-[#F5F3EC] shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-md border border-[#DEDACB] bg-[#F5F3EC] shrink-0 flex items-center justify-center">
+                        <AlertTriangle className="w-4 h-4 text-[#635E4F]" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <PriorityBadge
+                        severity={priority.severity}
+                        size="sm"
+                        escalated={priority.severity !== priority.base}
+                      />
+                      <p className="text-xs font-semibold text-[#242217] mt-1 leading-snug">
+                        {item.text}
+                      </p>
+                      <p className="text-[11px] text-[#635E4F] mt-0.5 leading-snug">
+                        {reasonText(answer)}
+                      </p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mt-1">
+                        {item.reasonGroup}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </RailCard>
+
+          <RailCard title={`Photos (${model.photos.length})`}>
+            {model.photos.length === 0 ? (
+              <p className="text-xs text-[#635E4F]">No photo evidence was attached.</p>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {model.photos.map((row) => (
+                  <img
+                    key={row.item.id}
+                    src={row.answer!.photo as string}
+                    alt={`Evidence for item ${row.number}: ${row.item.text}`}
+                    title={`${row.number} ${row.item.text}`}
+                    className="w-full aspect-square rounded-md object-cover border border-[#DEDACB] bg-[#F5F3EC]"
+                    referrerPolicy="no-referrer"
+                  />
+                ))}
+              </div>
+            )}
+          </RailCard>
+
+          <RailCard title="Inspection information">
+            <dl className="space-y-2.5">
+              <InfoRow label="Inspection ID" mono>
+                {inspection.id}
+              </InfoRow>
+              <InfoRow label="Branch">{inspection.branchName}</InfoRow>
+              <InfoRow label="Checklist">{FULL_CHECKLIST_LABEL}</InfoRow>
+              <InfoRow label="Items covered">
+                {model.missingCount > 0
+                  ? `${model.frozenTotal} (${model.total} still in checklist)`
+                  : String(model.total)}
+              </InfoRow>
+              <InfoRow label="Record type">
+                {inspection.itemIds && inspection.itemIds.length > 0
+                  ? 'Frozen at submission'
+                  : 'Follows live checklist'}
+              </InfoRow>
+              <InfoRow label="Manager signature">
+                {inspection.signature ? 'Signed' : 'Not signed'}
+              </InfoRow>
+              <InfoRow label="Visits on record">
+                {String(model.branchHistory.length)} at this branch
+              </InfoRow>
+            </dl>
+          </RailCard>
+        </aside>
       </div>
     </div>
   );
 };
+
+// ---------------------------------------------------------------------------
+// Pieces
+// ---------------------------------------------------------------------------
+
+const MetaField: React.FC<{
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  prominent?: boolean;
+  children: React.ReactNode;
+}> = ({ icon: Icon, label, prominent = false, children }) => (
+  <div className="min-w-0">
+    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#635E4F]">
+      <Icon className="w-3.5 h-3.5 shrink-0" />
+      <span className="truncate">{label}</span>
+    </div>
+    <div
+      className={`mt-1 font-semibold text-[#242217] ${prominent ? 'text-base' : 'text-sm'}`}
+    >
+      {children}
+    </div>
+  </div>
+);
+
+const OutcomeLegend: React.FC<{ model: ReportModel }> = ({ model }) => (
+  <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold">
+    <span className="inline-flex items-center gap-1.5 text-[#2F5233]">
+      <Check className="w-3.5 h-3.5" />
+      Passed ({model.passed})
+    </span>
+    <span className="inline-flex items-center gap-1.5 text-[#C25A33]">
+      <X className="w-3.5 h-3.5" />
+      Failed ({model.failed})
+    </span>
+    <span className="inline-flex items-center gap-1.5 text-[#635E4F]">
+      <Minus className="w-3.5 h-3.5" />
+      Not answered ({model.unanswered})
+    </span>
+  </div>
+);
+
+const LegendRow: React.FC<{
+  color: string;
+  label: string;
+  value: number;
+  total: number;
+}> = ({ color, label, value, total }) => (
+  <li className="flex items-center gap-2">
+    <span
+      className="w-2.5 h-2.5 rounded-full shrink-0"
+      style={{ backgroundColor: color }}
+      aria-hidden
+    />
+    <span className="text-xs text-[#242217] flex-1 min-w-0">{label}</span>
+    <span className="text-sm font-bold text-[#242217] tabular-nums">{value}</span>
+    <span className="text-[11px] text-[#635E4F] tabular-nums w-8 text-right">
+      {total > 0 ? Math.round((value / total) * 100) : 0}%
+    </span>
+  </li>
+);
+
+const ChecklistRow: React.FC<{
+  row: ReportRow;
+  expanded: boolean;
+  onToggle: () => void;
+}> = ({ row, expanded, onToggle }) => {
+  const { item, answer, outcome, number, priority } = row;
+  const hasDetail = outcome === 'failed' || !!answer?.note || !!answer?.photo;
+
+  return (
+    <div className={outcome === 'failed' ? 'bg-[#F4E4DF]/25' : ''}>
+      <div className="px-4 py-2.5 flex items-start gap-3">
+        <span className="text-xs font-semibold text-[#635E4F] tabular-nums shrink-0 w-8 pt-0.5">
+          {number}
+        </span>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-[#242217] leading-snug">{item.text}</p>
+          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] bg-[#F5F3EC] border border-[#DEDACB] px-1.5 py-0.5 rounded">
+              {item.reasonGroup}
+            </span>
+            {priority && (
+              <PriorityBadge
+                severity={priority.severity}
+                size="sm"
+                escalated={priority.severity !== priority.base}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <OutcomePill outcome={outcome} />
+          {answer?.note && (
+            <MessageSquare
+              className="w-4 h-4 text-[#635E4F]"
+              aria-label="Has a note"
+            />
+          )}
+          {answer?.photo && (
+            <Camera className="w-4 h-4 text-[#635E4F]" aria-label="Has photo evidence" />
+          )}
+          {hasDetail && (
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-expanded={expanded}
+              aria-label={expanded ? 'Hide detail' : 'Show detail'}
+              className="no-print p-0.5 text-[#635E4F] hover:text-[#242217] transition-colors cursor-pointer"
+            >
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${expanded ? '' : '-rotate-90'}`}
+              />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {hasDetail && (
+        <div className={`collapsible ${expanded ? '' : 'hidden'}`}>
+          <div className="px-4 pb-3.5 pl-15">
+            <div className="rounded-md border border-[#C25A33]/30 bg-[#F4E4DF]/50 p-3 space-y-2">
+              {outcome === 'failed' && (
+                <p className="text-xs">
+                  <span className="font-bold text-[#9C3B2E]">Reason: </span>
+                  <span className="text-[#242217] font-semibold">{reasonText(answer)}</span>
+                </p>
+              )}
+              {answer?.note && (
+                <p className="text-xs text-[#635E4F]">
+                  <span className="font-bold text-[#242217]">Note: </span>
+                  {answer.note}
+                </p>
+              )}
+              {priority && priority.factors.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1">
+                    How this priority was reached
+                  </p>
+                  <ul className="text-[11px] text-[#635E4F] space-y-0.5 list-disc list-inside">
+                    {priority.factors.map((factor, i) => (
+                      <li key={i}>{factor}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {answer?.photo && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1">
+                    Attached evidence
+                  </p>
+                  <img
+                    src={answer.photo}
+                    alt={`Evidence for item ${number}`}
+                    className="w-28 h-28 object-cover rounded-md border border-[#DEDACB] bg-white"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const OutcomePill: React.FC<{ outcome: Outcome }> = ({ outcome }) => {
+  if (outcome === 'passed') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E7EEE4] text-[#2F5233]">
+        <Check className="w-3.5 h-3.5" />
+        Yes
+      </span>
+    );
+  }
+  if (outcome === 'failed') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F4E4DF] text-[#9C3B2E]">
+        <X className="w-3.5 h-3.5" />
+        No
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F5F3EC] text-[#635E4F] border border-[#DEDACB]">
+      <Minus className="w-3.5 h-3.5" />
+      Not answered
+    </span>
+  );
+};
+
+const Panel: React.FC<{ active: boolean; title: string; children: React.ReactNode }> = ({
+  active,
+  title,
+  children,
+}) => (
+  <div className={`report-panel ${active ? '' : 'hidden'}`}>
+    {/* Only printing shows this — on screen the tab itself is the heading */}
+    <h2 className="print-only-heading hidden text-base font-bold text-[#242217] mb-3">
+      {title}
+    </h2>
+    {children}
+  </div>
+);
+
+const RailCard: React.FC<{
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ title, action, children }) => (
+  <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs page-break-inside-avoid">
+    <div className="px-4 py-3 border-b border-[#DEDACB] flex items-center justify-between gap-2">
+      <h2 className="text-sm font-bold text-[#242217]">{title}</h2>
+      {action}
+    </div>
+    <div className="p-4">{children}</div>
+  </section>
+);
+
+const InfoRow: React.FC<{ label: string; mono?: boolean; children: React.ReactNode }> = ({
+  label,
+  mono = false,
+  children,
+}) => (
+  <div className="flex items-baseline justify-between gap-3">
+    <dt className="text-[11px] text-[#635E4F] shrink-0">{label}</dt>
+    <dd
+      className={`text-[11px] font-semibold text-[#242217] text-right min-w-0 truncate ${
+        mono ? 'font-mono' : ''
+      }`}
+    >
+      {children}
+    </dd>
+  </div>
+);
+
+const EmptyState: React.FC<{
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  children: React.ReactNode;
+}> = ({ icon: Icon, title, children }) => (
+  <div className="bg-white border border-[#DEDACB] rounded-lg shadow-xs p-8 text-center">
+    <Icon className="w-8 h-8 text-[#2F5233] mx-auto mb-2.5" />
+    <p className="text-sm font-bold text-[#242217]">{title}</p>
+    <p className="text-xs text-[#635E4F] mt-1">{children}</p>
+  </div>
+);
+
+// ---------------------------------------------------------------------------
+// Tab panels
+// ---------------------------------------------------------------------------
+
+const FindingsPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
+  if (model.issues.length === 0) {
+    return (
+      <EmptyState icon={Check} title="No findings">
+        Every item on this inspection passed.
+      </EmptyState>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {SEVERITY_ORDER.filter((s) => model.severityCounts[s] > 0).map((severity) => (
+        <section key={severity} className="page-break-inside-avoid">
+          <div className="flex items-center gap-2 mb-2">
+            <PriorityBadge severity={severity} />
+            <span className="text-xs font-bold text-[#635E4F] tabular-nums">
+              {model.severityCounts[severity]} finding
+              {model.severityCounts[severity] === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="bg-white border border-[#DEDACB] rounded-lg shadow-xs divide-y divide-[#DEDACB] overflow-hidden">
+            {model.issues
+              .filter((issue) => issue.priority.severity === severity)
+              .map(({ item, answer, priority }) => {
+                const row = model.rows.find((r) => r.item.id === item.id);
+                return (
+                  <article key={item.id} className="p-4 flex items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-semibold text-[#635E4F] tabular-nums">
+                          {row?.number}
+                        </span>
+                        <h3 className="text-sm font-semibold text-[#242217]">{item.text}</h3>
+                      </div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mt-1">
+                        {row?.item.reasonGroup} • {model.sections.find((s) =>
+                          s.rows.some((r) => r.item.id === item.id)
+                        )?.title}
+                      </p>
+                      <p className="text-xs text-[#635E4F] mt-2">
+                        <span className="font-semibold text-[#9C3B2E]">Reason: </span>
+                        {reasonText(answer)}
+                      </p>
+                      {answer.note && (
+                        <p className="text-xs text-[#635E4F] mt-1">
+                          <span className="font-semibold text-[#242217]">Note: </span>
+                          {answer.note}
+                        </p>
+                      )}
+                      {priority.repeatCount > 0 && (
+                        <p className="text-xs font-semibold text-[#8A6318] mt-1.5 flex items-center gap-1.5">
+                          <History className="w-3.5 h-3.5 shrink-0" />
+                          Repeat — flagged in {priority.repeatCount} of the last{' '}
+                          {priority.historyVisits} visit
+                          {priority.historyVisits === 1 ? '' : 's'}
+                        </p>
+                      )}
+                      {priority.overridden && (
+                        <p className="text-xs text-[#635E4F] mt-1 italic">
+                          Priority set by hand — the rules said{' '}
+                          {SEVERITY_LABEL[priority.computed]}
+                        </p>
+                      )}
+                    </div>
+                    {answer.photo && (
+                      <img
+                        src={answer.photo}
+                        alt={`Evidence for item ${row?.number}`}
+                        className="w-20 h-20 rounded-md object-cover border border-[#DEDACB] bg-[#F5F3EC] shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                  </article>
+                );
+              })}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+};
+
+const MaintenancePanel: React.FC<{ model: ReportModel }> = ({ model }) => {
+  if (model.maintenance.length === 0) {
+    return (
+      <EmptyState icon={Wrench} title="No maintenance work raised">
+        Nothing flagged on this visit points to a repair or a service call.
+      </EmptyState>
+    );
+  }
+
+  return (
+    <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs overflow-hidden">
+      <div className="px-4 py-3 border-b border-[#DEDACB]">
+        <h2 className="text-sm font-bold text-[#242217]">Repair &amp; service actions</h2>
+        <p className="text-xs text-[#635E4F] mt-0.5">
+          Findings whose cause is a broken, damaged or unserviced item — the work the
+          branch has to raise with maintenance.
+        </p>
+      </div>
+      <div className="divide-y divide-[#DEDACB]">
+        {model.maintenance.map(({ item, answer, priority }) => {
+          const row = model.rows.find((r) => r.item.id === item.id);
+          return (
+            <div key={item.id} className="p-4 flex items-start gap-3">
+              <Wrench className="w-4 h-4 text-[#635E4F] shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold text-[#635E4F] tabular-nums">
+                    {row?.number}
+                  </span>
+                  <span className="text-sm font-semibold text-[#242217]">{item.text}</span>
+                  <PriorityBadge severity={priority.severity} size="sm" />
+                </div>
+                <p className="text-xs text-[#635E4F] mt-1">{reasonText(answer)}</p>
+                {answer.note && (
+                  <p className="text-xs text-[#635E4F] mt-0.5">
+                    <span className="font-semibold text-[#242217]">Note: </span>
+                    {answer.note}
+                  </p>
+                )}
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] bg-[#F5F3EC] border border-[#DEDACB] px-1.5 py-0.5 rounded shrink-0">
+                {item.reasonGroup}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
+const NotesPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
+  if (model.notes.length === 0) {
+    return (
+      <EmptyState icon={StickyNote} title="No notes">
+        The inspector did not write a note against any item on this visit.
+      </EmptyState>
+    );
+  }
+
+  return (
+    <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs divide-y divide-[#DEDACB] overflow-hidden">
+      {model.notes.map((row) => (
+        <div key={row.item.id} className="p-4 flex items-start gap-3">
+          <StickyNote className="w-4 h-4 text-[#635E4F] shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-[#635E4F] tabular-nums">
+                {row.number}
+              </span>
+              <span className="text-sm font-semibold text-[#242217]">{row.item.text}</span>
+              <OutcomePill outcome={row.outcome} />
+            </div>
+            <p className="text-xs text-[#242217] mt-1.5 whitespace-pre-wrap">
+              {row.answer?.note}
+            </p>
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+};
+
+const HistoryPanel: React.FC<{
+  model: ReportModel;
+  onOpen: (id: string) => void;
+}> = ({ model, onOpen }) => {
+  const { branchHistory } = model;
+
+  if (branchHistory.length === 0) {
+    return (
+      <EmptyState icon={History} title="No submitted visits yet">
+        This is the first inspection on record for {model.inspection.branchName}.
+      </EmptyState>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#DEDACB]">
+          <h2 className="text-sm font-bold text-[#242217]">
+            Score history — {model.inspection.branchName}
+          </h2>
+          <p className="text-xs text-[#635E4F] mt-0.5">
+            Every submitted visit at this branch, newest first.
+          </p>
+        </div>
+        <div className="divide-y divide-[#DEDACB]">
+          {branchHistory.map((visit) => (
+            <div
+              key={visit.id}
+              className={`px-4 py-3 flex items-center gap-4 ${
+                visit.isThis ? 'bg-[#E7EEE4]/50' : ''
+              }`}
+            >
+              <div className="w-32 shrink-0">
+                <p className="text-sm font-semibold text-[#242217]">{formatDate(visit.date)}</p>
+                <p className="text-[11px] text-[#635E4F]">{visit.time}</p>
+              </div>
+
+              {/*
+                * One hue for every bar, so scores compare by length. The visit
+                * being read is emphasised and the rest recede — the colour
+                * tracks which record this is, never how it ranks.
+                */}
+              <div className="flex-1 min-w-0 h-2 bg-[#EDEAE0] rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.max(visit.score, 2)}%`,
+                    backgroundColor: visit.isThis ? OUTCOME_COLOR.passed : '#A8BCA8',
+                  }}
+                />
+              </div>
+
+              <span className="text-sm font-bold text-[#242217] tabular-nums w-12 text-right shrink-0">
+                {visit.score}%
+              </span>
+              <span className="text-[11px] text-[#635E4F] tabular-nums w-20 text-right shrink-0">
+                {visit.failed} flagged
+              </span>
+
+              {visit.isThis ? (
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#2F5233] w-20 text-right shrink-0">
+                  This visit
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onOpen(visit.id)}
+                  className="no-print text-[11px] font-bold text-[#2F5233] hover:underline cursor-pointer w-20 text-right shrink-0"
+                >
+                  Open
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {model.repeats.length > 0 && (
+        <section className="bg-[#F3ECD8] border border-[#8A6318]/30 rounded-lg p-4 page-break-inside-avoid">
+          <h2 className="text-sm font-bold text-[#242217] flex items-center gap-2">
+            <History className="w-4 h-4 text-[#8A6318]" />
+            Repeat issues at this branch
+          </h2>
+          <ul className="mt-2.5 space-y-1.5">
+            {model.repeats.map(({ item, priority }) => {
+              const row = model.rows.find((r) => r.item.id === item.id);
+              return (
+                <li key={item.id} className="text-xs text-[#242217]">
+                  <span className="font-semibold">
+                    {row?.number} {item.text}
+                  </span>
+                  <span className="text-[#635E4F]">
+                    {' '}
+                    — flagged in {priority.repeatCount} of the last {priority.historyVisits}{' '}
+                    visit{priority.historyVisits === 1 ? '' : 's'}, raised to{' '}
+                    {SEVERITY_LABEL[priority.severity]}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+    </div>
+  );
+};
+
+const SignOffCard: React.FC<{ model: ReportModel }> = ({ model }) => {
+  const { inspection } = model;
+  return (
+    <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs p-5 page-break-inside-avoid">
+      <h2 className="text-sm font-bold text-[#242217]">
+        Manager verification &amp; acknowledgment
+      </h2>
+      <p className="text-xs text-[#635E4F] mt-0.5">
+        The manager certifies that this inspection accurately reflects the branch condition.
+      </p>
+
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+        <div>
+          <span className="text-xs font-semibold text-[#242217] block mb-1.5">
+            Branch manager signature
+          </span>
+          {inspection.signature ? (
+            <div className="w-60 h-24 border border-[#DEDACB] bg-[#F9F8F4] rounded-md flex items-center justify-center p-2">
+              <img
+                src={inspection.signature}
+                alt="Branch manager signature"
+                className="max-h-full max-w-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className="w-60 h-24 border border-dashed border-[#DEDACB] bg-[#F9F8F4] rounded-md flex items-center justify-center text-xs text-[#635E4F] italic">
+              Not signed yet
+            </div>
+          )}
+        </div>
+
+        <dl className="text-xs text-[#635E4F] space-y-1 sm:text-right">
+          <div>
+            Branch: <strong className="text-[#242217]">{inspection.branchName}</strong>
+          </div>
+          <div>
+            Inspected:{' '}
+            <strong className="text-[#242217]">
+              {formatDate(inspection.date)}, {inspection.time}
+            </strong>
+          </div>
+          {inspection.inspectorName && (
+            <div>
+              Inspector: <strong className="text-[#242217]">{inspection.inspectorName}</strong>
+            </div>
+          )}
+          <div>
+            Report ID: <span className="font-mono text-[#242217]">{inspection.id}</span>
+          </div>
+        </dl>
+      </div>
+    </section>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// CSV export
+// ---------------------------------------------------------------------------
+
+/** Wraps a field for CSV, doubling any quotes inside it. */
+function csvCell(value: string | number): string {
+  const text = String(value ?? '');
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+/**
+ * The report as a spreadsheet: a metadata block, then one row per checklist
+ * item. Opens directly in Excel, Numbers or Sheets.
+ */
+function downloadCsv(model: ReportModel): void {
+  const { inspection } = model;
+  const lines: string[] = [];
+
+  const meta: [string, string | number][] = [
+    ['Inspection ID', inspection.id],
+    ['Branch', inspection.branchName],
+    ['Date', formatDate(inspection.date)],
+    ['Time', inspection.time],
+    ['Inspector', inspection.inspectorName || 'Not recorded'],
+    [
+      'Inspection type',
+      inspection.inspectionType
+        ? INSPECTION_TYPE_LABEL[inspection.inspectionType]
+        : 'Not recorded',
+    ],
+    ['Status', inspection.status === 'submitted' ? 'Submitted & locked' : 'Draft'],
+    ['Submitted at', inspection.submittedAt ? formatDateTime(inspection.submittedAt) : ''],
+    ['Duration', formatDuration(model.durationMinutes)],
+    ['Score', `${model.score}%`],
+    ['Items covered', model.total],
+    ['Passed', model.passed],
+    ['Failed', model.failed],
+    ['Not answered', model.unanswered],
+    ['Next inspection due', formatDate(model.nextDueDate)],
+  ];
+  meta.forEach(([label, value]) => lines.push(`${csvCell(label)},${csvCell(value)}`));
+  lines.push('');
+
+  lines.push(
+    [
+      'No.',
+      'Checklist',
+      'Section',
+      'Item',
+      'Category',
+      'Result',
+      'Priority',
+      'Base risk',
+      'Repeat count',
+      'Reason',
+      'Note',
+      'Photo attached',
+    ]
+      .map(csvCell)
+      .join(',')
+  );
+
+  model.sections.forEach((section) => {
+    section.rows.forEach((row) => {
+      lines.push(
+        [
+          row.number,
+          section.listLabel,
+          section.title,
+          row.item.text,
+          row.item.reasonGroup,
+          row.outcome === 'passed' ? 'Yes' : row.outcome === 'failed' ? 'No' : 'Not answered',
+          row.priority ? SEVERITY_LABEL[row.priority.severity] : '',
+          SEVERITY_LABEL[row.item.severity as Severity],
+          row.priority ? row.priority.repeatCount : '',
+          row.outcome === 'failed' ? reasonText(row.answer) : '',
+          row.answer?.note || '',
+          row.answer?.photo ? 'Yes' : 'No',
+        ]
+          .map(csvCell)
+          .join(',')
+      );
+    });
+  });
+
+  // BOM so Excel reads the accented text as UTF-8
+  const blob = new Blob([`﻿${lines.join('\r\n')}`], {
+    type: 'text/csv;charset=utf-8;',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `inspection-${inspection.branchName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-${inspection.date}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

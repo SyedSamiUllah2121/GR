@@ -2,20 +2,42 @@
 
 import React, { useState } from 'react';
 import { PlayCircle, AlertCircle, ArrowLeft, Trash2 } from 'lucide-react';
-import { BRANCHES, Inspection, TemplateKey } from '../types';
-import { TEMPLATES } from '../data/templates';
-import { getActiveDraft, saveActiveDraft, clearActiveDraft } from '../services/storage';
+import {
+  BRANCHES,
+  INSPECTION_TYPE_KEYS,
+  INSPECTION_TYPE_LABEL,
+  Inspection,
+  InspectionType,
+} from '../types';
+import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
+import { useChecklist } from '../hooks/useChecklist';
+import {
+  clearActiveDraft,
+  deleteInspection,
+  getActiveDraft,
+  saveActiveDraft,
+} from '../services/storage';
 import { useRouter } from 'next/navigation';
+import { formatDate } from '../services/reportModel';
 
 export const NewInspectionScreen: React.FC = () => {
   const router = useRouter();
+  const checklist = useChecklist();
   const [existingDraft, setExistingDraft] = useState<Inspection | null>(() => getActiveDraft());
   const [selectedBranch, setSelectedBranch] = useState(BRANCHES[0].name);
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateKey>('kitchen');
+  const [inspectorName, setInspectorName] = useState('');
+  const [inspectionType, setInspectionType] = useState<InspectionType>('routine');
+  const [nameError, setNameError] = useState<string | null>(null);
 
   // Formatted current date and time
   const now = new Date();
-  const currentDateISO = now.toISOString().split('T')[0];
+  // Local calendar date, not the UTC one — toISOString() would file a visit
+  // started just after midnight under the previous day.
+  const currentDateISO = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, '0'),
+    String(now.getDate()).padStart(2, '0'),
+  ].join('-');
   const currentTimeStr = now.toLocaleTimeString([], {
     hour: 'numeric',
     minute: '2-digit',
@@ -25,6 +47,13 @@ export const NewInspectionScreen: React.FC = () => {
   const handleStartInspection = (e: React.FormEvent) => {
     e.preventDefault();
 
+    const trimmedName = inspectorName.trim();
+    if (!trimmedName) {
+      setNameError('Enter the name of the inspector carrying out this visit');
+      return;
+    }
+    setNameError(null);
+
     if (existingDraft && existingDraft.status === 'draft') {
       const confirmDiscard = window.confirm(
         `Starting a new inspection will replace the existing draft for ${existingDraft.branchName}. Do you want to proceed?`
@@ -32,6 +61,7 @@ export const NewInspectionScreen: React.FC = () => {
       if (!confirmDiscard) {
         return;
       }
+      deleteInspection(existingDraft.id);
       clearActiveDraft();
     }
 
@@ -39,7 +69,6 @@ export const NewInspectionScreen: React.FC = () => {
     const newInspection: Inspection = {
       id: newId,
       branchName: selectedBranch,
-      templateKey: selectedTemplate,
       date: currentDateISO,
       time: currentTimeStr,
       status: 'draft',
@@ -47,6 +76,10 @@ export const NewInspectionScreen: React.FC = () => {
       signature: null,
       answers: {},
       currentSectionIndex: 0,
+      inspectorName: trimmedName,
+      inspectionType,
+      // The report measures how long the visit took from here
+      startedAt: new Date().toISOString(),
     };
 
     saveActiveDraft(newInspection);
@@ -60,7 +93,10 @@ export const NewInspectionScreen: React.FC = () => {
   };
 
   const handleDiscardDraft = () => {
+    if (!existingDraft) return;
     if (window.confirm('Are you sure you want to discard this unfinished draft?')) {
+      // Also drop the row the draft left in the records store as it was answered
+      deleteInspection(existingDraft.id);
       clearActiveDraft();
       setExistingDraft(null);
     }
@@ -82,7 +118,7 @@ export const NewInspectionScreen: React.FC = () => {
       <div className="mb-6">
         <h1 className="text-xl font-bold tracking-tight text-[#242217]">New inspection</h1>
         <p className="text-xs text-[#635E4F] mt-0.5">
-          Select branch and checklist to begin the weekly inspection.
+          Pick the branch to begin. Every branch runs the same full checklist.
         </p>
       </div>
 
@@ -101,7 +137,7 @@ export const NewInspectionScreen: React.FC = () => {
                 Unfinished draft exists: {existingDraft.branchName}
               </p>
               <p className="text-xs text-[#635E4F] mt-0.5">
-                {TEMPLATES[existingDraft.templateKey]?.label} • Started {existingDraft.date} at{' '}
+                {FULL_CHECKLIST_LABEL} • Started {formatDate(existingDraft.date)} at{' '}
                 {existingDraft.time}
               </p>
             </div>
@@ -154,23 +190,95 @@ export const NewInspectionScreen: React.FC = () => {
             </select>
           </div>
 
-          {/* Checklist Dropdown */}
-          <div>
-            <label
-              htmlFor="template-select"
-              className="block text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1.5"
-            >
-              Checklist template
-            </label>
-            <select
-              id="template-select"
-              value={selectedTemplate}
-              onChange={(e) => setSelectedTemplate(e.target.value as TemplateKey)}
-              className="w-full px-3 py-2.5 bg-white border border-[#DEDACB] rounded-md text-sm text-[#242217] focus:outline-none focus:ring-1 focus:ring-[#2F5233]"
-            >
-              <option value="kitchen">Kitchen hygiene checklist</option>
-              <option value="frontofhouse">Front of house checklist</option>
-            </select>
+          {/* Who is carrying out the visit, and why */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label
+                htmlFor="inspector-name-input"
+                className="block text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1.5"
+              >
+                Inspector
+              </label>
+              <input
+                id="inspector-name-input"
+                type="text"
+                value={inspectorName}
+                onChange={(e) => {
+                  setInspectorName(e.target.value);
+                  if (nameError) setNameError(null);
+                }}
+                placeholder="Name of the inspector"
+                aria-invalid={!!nameError}
+                aria-describedby={nameError ? 'inspector-name-error' : undefined}
+                className={`w-full px-3 py-2.5 bg-white border rounded-md text-sm text-[#242217] focus:outline-none focus:ring-1 focus:ring-[#2F5233] ${
+                  nameError ? 'border-[#9C3B2E]' : 'border-[#DEDACB]'
+                }`}
+              />
+              {nameError && (
+                <p id="inspector-name-error" className="text-xs font-semibold text-[#9C3B2E] mt-1">
+                  {nameError}
+                </p>
+              )}
+            </div>
+            <div>
+              <label
+                htmlFor="inspection-type-select"
+                className="block text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1.5"
+              >
+                Inspection type
+              </label>
+              <select
+                id="inspection-type-select"
+                value={inspectionType}
+                onChange={(e) => setInspectionType(e.target.value as InspectionType)}
+                className="w-full px-3 py-2.5 bg-white border border-[#DEDACB] rounded-md text-sm text-[#242217] focus:outline-none focus:ring-1 focus:ring-[#2F5233]"
+              >
+                {INSPECTION_TYPE_KEYS.map((key) => (
+                  <option key={key} value={key}>
+                    {INSPECTION_TYPE_LABEL[key]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Checklist coverage — every branch runs every list, so there is nothing to pick */}
+          <div id="checklist-coverage">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1.5">
+              Checklist
+            </span>
+            <div className="border border-[#DEDACB] rounded-md bg-[#F9F8F4] px-3.5 py-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-sm font-semibold text-[#242217]">{FULL_CHECKLIST_LABEL}</p>
+                <p className="text-xs text-[#635E4F] shrink-0">
+                  {checklist.sections.length} sections • {checklist.total} items
+                </p>
+              </div>
+              <ul className="mt-2.5 space-y-1">
+                {checklist.listGroups.map((group) => {
+                  const itemCount = group.sectionIndexes.reduce(
+                    (n, idx) => n + checklist.sections[idx].items.length,
+                    0
+                  );
+                  return (
+                    <li
+                      key={group.key}
+                      className="flex items-baseline justify-between gap-3 text-xs text-[#635E4F]"
+                    >
+                      <span className="font-medium text-[#242217]">{group.label}</span>
+                      <span className="shrink-0">{itemCount} items</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button
+                type="button"
+                onClick={() => router.push('/checklist')}
+                className="mt-3 text-xs font-bold text-[#2F5233] hover:underline cursor-pointer"
+              >
+                Edit checklist
+              </button>
+            </div>
           </div>
 
           {/* Read-only Date & Time */}

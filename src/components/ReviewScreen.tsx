@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   ArrowLeft,
   CheckCircle,
@@ -11,13 +11,27 @@ import {
   PenTool,
 } from 'lucide-react';
 import { Answer, Inspection, Item } from '../types';
-import { TEMPLATES } from '../data/templates';
+import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
+import { numberingFor } from '../services/checklistStore';
+import { useChecklist } from '../hooks/useChecklist';
 import { ScorePill } from './ScorePill';
+import { PriorityBadge } from './PriorityBadge';
 import {
   getInspectionById,
+  getInspections,
   saveInspection,
   clearActiveDraft,
 } from '../services/storage';
+import {
+  EMPTY_HISTORY,
+  RankedIssue,
+  SEVERITY_LABEL,
+  buildFailureHistory,
+  computePriority,
+  countBySeverity,
+  missingPhotoEvidence,
+  sortByPriority,
+} from '../services/priority';
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastProvider';
 
@@ -28,6 +42,7 @@ interface ReviewScreenProps {
 export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
   const router = useRouter();
   const showToast = useToast();
+  const checklist = useChecklist();
   const [inspection, setInspection] = useState<Inspection | null>(() =>
     getInspectionById(inspectionId)
   );
@@ -161,6 +176,20 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     setSignError(null);
   };
 
+  // Past failures at this branch, so repeat issues get escalated
+  const branchName = inspection?.branchName;
+  const inspectionDate = inspection?.date;
+  const failureHistory = useMemo(
+    () =>
+      branchName && inspectionDate
+        ? buildFailureHistory(getInspections(), branchName, {
+            id: inspectionId,
+            date: inspectionDate,
+          })
+        : EMPTY_HISTORY,
+    [inspectionId, branchName, inspectionDate]
+  );
+
   if (!inspection) {
     return (
       <div className="p-8 max-w-2xl mx-auto text-center">
@@ -175,12 +204,18 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     );
   }
 
-  const template = TEMPLATES[inspection.templateKey];
-  const allItems: Item[] = template.sections.flatMap((s) => s.items);
+  // A record being re-reviewed keeps the items it originally covered
+  const frozenIds = inspection.itemIds;
+  const allItems: Item[] =
+    frozenIds && frozenIds.length > 0
+      ? frozenIds.map((id) => checklist.getItem(id)).filter((i): i is Item => !!i)
+      : checklist.items;
   const totalItemsCount = allItems.length;
+  const displayNumber = numberingFor(allItems.map((i) => i.id));
 
-  // Gather flagged (No) items
-  const flaggedItems: { item: Item; answer: Answer }[] = [];
+  // Gather flagged (No) items, and anything still unanswered
+  const unrankedIssues: RankedIssue[] = [];
+  const unansweredItems: Item[] = [];
   let yesCount = 0;
 
   allItems.forEach((item) => {
@@ -188,15 +223,65 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     if (ans?.status === 'yes') {
       yesCount++;
     } else if (ans?.status === 'no') {
-      flaggedItems.push({ item, answer: ans });
+      unrankedIssues.push({
+        item,
+        answer: ans,
+        priority: computePriority(item, ans, failureHistory),
+      });
+    } else {
+      unansweredItems.push(item);
     }
   });
 
-  const calculatedScore = Math.round((yesCount / totalItemsCount) * 100);
+  // Most serious first — that is the order the manager should read them in
+  const flaggedItems = sortByPriority(unrankedIssues);
+  const severityCounts = countBySeverity(flaggedItems);
+  const needEvidence = missingPhotoEvidence(flaggedItems);
+
+  const calculatedScore =
+    totalItemsCount > 0 ? Math.round((yesCount / totalItemsCount) * 100) : 0;
+
+  // Items this record covered that the checklist no longer defines. Re-submitting
+  // would drop them from itemIds for good, so the manager is asked first.
+  const droppedItemCount = frozenIds
+    ? frozenIds.filter((id) => !checklist.getItem(id)).length
+    : 0;
 
   const handleSubmitInspection = () => {
+    // Sections can be jumped from the checklist, so re-check completeness here
+    if (unansweredItems.length > 0) {
+      showToast(
+        `${unansweredItems.length} item${unansweredItems.length === 1 ? ' is' : 's are'} still unanswered`
+      );
+      return;
+    }
+
+    // Critical issues have to carry photo evidence
+    if (needEvidence.length > 0) {
+      showToast(
+        `${needEvidence.length} critical issue${
+          needEvidence.length === 1 ? ' needs' : 's need'
+        } photo evidence`
+      );
+      return;
+    }
+
     if (!hasDrawn) {
       setSignError('Please sign before submitting');
+      return;
+    }
+
+    // Re-submitting rewrites itemIds from what is on screen. When the checklist
+    // has moved on, that quietly narrows what the record says it covered.
+    if (
+      droppedItemCount > 0 &&
+      !window.confirm(
+        `${droppedItemCount} item${droppedItemCount === 1 ? '' : 's'} this inspection ` +
+          `originally covered ${droppedItemCount === 1 ? 'is' : 'are'} no longer in the checklist. ` +
+          `Submitting now records it as covering ${totalItemsCount} items instead of ` +
+          `${frozenIds ? frozenIds.length : totalItemsCount}, and rescores it out of ${totalItemsCount}. Continue?`
+      )
+    ) {
       return;
     }
 
@@ -208,13 +293,18 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       status: 'submitted',
       score: calculatedScore,
       signature: signatureDataUrl,
+      // Freeze what was inspected, so later checklist edits cannot rewrite
+      // this record's contents, numbering or score
+      itemIds: allItems.map((item) => item.id),
+      // Closes the duration the report shows against startedAt
+      submittedAt: new Date().toISOString(),
     };
 
     saveInspection(submittedInspection);
     clearActiveDraft();
 
     showToast('Inspection saved');
-    router.push(`/inspections/${inspection.id}`);
+    router.push(`/inspections/${inspection.id}/summary`);
   };
 
   return (
@@ -237,8 +327,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
         <p className="text-xs font-medium text-[#635E4F] mt-1">
           {flaggedItems.length === 0
             ? 'Every item passed'
-            : `${flaggedItems.length} item${flaggedItems.length === 1 ? '' : 's'} flagged with a reason`}
-          {' '}• {inspection.branchName} ({template.label})
+            : `${flaggedItems.length} item${flaggedItems.length === 1 ? '' : 's'} flagged` +
+              (severityCounts.critical > 0
+                ? `, ${severityCounts.critical} critical`
+                : severityCounts.high > 0
+                  ? `, ${severityCounts.high} high priority`
+                  : '')}
+          {' '}• {inspection.branchName} ({FULL_CHECKLIST_LABEL})
         </p>
       </div>
 
@@ -257,10 +352,100 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
         </div>
       </div>
 
+      {/* Priority breakdown of everything flagged */}
+      {flaggedItems.length > 0 && (
+        <div
+          id="review-priority-summary"
+          className="mb-6 p-4 rounded-md bg-white border border-[#DEDACB] shadow-xs"
+        >
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-2.5">
+            Priority breakdown
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(['critical', 'high', 'medium', 'low'] as const).map((severity) => (
+              <span
+                key={severity}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-semibold ${
+                  severityCounts[severity] === 0
+                    ? 'border-[#DEDACB] bg-[#F9F8F4] text-[#635E4F]/60'
+                    : 'border-[#DEDACB] bg-white text-[#242217]'
+                }`}
+              >
+                <PriorityBadge severity={severity} size="sm" />
+                <span className="tabular-nums">{severityCounts[severity]}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Critical issues lacking photo evidence — blocks submit */}
+      {needEvidence.length > 0 && (
+        <div
+          id="review-evidence-banner"
+          className="mb-6 p-4 rounded-md bg-[#F4E4DF] border border-[#9C3B2E]/40 shadow-xs"
+          role="alert"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-[#9C3B2E] shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-[#242217]">
+                {needEvidence.length} critical issue{needEvidence.length === 1 ? '' : 's'} need
+                {needEvidence.length === 1 ? 's' : ''} photo evidence
+              </p>
+              <ul className="mt-1.5 space-y-0.5">
+                {needEvidence.map(({ item }) => (
+                  <li key={item.id} className="text-xs text-[#635E4F]">
+                    {displayNumber(item.id)}. {item.text}
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
+                className="mt-2 text-xs font-bold text-[#2F5233] hover:underline cursor-pointer"
+              >
+                Return to checklist
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unanswered items — blocks submit until every item is marked */}
+      {unansweredItems.length > 0 && (
+        <div
+          id="review-unanswered-banner"
+          className="mb-6 p-4 rounded-md bg-[#F3ECD8] border border-[#8A6318]/30 shadow-xs"
+          role="alert"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-[#8A6318] shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-[#242217]">
+                {unansweredItems.length} item{unansweredItems.length === 1 ? '' : 's'} still
+                unanswered
+              </p>
+              <p className="text-xs text-[#635E4F] mt-0.5">
+                Mark item{unansweredItems.length === 1 ? '' : 's'}{' '}
+                {unansweredItems.map((item) => displayNumber(item.id)).join(', ')} before submitting.
+              </p>
+              <button
+                type="button"
+                onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
+                className="mt-2 text-xs font-bold text-[#2F5233] hover:underline cursor-pointer"
+              >
+                Return to checklist
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Flagged items list */}
       <div className="mb-8">
         <h2 className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-3">
-          Non-compliant items ({flaggedItems.length})
+          Non-compliant items ({flaggedItems.length}) — most serious first
         </h2>
 
         {flaggedItems.length === 0 ? (
@@ -273,7 +458,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
           </div>
         ) : (
           <div className="space-y-3">
-            {flaggedItems.map(({ item, answer }) => {
+            {flaggedItems.map(({ item, answer, priority }) => {
               const displayReason =
                 answer.reason === 'Other'
                   ? `Other: ${answer.otherReason || 'Unspecified'}`
@@ -283,15 +468,26 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                 <div
                   key={item.id}
                   id={`review-flagged-item-${item.id}`}
-                  className="bg-[#F4E4DF]/40 border border-[#9C3B2E]/30 rounded-md p-4 text-[#242217]"
+                  className={`bg-[#F4E4DF]/40 border rounded-md p-4 text-[#242217] ${
+                    priority.severity === 'critical'
+                      ? 'border-[#9C3B2E] border-l-4'
+                      : 'border-[#9C3B2E]/30'
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-2.5">
-                      <span className="text-xs font-bold text-[#9C3B2E] bg-white border border-[#9C3B2E]/30 w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5">
-                        {item.id}
+                      <span className="text-xs font-bold text-[#9C3B2E] bg-white border border-[#9C3B2E]/30 min-w-5 h-5 px-1 rounded flex items-center justify-center shrink-0 mt-0.5 tabular-nums">
+                        {displayNumber(item.id)}
                       </span>
                       <div>
-                        <p className="text-sm font-semibold text-[#242217]">{item.text}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-[#242217]">{item.text}</p>
+                          <PriorityBadge
+                            severity={priority.severity}
+                            size="sm"
+                            escalated={priority.severity !== priority.base}
+                          />
+                        </div>
                         <div className="mt-1.5 text-xs">
                           <span className="font-semibold text-[#9C3B2E]">Reason: </span>
                           <span className="text-[#242217]">{displayReason}</span>
@@ -300,6 +496,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                           <div className="mt-1 text-xs text-[#635E4F]">
                             <span className="font-semibold">Note: </span>
                             <span>{answer.note}</span>
+                          </div>
+                        )}
+                        {priority.repeatCount > 0 && (
+                          <div className="mt-1 text-xs font-semibold text-[#8A6318]">
+                            Repeat issue — flagged in {priority.repeatCount} of the last{' '}
+                            {priority.historyVisits} visit
+                            {priority.historyVisits === 1 ? '' : 's'} to this branch
                           </div>
                         )}
                       </div>

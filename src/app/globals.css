@@ -18,20 +18,51 @@ body {
     margin: 0 !important;
   }
 
+  /* Status colours carry meaning on this report, so let them print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   .no-print,
-  aside,
+  #main-sidebar,
   nav,
-  button,
   .print-hidden {
     display: none !important;
   }
 
+  /*
+   * Buttons are interactive chrome and drop out, except the ones that carry
+   * content — the report's collapsible section headers are buttons, and their
+   * titles have to survive into the printed document.
+   */
+  button:not(.print-keep) {
+    display: none !important;
+  }
+
+  /*
+   * A printed report is the whole record, not whichever tab happened to be
+   * open, so every panel, section and row detail is expanded.
+   */
+  .report-panel,
+  .collapsible,
+  .print-only-heading {
+    display: block !important;
+  }
+
+  /* The rail follows the checklist down the page instead of squeezing beside it */
   .print-container {
+    display: block !important;
     max-width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
+  }
+
+  .print-container > aside {
+    position: static !important;
+    margin-top: 1.25rem;
   }
 
   .page-break-inside-avoid {

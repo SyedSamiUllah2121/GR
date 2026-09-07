@@ -3,8 +3,17 @@ import { SEED_INSPECTIONS } from '../data/seedData';
 
 const STORAGE_KEYS = {
   AUTH: 'inspection_log_auth',
-  INSPECTIONS: 'inspection_log_records_v1',
-  ACTIVE_DRAFT: 'inspection_log_draft_v1',
+  // Bumped whenever the set of checklist items changes, because records are
+  // keyed by global item id and an older record would read as half-unanswered.
+  //   v2  one inspection covers every list; answers keyed by global item id
+  //   v3  per-item severity added, seeded history for repeat-issue escalation
+  //   v4  duplicate checks removed, shared ones moved to the branch-wide list
+  //   v5  checklist became editable; records freeze the items they covered
+  //   v6  visits record inspector, type and start/submit times; the default
+  //       checklist grew to 61 items, so v5 records read as partly uncovered
+  // Older records are left in place rather than migrated.
+  INSPECTIONS: 'inspection_log_records_v6',
+  ACTIVE_DRAFT: 'inspection_log_draft_v6',
 };
 
 // Check if user is authenticated
