@@ -446,9 +446,13 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
         <aside className="space-y-5 xl:sticky xl:top-6">
           <RailCard title="Inspection summary">
             <div className="flex items-center gap-4">
+              {/* The score sits in the middle because it is what differs from
+                  one visit to the next; the item count is the same on every
+                  inspection of this checklist. */}
               <DonutChart
-                centerValue={model.total}
-                centerLabel="Total items"
+                centerValue={model.score}
+                centerSuffix="%"
+                centerLabel={`of ${model.total} items`}
                 segments={[
                   {
                     key: 'passed',
