@@ -130,7 +130,47 @@ export interface Answer {
   priorityOverride?: Severity | null;
 }
 
-export type InspectionStatus = 'draft' | 'submitted';
+/**
+ * Where a visit is in its life.
+ *
+ *   assigned   a surprise visit the admin has raised and handed to an
+ *              inspector, not yet started. Has no answers.
+ *   draft      being filled in.
+ *   submitted  signed off, and from that moment locked — see `lockedAt`.
+ */
+export type InspectionStatus = 'assigned' | 'draft' | 'submitted';
+
+/**
+ * How the visit came about, which is what decides who may carry it out and
+ * who may change the result afterwards.
+ *
+ *   monday    the branch's own weekly inspection, filled in by its manager
+ *   surprise  raised by the admin and assigned to an inspector, unannounced
+ *
+ * Distinct from `InspectionType` below, which says *why* a visit happened
+ * (a complaint, a follow-up) and is only ever descriptive. This one carries
+ * permissions, so it is deliberately a closed pair.
+ */
+export type InspectionKind = 'monday' | 'surprise';
+
+export const INSPECTION_KIND_LABEL: Record<InspectionKind, string> = {
+  monday: 'Regular Monday inspection',
+  surprise: 'Surprise inspection',
+};
+
+/** The same, short enough for a table cell or a pill. */
+export const INSPECTION_KIND_SHORT: Record<InspectionKind, string> = {
+  monday: 'Monday',
+  surprise: 'Surprise',
+};
+
+/**
+ * Records made before visits were classified. They were all the branch's own
+ * weekly round, so that is what an absent kind means.
+ */
+export function inspectionKindOf(inspection: Pick<Inspection, 'kind'>): InspectionKind {
+  return inspection.kind ?? 'monday';
+}
 
 /** Why the visit happened. Shown on the report header. */
 export type InspectionType = 'routine' | 'follow-up' | 'complaint' | 'pre-opening';
@@ -160,15 +200,48 @@ export interface Inspection {
   status: InspectionStatus;
   score: number; // percentage (0-100)
   signature: string | null; // data URL
+  /**
+   * Who signed the record off, and in what capacity. The branch manager is
+   * not always on site, so the signature alone does not say who gave it —
+   * these do. Absent on records made before they were captured.
+   */
+  signatoryName?: string;
+  signatoryRole?: string;
   answers: Record<number, Answer>;
   currentSectionIndex?: number;
   /** Who carried out the visit. Absent on records made before this was captured. */
   inspectorName?: string;
   inspectionType?: InspectionType;
+  /**
+   * Monday round or surprise visit. Absent on records made before visits were
+   * classified — read it through `inspectionKindOf`, never directly.
+   */
+  kind?: InspectionKind;
+  /**
+   * Surprise visits: the inspector it was handed to, and the admin who handed
+   * it over. Held as user ids rather than names so renaming an account does
+   * not orphan the assignment — `inspectorName` carries the name for display
+   * and stays on the record for good.
+   */
+  assignedToUserId?: string;
+  assignedByUserId?: string;
+  /** ISO timestamp the assignment was raised. */
+  assignedAt?: string;
   /** ISO timestamp the visit was started, which the duration is measured from. */
   startedAt?: string;
   /** ISO timestamp the report was signed and submitted. */
   submittedAt?: string;
+  /** Who submitted it, for the audit line on the report. */
+  submittedByUserId?: string;
+  /**
+   * When the answers were sealed. Set on submit, and the same moment as
+   * `submittedAt` — a separate field because it is the *permission* that
+   * matters here, not the timing: only the main admin may reopen a record
+   * that carries this, and doing so records who did it below.
+   */
+  lockedAt?: string;
+  /** Every admin override of a locked result, oldest first. */
+  edits?: InspectionEdit[];
   /**
    * The items this inspection actually covered, in order, recorded on submit.
    * Lets a past report render exactly what was inspected — and score out of
@@ -176,6 +249,99 @@ export interface Inspection {
    * which follow the current checklist.
    */
   itemIds?: number[];
+}
+
+/**
+ * An admin override of a submitted result.
+ *
+ * A locked record that can nevertheless be changed by one person needs to say
+ * so on its face, otherwise "locked" is a claim the system cannot back up.
+ * Every reopening appends one of these, and the report prints them.
+ */
+export interface InspectionEdit {
+  /** ISO timestamp of the change. */
+  at: string;
+  byUserId: string;
+  byName: string;
+  /** The score before the edit, so a changed outcome is visible. */
+  previousScore: number;
+}
+
+// ---------------------------------------------------------------------------
+// Users and access
+// ---------------------------------------------------------------------------
+
+/**
+ * Who is using the system.
+ *
+ *   admin           full control: every branch, every record, user accounts,
+ *                   the checklist, and surprise visits
+ *   branch-manager  one branch: its records, and its own Monday inspection
+ *   inspector       the surprise visits handed to them, and nothing else
+ *
+ * The three are a hierarchy of reach, not of trust — a branch manager is not
+ * a lesser admin, they simply cannot see past their own branch. Permissions
+ * are spelled out one at a time in services/permissions.ts rather than
+ * inferred from an ordering, because these three do not nest cleanly: an
+ * inspector may submit a visit at any branch, which a branch manager may not.
+ */
+export type UserRole = 'admin' | 'branch-manager' | 'inspector';
+
+/**
+ * The roles in order of reach, which is the order they are listed in. Screens
+ * read this rather than keeping their own copy, so a fourth role would appear
+ * everywhere at once.
+ */
+export const USER_ROLE_KEYS: UserRole[] = ['admin', 'branch-manager', 'inspector'];
+
+export const USER_ROLE_LABEL: Record<UserRole, string> = {
+  admin: 'Main Admin',
+  'branch-manager': 'Branch Manager',
+  inspector: 'Inspector',
+};
+
+/** One line on what each role is for, shown where accounts are managed. */
+export const USER_ROLE_BLURB: Record<UserRole, string> = {
+  admin: 'Full control of the system, every branch and all accounts',
+  'branch-manager': 'Their own branch, and its regular Monday inspection',
+  inspector: 'Surprise visits assigned to them, at any branch',
+};
+
+export interface User {
+  id: string;
+  name: string;
+  /** Also the sign-in name. Unique, case-insensitively. */
+  email: string;
+  /**
+   * Stored as typed. This is a demo system with no server to hash against —
+   * when accounts move to a backend, nothing outside userStore reads this.
+   */
+  password: string;
+  role: UserRole;
+  /**
+   * The branch this account belongs to. Required for a branch manager, which
+   * is the whole of their access; meaningless for the other two, who are not
+   * tied to one branch.
+   */
+  branchName?: string;
+  /** Shown in the avatar when there is no photo. */
+  initials: string;
+  /**
+   * Withdrawn accounts are kept rather than deleted: their name still appears
+   * on the inspections they submitted, and a deleted id would leave those
+   * records pointing at nothing.
+   */
+  active: boolean;
+  /** ISO date the account was created. */
+  createdAt: string;
+}
+
+/** Initials for the avatar, from however many words the name has. */
+export function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
 // ---------------------------------------------------------------------------

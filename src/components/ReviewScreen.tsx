@@ -35,20 +35,54 @@ import {
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastProvider';
 import { raiseMaintenanceJobs } from '../services/maintenanceIntake';
+import { currentUser } from '../services/session';
+import { canEditInspection, canViewInspection } from '../services/permissions';
+import { AccessNotice, NOT_YOURS } from './AccessNotice';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 interface ReviewScreenProps {
   inspectionId: string;
 }
 
+/**
+ * Titles offered under the designation box. Only suggestions — a branch can
+ * call the person on duty whatever it likes, so the field stays free text.
+ */
+const SIGNATORY_ROLES = [
+  'Branch manager',
+  'Assistant manager',
+  'Shift supervisor',
+  'Head chef',
+  'Duty manager',
+  'Owner',
+];
+
 export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
   const router = useRouter();
   const showToast = useToast();
   const checklist = useChecklist();
+  const user = useCurrentUser();
   const [inspection, setInspection] = useState<Inspection | null>(() =>
     getInspectionById(inspectionId)
   );
   const [hasDrawn, setHasDrawn] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
+  /*
+   * Who is signing. The manager is often not the person on site, so this is
+   * asked rather than assumed — but a branch manager signing off their own
+   * round is the common case, so their name and title start in the boxes.
+   * Both stay editable: it is a statement of who was actually there.
+   */
+  const [signatoryName, setSignatoryName] = useState(
+    () =>
+      getInspectionById(inspectionId)?.signatoryName ??
+      (currentUser()?.role === 'branch-manager' ? currentUser()?.name ?? '' : '')
+  );
+  const [signatoryRole, setSignatoryRole] = useState(
+    () =>
+      getInspectionById(inspectionId)?.signatoryRole ??
+      (currentUser()?.role === 'branch-manager' ? 'Branch manager' : '')
+  );
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const isDrawingRef = useRef(false);
@@ -205,6 +239,27 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     );
   }
 
+  /*
+   * Signing off is the act that produces the locked result, so the same rule
+   * that governs the answers governs this screen. Without it a locked record
+   * could be re-signed straight from its URL, which would make the padlock on
+   * the checklist decorative.
+   */
+  if (!canEditInspection(user, inspection)) {
+    const mayRead = canViewInspection(user, inspection);
+    return (
+      <AccessNotice
+        title={mayRead ? 'Already signed off' : NOT_YOURS.title}
+        detail={
+          mayRead
+            ? 'This inspection has been submitted and locked. Only the Main Admin can reopen and re-sign it.'
+            : NOT_YOURS.detail
+        }
+        reportHref={mayRead ? `/inspections/${inspection.id}` : undefined}
+      />
+    );
+  }
+
   // A record being re-reviewed keeps the items it originally covered
   const frozenIds = inspection.itemIds;
   const allItems: Item[] =
@@ -267,6 +322,16 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       return;
     }
 
+    if (!signatoryName.trim()) {
+      setSignError('Enter the name of the person signing');
+      return;
+    }
+
+    if (!signatoryRole.trim()) {
+      setSignError('Enter their designation — the record has to say in what capacity they signed');
+      return;
+    }
+
     if (!hasDrawn) {
       setSignError('Please sign before submitting');
       return;
@@ -289,16 +354,50 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     const canvas = canvasRef.current;
     const signatureDataUrl = canvas ? canvas.toDataURL('image/png') : null;
 
+    const now = new Date().toISOString();
+
+    /*
+     * Re-submitting a record that was already signed off is the main admin
+     * overriding a locked result, and the report has to be able to say so —
+     * a lock only one person can open is worth nothing if opening it leaves
+     * no trace. Appended rather than replaced, so a second override does not
+     * erase the first.
+     */
+    const wasLocked = inspection.status === 'submitted';
+    const edits = wasLocked
+      ? [
+          ...(inspection.edits ?? []),
+          {
+            at: now,
+            byUserId: user?.id ?? 'unknown',
+            byName: user?.name ?? 'Unknown',
+            previousScore: inspection.score,
+          },
+        ]
+      : inspection.edits;
+
     const submittedInspection: Inspection = {
       ...inspection,
       status: 'submitted',
       score: calculatedScore,
       signature: signatureDataUrl,
+      signatoryName: signatoryName.trim(),
+      signatoryRole: signatoryRole.trim(),
       // Freeze what was inspected, so later checklist edits cannot rewrite
       // this record's contents, numbering or score
       itemIds: allItems.map((item) => item.id),
       // Closes the duration the report shows against startedAt
-      submittedAt: new Date().toISOString(),
+      submittedAt: now,
+      submittedByUserId: user?.id,
+      /*
+       * When the answers were first sealed. Kept separate from `submittedAt`
+       * even though they start as the same instant: this one is the
+       * permission — only the main admin may reopen a record that carries it
+       * — and it holds the *original* seal, because each override already
+       * stamps its own time in `edits`.
+       */
+      lockedAt: inspection.lockedAt ?? now,
+      edits,
     };
 
     saveInspection(submittedInspection);
@@ -549,10 +648,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
               htmlFor="signature-canvas"
               className="block text-sm font-bold text-[#17181D]"
             >
-              Branch manager sign-off <span className="text-[#C8202D]">*</span>
+              Sign-off <span className="text-[#C8202D]">*</span>
             </label>
             <p className="text-xs text-[#6B6F76] mt-0.5">
-              Draw manager signature with touch or mouse to acknowledge this inspection.
+              Whoever is on site signs. Record their name and designation, then sign below.
             </p>
           </div>
 
@@ -575,6 +674,59 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
             <span>{signError}</span>
           </div>
         )}
+
+        {/*
+          Who is actually signing. A signature on its own does not say whose
+          it is, and the branch manager is often not the person on site.
+        */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <div>
+            <label
+              htmlFor="signatory-name-input"
+              className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
+            >
+              Name of person signing <span className="text-[#C8202D]">*</span>
+            </label>
+            <input
+              id="signatory-name-input"
+              type="text"
+              value={signatoryName}
+              onChange={(e) => {
+                setSignatoryName(e.target.value);
+                setSignError(null);
+              }}
+              placeholder="e.g. A. Rahman"
+              className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] transition-colors"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="signatory-role-input"
+              className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
+            >
+              Designation <span className="text-[#C8202D]">*</span>
+            </label>
+            <input
+              id="signatory-role-input"
+              type="text"
+              list="signatory-role-options"
+              value={signatoryRole}
+              onChange={(e) => {
+                setSignatoryRole(e.target.value);
+                setSignError(null);
+              }}
+              placeholder="e.g. Shift supervisor"
+              className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] transition-colors"
+            />
+            {/* Suggestions, not a fixed list — a branch can title people anything */}
+            <datalist id="signatory-role-options">
+              {SIGNATORY_ROLES.map((role) => (
+                <option key={role} value={role} />
+              ))}
+            </datalist>
+          </div>
+        </div>
 
         <div className="relative border-2 border-dashed border-[#E6E7EB] rounded-md bg-[#FAFAFA] overflow-hidden touch-none">
           <canvas

@@ -2,7 +2,6 @@ import { Inspection } from '../types';
 import { SEED_INSPECTIONS } from '../data/seedData';
 
 const STORAGE_KEYS = {
-  AUTH: 'inspection_log_auth',
   // Bumped whenever the set of checklist items changes, because records are
   // keyed by global item id and an older record would read as half-unanswered.
   //   v2  one inspection covers every list; answers keyed by global item id
@@ -11,32 +10,21 @@ const STORAGE_KEYS = {
   //   v5  checklist became editable; records freeze the items they covered
   //   v6  visits record inspector, type and start/submit times; the default
   //       checklist grew to 61 items, so v5 records read as partly uncovered
+  //   v7  visits are a Monday round or a surprise visit, and carry who they
+  //       were assigned to, who submitted them and when they were locked.
+  //       v6 records have none of that, so they would all read as unassigned
+  //       Monday rounds and an inspector would see an empty list.
   // Older records are left in place rather than migrated.
-  INSPECTIONS: 'inspection_log_records_v6',
-  ACTIVE_DRAFT: 'inspection_log_draft_v6',
+  INSPECTIONS: 'inspection_log_records_v7',
+  ACTIVE_DRAFT: 'inspection_log_draft_v7',
 };
 
-// Check if user is authenticated
-export function isAuthenticated(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEYS.AUTH) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-export function setAuthenticated(val: boolean): void {
-  try {
-    if (val) {
-      localStorage.setItem(STORAGE_KEYS.AUTH, 'true');
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.AUTH);
-    }
-    notifyStorageChange();
-  } catch (err) {
-    console.error('Failed to set auth state:', err);
-  }
-}
+/*
+ * Sign-in lives in services/session.ts, which names an account rather than
+ * setting a boolean. It is a separate module because it depends on the user
+ * store, and the user store depends on this one for inspection counts —
+ * keeping them apart is what stops that becoming a cycle.
+ */
 
 // Retrieve all inspections (seeding if empty)
 export function getInspections(): Inspection[] {
@@ -132,7 +120,13 @@ export function clearActiveDraft(): void {
 // Custom event for reactive UI updates across same-window components
 const STORAGE_EVENT_NAME = 'inspection_log_store_change';
 
-function notifyStorageChange(): void {
+/**
+ * Tells every screen in this tab that stored data changed.
+ *
+ * Exported because the session module signs people in and out, and the
+ * chrome watches this event to notice.
+ */
+export function notifyStorageChange(): void {
   window.dispatchEvent(new Event(STORAGE_EVENT_NAME));
 }
 

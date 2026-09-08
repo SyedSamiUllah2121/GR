@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Building2,
   Calendar,
+  CalendarCheck,
   CalendarClock,
   Camera,
   Check,
@@ -29,8 +30,16 @@ import {
   User,
   Wrench,
   X,
+  Zap,
 } from 'lucide-react';
-import { INSPECTION_TYPE_LABEL, Inspection, Severity } from '../types';
+import {
+  INSPECTION_KIND_LABEL,
+  INSPECTION_KIND_SHORT,
+  INSPECTION_TYPE_LABEL,
+  Inspection,
+  Severity,
+  inspectionKindOf,
+} from '../types';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
 import { useChecklist } from '../hooks/useChecklist';
 import { getInspectionById, getInspections, subscribeToStorage } from '../services/storage';
@@ -49,6 +58,10 @@ import {
 import { PriorityBadge } from './PriorityBadge';
 import { ScorePill } from './ScorePill';
 import { DonutChart } from './DonutChart';
+import { canEditInspection, canViewInspection } from '../services/permissions';
+import { AccessNotice, NOT_YOURS } from './AccessNotice';
+import { getUserById } from '../services/userStore';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 interface ReportScreenProps {
   inspectionId: string;
@@ -71,6 +84,7 @@ type TabKey = 'checklist' | 'findings' | 'maintenance' | 'notes' | 'history';
 export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
   const router = useRouter();
   const checklist = useChecklist();
+  const user = useCurrentUser();
 
   const [inspection, setInspection] = useState<Inspection | null>(() =>
     getInspectionById(inspectionId)
@@ -129,9 +143,29 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
     );
   }
 
+  /*
+   * A record from another branch, or another inspector's visit. Refused here
+   * rather than only having its buttons hidden: this screen is the whole
+   * report — every finding, note and photograph — so leaving it readable
+   * would have made the scoping on the records list cosmetic.
+   */
+  if (!canViewInspection(user, inspection)) {
+    return <AccessNotice {...NOT_YOURS} />;
+  }
+
   const open = openSections ?? new Set<string>();
   const isLocked = inspection.status === 'submitted';
   const allOpen = open.size === model.sections.length;
+  const kind = inspectionKindOf(inspection);
+  const mayEdit = canEditInspection(user, inspection);
+  const assignedBy = getUserById(inspection.assignedByUserId);
+  const submittedBy = getUserById(inspection.submittedByUserId);
+  /*
+   * Admin overrides of this locked result. A lock only one person can open
+   * has to leave a trail, otherwise the word means nothing — so the report
+   * prints every reopening rather than only the current answers.
+   */
+  const overrides = inspection.edits ?? [];
 
   const toggleSection = (key: string) =>
     setOpenSections(() => {
@@ -198,17 +232,37 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
               Draft
             </span>
           )}
+
+          {/* Which kind of visit this was — it decides who could edit it */}
+          <span
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+              kind === 'surprise'
+                ? 'bg-[#FFF6E5] text-[#8A5A08] border-[#B4740A]/25'
+                : 'bg-[#F6F6F8] text-[#6B6F76] border-[#E6E7EB]'
+            }`}
+          >
+            {kind === 'surprise' ? <Zap className="w-3 h-3" /> : <CalendarCheck className="w-3 h-3" />}
+            {INSPECTION_KIND_SHORT[kind]}
+          </span>
         </div>
 
         <div className="no-print flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer shadow-xs"
-          >
-            <Edit3 className="w-3.5 h-3.5 text-[#C8202D]" />
-            <span>Edit answers</span>
-          </button>
+          {/*
+            "Only the Main Admin can edit the submitted results if necessary"
+            — so for everyone else on a submitted record this button is not
+            here at all. A draft is still editable by whoever is carrying the
+            visit out.
+          */}
+          {mayEdit && (
+            <button
+              type="button"
+              onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer shadow-xs"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-[#C8202D]" />
+              <span>{isLocked ? 'Reopen answers' : 'Edit answers'}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={handleExportCsv}
@@ -278,6 +332,19 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
               </MetaField>
               <MetaField icon={User} label="Inspector">
                 {inspection.inspectorName || 'Not recorded'}
+              </MetaField>
+              <MetaField icon={kind === 'surprise' ? Zap : CalendarCheck} label="Visit">
+                {INSPECTION_KIND_LABEL[kind]}
+                {/*
+                  Who sent them. Only a surprise visit has an answer — a
+                  Monday round is the branch's own standing obligation and
+                  nobody hands it out.
+                */}
+                {kind === 'surprise' && (
+                  <span className="block text-[11px] font-normal text-[#6B6F76] mt-0.5">
+                    {assignedBy ? `Assigned by ${assignedBy.name}` : 'Assigned by the admin'}
+                  </span>
+                )}
               </MetaField>
               <MetaField icon={ClipboardList} label="Inspection type">
                 {inspection.inspectionType
@@ -626,14 +693,58 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                   ? 'Frozen at submission'
                   : 'Follows live checklist'}
               </InfoRow>
-              <InfoRow label="Manager signature">
-                {inspection.signature ? 'Signed' : 'Not signed'}
+              <InfoRow label="Signed by">
+                {inspection.signature
+                  ? inspection.signatoryName
+                    ? `${inspection.signatoryName}${
+                        inspection.signatoryRole ? ` — ${inspection.signatoryRole}` : ''
+                      }`
+                    : 'Signed'
+                  : 'Not signed'}
               </InfoRow>
+              <InfoRow label="Visit">{INSPECTION_KIND_LABEL[kind]}</InfoRow>
+              {submittedBy && (
+                <InfoRow label="Submitted by">{submittedBy.name}</InfoRow>
+              )}
+              {inspection.lockedAt && (
+                <InfoRow label="Locked">{formatDateTime(inspection.lockedAt)}</InfoRow>
+              )}
               <InfoRow label="Visits on record">
                 {String(model.branchHistory.length)} at this branch
               </InfoRow>
             </dl>
           </RailCard>
+
+          {/*
+            The override trail. Absent on the overwhelming majority of
+            records, which is the point — when it is there, it is the most
+            important thing on the page: a signed-off result was changed
+            afterwards, and this says by whom and what the score had been.
+          */}
+          {overrides.length > 0 && (
+            <RailCard title="Reopened after sign-off">
+              <ol className="space-y-2.5">
+                {overrides
+                  .slice()
+                  .reverse()
+                  .map((edit, index) => (
+                    <li
+                      key={`${edit.at}-${index}`}
+                      className="pl-3 border-l-2 border-[#B4740A]/40"
+                    >
+                      <p className="text-xs font-bold text-[#17181D]">{edit.byName}</p>
+                      <p className="text-[11px] text-[#6B6F76]">
+                        {formatDateTime(edit.at)} — score was {edit.previousScore}%
+                      </p>
+                    </li>
+                  ))}
+              </ol>
+              <p className="mt-3 text-[11px] text-[#6B6F76] leading-relaxed">
+                Only the Main Admin can change a submitted result. Every change is recorded
+                here.
+              </p>
+            </RailCard>
+          )}
         </aside>
       </div>
     </div>
@@ -1180,7 +1291,7 @@ const SignOffCard: React.FC<{ model: ReportModel }> = ({ model }) => {
       <div className="mt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-6">
         <div>
           <span className="text-xs font-semibold text-[#17181D] block mb-1.5">
-            Branch manager signature
+            Signed by
           </span>
           {inspection.signature ? (
             <div className="w-60 h-24 border border-[#E6E7EB] bg-[#FAFAFA] rounded-md flex items-center justify-center p-2">
@@ -1194,6 +1305,16 @@ const SignOffCard: React.FC<{ model: ReportModel }> = ({ model }) => {
             <div className="w-60 h-24 border border-dashed border-[#E6E7EB] bg-[#FAFAFA] rounded-md flex items-center justify-center text-xs text-[#6B6F76] italic">
               Not signed yet
             </div>
+          )}
+
+          {/* A signature says nothing without a name against it */}
+          {inspection.signatoryName && (
+            <p className="mt-2 text-xs text-[#17181D] w-60">
+              <strong>{inspection.signatoryName}</strong>
+              {inspection.signatoryRole && (
+                <span className="text-[#6B6F76]"> — {inspection.signatoryRole}</span>
+              )}
+            </p>
           )}
         </div>
 
@@ -1245,6 +1366,7 @@ function downloadCsv(model: ReportModel): void {
     ['Date', formatDate(inspection.date)],
     ['Time', inspection.time],
     ['Inspector', inspection.inspectorName || 'Not recorded'],
+    ['Visit', INSPECTION_KIND_LABEL[inspectionKindOf(inspection)]],
     [
       'Inspection type',
       inspection.inspectionType
@@ -1253,6 +1375,12 @@ function downloadCsv(model: ReportModel): void {
     ],
     ['Status', inspection.status === 'submitted' ? 'Submitted & locked' : 'Draft'],
     ['Submitted at', inspection.submittedAt ? formatDateTime(inspection.submittedAt) : ''],
+    [
+      'Submitted by',
+      getUserById(inspection.submittedByUserId)?.name ?? inspection.inspectorName ?? '',
+    ],
+    // Blank on every record that has never been reopened, which is most
+    ['Reopened after sign-off', (inspection.edits ?? []).length || ''],
     ['Duration', formatDuration(model.durationMinutes)],
     ['Score', `${model.score}%`],
     ['Items covered', model.total],

@@ -1,41 +1,53 @@
 'use client';
 
-import {useEffect, useState} from 'react';
-import {useRouter} from 'next/navigation';
+import {useEffect} from 'react';
+import {usePathname, useRouter} from 'next/navigation';
 import {Sidebar} from './Sidebar';
 import {Topbar} from './Topbar';
 import {ToastProvider} from './ToastProvider';
-import {getInspections, isAuthenticated, subscribeToStorage} from '../services/storage';
+import {getInspections} from '../services/storage';
+import {canAccessPath, homePathFor} from '../services/permissions';
+import {useCurrentUser} from '../hooks/useCurrentUser';
 import {useMounted} from '../hooks/useMounted';
 
 /**
- * Signed-in chrome: sidebar, top bar, toasts and the auth guard. Shared by
+ * Signed-in chrome: sidebar, top bar, toasts and the access guard. Shared by
  * every route behind the login screen.
+ *
+ * Two things are checked here. Whether anyone is signed in at all, and
+ * whether the account they are signed in as may open this particular route —
+ * a branch manager who follows a link to the checklist editor, or an
+ * inspector who types `/maintenance`, is sent to their own home rather than
+ * shown a screen full of things they cannot use.
+ *
+ * Which *records* they may open is not decided here: that depends on the
+ * record, so the inspection screens ask per report.
  */
 export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
   const router = useRouter();
+  const pathname = usePathname();
   const mounted = useMounted();
-  const [authed, setAuthed] = useState(false);
+  const user = useCurrentUser();
 
   // Seed the demo records on first run.
   useEffect(() => {
     getInspections();
   }, []);
 
-  // Keep auth state in sync with storage (also covers sign-out from another tab).
-  useEffect(() => {
-    const check = () => setAuthed(isAuthenticated());
-    check();
-    return subscribeToStorage(check);
-  }, []);
+  const allowed = user !== null && canAccessPath(user, pathname);
 
   useEffect(() => {
-    if (mounted && !authed) {
+    if (!mounted) return;
+    if (!user) {
       router.replace('/login');
+      return;
     }
-  }, [mounted, authed, router]);
+    if (!canAccessPath(user, pathname)) {
+      router.replace(homePathFor(user));
+    }
+  }, [mounted, user, pathname, router]);
 
-  if (!mounted || !authed) return null;
+  if (!mounted || !allowed) return null;
 
   return (
     <ToastProvider>

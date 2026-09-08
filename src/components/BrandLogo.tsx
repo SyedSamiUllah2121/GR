@@ -16,12 +16,13 @@ import { ORGANISATION } from '../data/user';
  *
  *   horizontal  full colour on a white plate, for light backgrounds
  *   knockout    reversed out in white, sitting straight on the red rail
+ *   emblem      the mark alone, for the collapsed rail where no wordmark fits
  *
  * The rail used to carry the full-colour mark on a white card, which read as a
  * heavy slab in a 272px column. Reversing it out is both lighter and the
  * conventional way to put a brand on a coloured ground.
  */
-type Variant = 'horizontal' | 'knockout';
+type Variant = 'horizontal' | 'knockout' | 'emblem';
 
 /**
  * Sources are tried in order: drop the original artwork in as a `.png` beside
@@ -30,6 +31,7 @@ type Variant = 'horizontal' | 'knockout';
 const SOURCES: Record<Variant, string[]> = {
   horizontal: ['/brand/royal-gujrat.png', '/brand/royal-gujrat.svg'],
   knockout: ['/brand/royal-gujrat-knockout.png', '/brand/royal-gujrat-knockout.svg'],
+  emblem: ['/brand/royal-gujrat-emblem.png', '/brand/royal-gujrat-emblem.svg'],
 };
 
 interface BrandLogoProps {
@@ -43,7 +45,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   className = '',
 }) => {
   const sources = SOURCES[variant];
-  const knockout = variant === 'knockout';
+  const knockout = variant === 'knockout' || variant === 'emblem';
   const [stage, setStage] = useState(0);
   const imgRef = useRef<HTMLImageElement>(null);
 

@@ -29,6 +29,9 @@ import {
 import { Inspection, ReasonGroup, Severity } from '../types';
 import { useChecklist } from '../hooks/useChecklist';
 import { useBranches } from '../hooks/useBranches';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { can, visibleInspections } from '../services/permissions';
+import { mondayStatusFor } from '../services/mondaySchedule';
 import { getInspections, subscribeToStorage } from '../services/storage';
 import { SEVERITY_LABEL } from '../services/priority';
 import { formatDate } from '../services/reportModel';
@@ -65,8 +68,9 @@ const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low'];
 
 export const DashboardScreen: React.FC = () => {
   const checklist = useChecklist();
-  const branches = useBranches();
-  const [inspections, setInspections] = useState<Inspection[]>(() => getInspections());
+  const user = useCurrentUser();
+  const allBranches = useBranches();
+  const [allInspections, setInspections] = useState<Inspection[]>(() => getInspections());
 
   useEffect(() => {
     const refresh = () => setInspections(getInspections());
@@ -74,9 +78,39 @@ export const DashboardScreen: React.FC = () => {
     return subscribeToStorage(refresh);
   }, []);
 
+  /*
+   * Narrowed to what this account may see before the model is built, rather
+   * than after: the model averages scores, ranks branches and counts overdue
+   * visits, and a branch manager's dashboard has to be *their* averages, not
+   * the estate's with the other rows hidden.
+   *
+   * `buildDashboardModel` takes its data as arguments precisely so this
+   * works — nothing inside it reads the store.
+   */
+  const everyBranch = can(user, 'inspections.viewAll');
+
+  const inspections = useMemo(
+    () => visibleInspections(user, allInspections),
+    [user, allInspections]
+  );
+
+  const branches = useMemo(
+    () => (everyBranch ? allBranches : allBranches.filter((b) => b.name === user?.branchName)),
+    [everyBranch, allBranches, user]
+  );
+
   const model = useMemo(
     () => buildDashboardModel(inspections, checklist, branches),
     [inspections, checklist, branches]
+  );
+
+  /** This week's round, for the manager whose branch this dashboard is. */
+  const monday = useMemo(
+    () =>
+      user?.role === 'branch-manager' && user.branchName
+        ? mondayStatusFor(user.branchName, inspections)
+        : null,
+    [user, inspections]
   );
   const needsAction = model.severityTotals.critical + model.severityTotals.high;
   const inspectedCount = model.branches.filter((b) => !b.neverInspected).length;
@@ -88,7 +122,12 @@ export const DashboardScreen: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-[26px] font-bold tracking-tight text-[#17181D]">
-            Dashboard
+            {/*
+              A branch manager's dashboard covers one branch, so it says
+              which. Calling it "Dashboard" while showing a single branch's
+              averages would read as the whole estate doing badly.
+            */}
+            {everyBranch ? 'Dashboard' : user?.branchName ?? 'Dashboard'}
           </h1>
           <p className="text-xs text-[#6B6F76] mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             {model.empty ? (
@@ -97,9 +136,18 @@ export const DashboardScreen: React.FC = () => {
               <>
                 <span className="w-1.5 h-1.5 rounded-full bg-[#C8202D] shrink-0" />
                 <span>
-                  {model.totalInspections} inspection
-                  {model.totalInspections === 1 ? '' : 's'} across {inspectedCount} branch
-                  {inspectedCount === 1 ? '' : 'es'}
+                  {everyBranch ? (
+                    <>
+                      {model.totalInspections} inspection
+                      {model.totalInspections === 1 ? '' : 's'} across {inspectedCount} branch
+                      {inspectedCount === 1 ? '' : 'es'}
+                    </>
+                  ) : (
+                    <>
+                      {model.totalInspections} inspection
+                      {model.totalInspections === 1 ? '' : 's'} on record
+                    </>
+                  )}
                 </span>
                 <span className="text-[#C9CCD2]">•</span>
                 <span>Latest {formatDate(model.latestVisitDate)}</span>
@@ -107,6 +155,39 @@ export const DashboardScreen: React.FC = () => {
             )}
           </p>
         </div>
+
+        {/*
+          The one thing a branch manager has to do this week, on the screen
+          they land on. A link rather than the full card the inspections page
+          carries — this page reports, and the doing belongs over there.
+        */}
+        {monday && (
+          <Link
+            id="dashboard-monday-link"
+            href="/inspections"
+            className={`shrink-0 inline-flex items-center gap-2.5 px-4 py-2.5 rounded-lg border text-xs font-bold transition-colors ${
+              monday.done
+                ? 'bg-[#EAF6EF] border-[#157F4B]/25 text-[#12643C] hover:bg-[#DFF1E7]'
+                : monday.overdue
+                  ? 'bg-[#C8202D] border-[#C8202D] text-white hover:bg-[#A81823]'
+                  : 'bg-[#FDF3E2] border-[#B4740A]/30 text-[#8A5A08] hover:bg-[#FBEBD2]'
+            }`}
+          >
+            <CalendarClock className="w-4 h-4 shrink-0" />
+            <span>
+              {monday.done
+                ? 'Monday inspection done this week'
+                : monday.inProgress
+                  ? 'Monday inspection unfinished'
+                  : monday.overdue
+                    ? `Monday inspection ${monday.daysLate} day${
+                        monday.daysLate === 1 ? '' : 's'
+                      } late`
+                    : 'Monday inspection due today'}
+            </span>
+            <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+          </Link>
+        )}
       </div>
 
       {model.empty ? (

@@ -5,24 +5,36 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
+  CalendarCheck,
   Check,
   ChevronDown,
+  Lock,
   PlayCircle,
   Plus,
+  Shuffle,
+  Store,
   Trash2,
+  Zap,
 } from 'lucide-react';
 import {
   Branch,
+  INSPECTION_KIND_LABEL,
   INSPECTION_TYPE_KEYS,
   INSPECTION_TYPE_LABEL,
   INSPECTORS,
   Inspection,
+  InspectionKind,
   InspectionType,
 } from '../types';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
 import { useChecklist } from '../hooks/useChecklist';
 import { useBranches } from '../hooks/useBranches';
+import { useUsers } from '../hooks/useUsers';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { activeBranches, addBranch, branchUsage, removeBranch } from '../services/branchStore';
+import { inspectors as inspectorAccounts } from '../services/userStore';
+import { can, fixedBranchFor } from '../services/permissions';
+import { createSurpriseVisit, randomBranch, randomInspector } from '../services/assignments';
 import {
   clearActiveDraft,
   deleteInspection,
@@ -35,12 +47,56 @@ import { formatDate } from '../services/reportModel';
 /** Sentinel for the "not on the list" option. */
 const OTHER_INSPECTOR = '__other__';
 
+/** Sentinels for "let the system pick", on the surprise-visit form. */
+const RANDOM = '__random__';
+
 export const NewInspectionScreen: React.FC = () => {
   const router = useRouter();
   const checklist = useChecklist();
   const branches = activeBranches(useBranches());
+  const user = useCurrentUser();
+  const availableInspectors = inspectorAccounts(useUsers());
+
+  /*
+   * What this screen offers depends entirely on who is looking at it.
+   *
+   *   admin           either kind of visit, at any branch — and a surprise
+   *                   visit is *assigned* rather than started, since the
+   *                   admin is not the one going
+   *   branch manager  their own branch's Monday round, and only that: the
+   *                   branch is not a choice, and neither is who does it
+   *
+   * An inspector never reaches here at all — AppShell turns them away, and
+   * their visits arrive already created.
+   */
+  const mayAssignSurprise = can(user, 'surprise.create');
+  const mayPickBranch = can(user, 'inspections.viewAll');
+  /*
+   * Adding and closing branches is a separate right from choosing between
+   * them. Asked for by name rather than inferred from who can see the
+   * picker: the two happen to coincide today, and a permission that is only
+   * enforced by coincidence is one that quietly stops being enforced.
+   */
+  const mayManageBranches = can(user, 'branches.manage');
+  const fixedBranch = fixedBranchFor(user);
+
+  const [kind, setKind] = useState<InspectionKind>('monday');
   const [existingDraft, setExistingDraft] = useState<Inspection | null>(() => getActiveDraft());
   const [selectedBranch, setSelectedBranch] = useState(() => branches[0]?.name ?? '');
+
+  /*
+   * A branch manager has one branch and it is not up for choosing, so the
+   * selection is overridden rather than merely defaulted — that way it stays
+   * right even if the account's branch is changed while this form is open.
+   */
+  const branchName = fixedBranch ?? selectedBranch;
+
+  /** Who a surprise visit goes to; RANDOM lets the system draw one. */
+  const [assignTo, setAssignTo] = useState<string>(RANDOM);
+  /** Where it goes; RANDOM draws the branch that has gone longest unvisited. */
+  const [surpriseBranch, setSurpriseBranch] = useState<string>(RANDOM);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignDone, setAssignDone] = useState<string | null>(null);
 
   // Adding a branch without leaving the form you came here to fill in
   const [addingBranch, setAddingBranch] = useState(false);
@@ -95,7 +151,7 @@ export const NewInspectionScreen: React.FC = () => {
       return;
     }
     // Only move the selection if what was removed was selected
-    if (branch.name === selectedBranch) {
+    if (branch.name === branchName) {
       const left = branches.filter((b) => b.id !== branch.id);
       setSelectedBranch(left[0]?.name ?? '');
     }
@@ -136,11 +192,66 @@ export const NewInspectionScreen: React.FC = () => {
     hour12: true,
   }).toLowerCase();
 
+  /**
+   * Raises a surprise visit and hands it over. It is *not* started here — the
+   * admin is not the one going, so what this produces is an assignment
+   * waiting in an inspector's list.
+   */
+  const handleAssignSurprise = () => {
+    if (!user) return;
+
+    const branch =
+      surpriseBranch === RANDOM ? randomBranch(branches)?.name ?? '' : surpriseBranch;
+    const inspector =
+      assignTo === RANDOM ? randomInspector(availableInspectors)?.id ?? '' : assignTo;
+
+    if (!inspector) {
+      setAssignError('There are no inspector accounts to assign this to');
+      return;
+    }
+
+    const result = createSurpriseVisit({
+      branchName: branch,
+      inspectorId: inspector,
+      raisedBy: user,
+    });
+
+    if (!result.ok || !result.inspection) {
+      setAssignError(result.error ?? 'Could not create the surprise visit');
+      return;
+    }
+
+    setAssignError(null);
+    setAssignDone(
+      `${result.inspection.inspectorName} has been assigned a surprise visit to ${result.inspection.branchName}`
+    );
+    // Reset the draw so a second visit is not silently the same one again
+    setAssignTo(RANDOM);
+    setSurpriseBranch(RANDOM);
+  };
+
+  /**
+   * The name that goes on the record.
+   *
+   * A branch manager carries out their own branch's round, so it is theirs
+   * and not a choice. The admin picks, because they may be standing in or
+   * recording a round somebody else walked.
+   */
+  const performerName = mayPickBranch
+    ? inspectorChoice === OTHER_INSPECTOR
+      ? otherInspector.trim()
+      : inspectorChoice.trim()
+    : user?.name ?? '';
+
   const handleStartInspection = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const trimmedName =
-      inspectorChoice === OTHER_INSPECTOR ? otherInspector.trim() : inspectorChoice.trim();
+    if (kind === 'surprise') {
+      handleAssignSurprise();
+      return;
+    }
+
+    const trimmedName = performerName;
     if (!trimmedName) {
       setNameError(
         inspectorChoice === OTHER_INSPECTOR
@@ -165,7 +276,7 @@ export const NewInspectionScreen: React.FC = () => {
     const newId = `insp-${Date.now()}`;
     const newInspection: Inspection = {
       id: newId,
-      branchName: selectedBranch,
+      branchName,
       date: currentDateISO,
       time: currentTimeStr,
       status: 'draft',
@@ -175,6 +286,10 @@ export const NewInspectionScreen: React.FC = () => {
       currentSectionIndex: 0,
       inspectorName: trimmedName,
       inspectionType,
+      // Started from this form by a manager or the admin, which is the
+      // branch's own weekly round. Surprise visits never reach here — they
+      // are assigned above and started from the inspector's own list.
+      kind: 'monday',
       // The report measures how long the visit took from here
       startedAt: new Date().toISOString(),
     };
@@ -215,9 +330,45 @@ export const NewInspectionScreen: React.FC = () => {
       <div className="mb-6">
         <h1 className="text-xl font-bold tracking-tight text-[#17181D]">New inspection</h1>
         <p className="text-xs text-[#6B6F76] mt-0.5">
-          Pick the branch to begin. Every branch runs the same full checklist.
+          {kind === 'surprise'
+            ? 'Send an inspector to a branch unannounced. Every branch runs the same full checklist.'
+            : fixedBranch
+              ? `This week's round for ${fixedBranch}. Every branch runs the same full checklist.`
+              : 'Pick the branch to begin. Every branch runs the same full checklist.'}
         </p>
       </div>
+
+      {/*
+        Which kind of visit. Only the admin sees this: a branch manager can
+        raise one kind, so a picker with a single option would be furniture.
+      */}
+      {mayAssignSurprise && (
+        <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <KindCard
+            id="visit-kind-monday"
+            selected={kind === 'monday'}
+            icon={CalendarCheck}
+            title={INSPECTION_KIND_LABEL.monday}
+            blurb="The branch's own weekly round. Start it now and fill it in."
+            onSelect={() => {
+              setKind('monday');
+              setAssignDone(null);
+              setAssignError(null);
+            }}
+          />
+          <KindCard
+            id="visit-kind-surprise"
+            selected={kind === 'surprise'}
+            icon={Zap}
+            title={INSPECTION_KIND_LABEL.surprise}
+            blurb="Assign a branch to an inspector. They carry it out unannounced."
+            onSelect={() => {
+              setKind('surprise');
+              setNameError(null);
+            }}
+          />
+        </div>
+      )}
 
       {/* Existing draft warning banner */}
       {existingDraft && existingDraft.status === 'draft' && (
@@ -265,8 +416,35 @@ export const NewInspectionScreen: React.FC = () => {
       {/* Form Card */}
       <div className="bg-white border border-[#E6E7EB] rounded-md p-6 md:p-8 shadow-xs">
         <form onSubmit={handleStartInspection} className="space-y-5">
-          {/* Branch picker. Custom rather than a <select> because each branch
-              carries its own remove button, which an <option> cannot hold. */}
+          {/*
+            Branch.
+
+            The admin chooses from a custom picker rather than a <select>,
+            because each branch carries its own remove button and an <option>
+            cannot hold one. A branch manager has no choice to make here, and
+            no business removing branches, so they get the name and a padlock
+            — a disabled dropdown would imply there was an alternative.
+          */}
+          {kind === 'monday' && !mayPickBranch && (
+            <div>
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
+                Branch
+              </span>
+              <p
+                id="fixed-branch"
+                className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D]"
+              >
+                <Store className="w-4 h-4 text-[#6B6F76] shrink-0" />
+                <span className="truncate">{fixedBranch}</span>
+                <Lock className="w-3.5 h-3.5 text-[#9CA1A9] ml-auto shrink-0" />
+              </p>
+              <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+                You inspect your own branch — this cannot be changed.
+              </p>
+            </div>
+          )}
+
+          {kind === 'monday' && mayPickBranch && (
           <div ref={branchMenuRef}>
             <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
               Branch
@@ -333,6 +511,7 @@ export const NewInspectionScreen: React.FC = () => {
                             {selected && <Check className="w-4 h-4 text-[#C8202D] shrink-0" />}
                           </button>
 
+                          {mayManageBranches && (
                           <button
                             type="button"
                             onClick={() => askToRemove(b)}
@@ -347,6 +526,7 @@ export const NewInspectionScreen: React.FC = () => {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
+                          )}
                         </div>
                       );
                     })}
@@ -354,24 +534,26 @@ export const NewInspectionScreen: React.FC = () => {
                 )}
               </div>
 
-              <button
-                type="button"
-                id="add-branch-btn"
-                onClick={() => {
-                  setAddingBranch((v) => !v);
-                  setBranchMenuOpen(false);
-                  setBranchError(null);
-                }}
-                aria-expanded={addingBranch}
-                title="Add a branch"
-                className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold text-[#C8202D] bg-white border border-[#C8202D]/30 rounded-md hover:bg-[#FDECEE] transition-colors cursor-pointer shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">New branch</span>
-              </button>
+              {mayManageBranches && (
+                <button
+                  type="button"
+                  id="add-branch-btn"
+                  onClick={() => {
+                    setAddingBranch((v) => !v);
+                    setBranchMenuOpen(false);
+                    setBranchError(null);
+                  }}
+                  aria-expanded={addingBranch}
+                  title="Add a branch"
+                  className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold text-[#C8202D] bg-white border border-[#C8202D]/30 rounded-md hover:bg-[#FDECEE] transition-colors cursor-pointer shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">New branch</span>
+                </button>
+              )}
             </div>
 
-            {addingBranch && (
+            {addingBranch && mayManageBranches && (
               <div className="mt-2 p-3 rounded-md border border-[#E6E7EB] bg-[#FBFBFC] space-y-2">
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -438,9 +620,132 @@ export const NewInspectionScreen: React.FC = () => {
               <p className="mt-2 text-xs font-semibold text-[#C8202D]">{branchError}</p>
             )}
           </div>
+          )}
+
+          {/*
+            A surprise visit is planned rather than filled in, so the form is
+            two questions: where, and who goes. Both can be left to the
+            system — an admin who picks the branch every time will drift
+            towards the ones they already worry about, which is the opposite
+            of surprise coverage.
+          */}
+          {kind === 'surprise' && (
+            <>
+              <div>
+                <label
+                  htmlFor="surprise-branch-select"
+                  className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
+                >
+                  Branch to visit
+                </label>
+                <select
+                  id="surprise-branch-select"
+                  value={surpriseBranch}
+                  onChange={(e) => {
+                    setSurpriseBranch(e.target.value);
+                    setAssignError(null);
+                    setAssignDone(null);
+                  }}
+                  className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                >
+                  <option value={RANDOM}>Let the system choose</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.name}>
+                      {b.name}
+                      {b.location ? ` — ${b.location}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {surpriseBranch === RANDOM && (
+                  <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
+                    <Shuffle className="w-3 h-3 mt-0.5 shrink-0" />
+                    Drawn from the branches that have gone longest without a visit.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="surprise-inspector-select"
+                  className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
+                >
+                  Inspector to send
+                </label>
+                <select
+                  id="surprise-inspector-select"
+                  value={assignTo}
+                  onChange={(e) => {
+                    setAssignTo(e.target.value);
+                    setAssignError(null);
+                    setAssignDone(null);
+                  }}
+                  className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                >
+                  <option value={RANDOM}>Let the system choose</option>
+                  {availableInspectors.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
+                {assignTo === RANDOM ? (
+                  <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
+                    <Shuffle className="w-3 h-3 mt-0.5 shrink-0" />
+                    Drawn from the inspectors carrying the fewest outstanding visits.
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+                    They will see the branch in their own list, and nothing else.
+                  </p>
+                )}
+                {availableInspectors.length === 0 && (
+                  <p className="mt-1.5 text-[11px] font-semibold text-[#C8202D]">
+                    No inspector accounts yet — add one under Users first.
+                  </p>
+                )}
+              </div>
+
+              {assignError && (
+                <p id="assign-error" className="text-xs font-semibold text-[#C8202D]">
+                  {assignError}
+                </p>
+              )}
+
+              {assignDone && (
+                <div
+                  id="assign-done"
+                  role="status"
+                  className="p-3 rounded-md bg-[#EAF6EF] border border-[#157F4B]/25 text-[#12643C] text-xs font-semibold flex items-start gap-2"
+                >
+                  <Check className="w-4 h-4 shrink-0 mt-px" />
+                  <span>{assignDone}</span>
+                </div>
+              )}
+            </>
+          )}
 
           {/* Who is carrying out the visit, and why */}
+          {kind === 'monday' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {!mayPickBranch ? (
+              /*
+               * The branch manager carries out their own round, so this is a
+               * statement rather than a question. Their name still goes on
+               * the record, which is what the field is for.
+               */
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
+                  Inspector
+                </span>
+                <p
+                  id="fixed-inspector"
+                  className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D]"
+                >
+                  <span className="truncate">{user?.name}</span>
+                  <Lock className="w-3.5 h-3.5 text-[#9CA1A9] ml-auto shrink-0" />
+                </p>
+              </div>
+            ) : (
             <div>
               <label
                 htmlFor="inspector-name-input"
@@ -492,6 +797,7 @@ export const NewInspectionScreen: React.FC = () => {
                 </p>
               )}
             </div>
+            )}
             <div>
               <label
                 htmlFor="inspection-type-select"
@@ -513,6 +819,7 @@ export const NewInspectionScreen: React.FC = () => {
               </select>
             </div>
           </div>
+          )}
 
           {/* Checklist coverage — every branch runs every list, so there is nothing to pick */}
           <div id="checklist-coverage">
@@ -543,17 +850,25 @@ export const NewInspectionScreen: React.FC = () => {
                   );
                 })}
               </ul>
-              <button
-                type="button"
-                onClick={() => router.push('/checklist')}
-                className="mt-3 text-xs font-bold text-[#C8202D] hover:underline cursor-pointer"
-              >
-                Edit checklist
-              </button>
+              {/* Only the admin may change the checklist */}
+              {can(user, 'checklist.manage') && (
+                <button
+                  type="button"
+                  onClick={() => router.push('/checklist')}
+                  className="mt-3 text-xs font-bold text-[#C8202D] hover:underline cursor-pointer"
+                >
+                  Edit checklist
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Read-only Date & Time */}
+          {/*
+            Read-only date and time — when the visit is being carried out.
+            Meaningless on a surprise visit, which is being *planned*: the
+            inspector may go tomorrow, and the record is stamped when they do.
+          */}
+          {kind === 'monday' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
@@ -582,6 +897,7 @@ export const NewInspectionScreen: React.FC = () => {
               />
             </div>
           </div>
+          )}
 
           <div className="pt-3 border-t border-[#E6E7EB] flex items-center justify-end gap-3">
             <button
@@ -589,14 +905,23 @@ export const NewInspectionScreen: React.FC = () => {
               onClick={() => router.push('/inspections')}
               className="px-4 py-2 border border-[#E6E7EB] rounded-md text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] transition-colors cursor-pointer"
             >
-              Cancel
+              {/* Once a visit has been assigned, leaving is not cancelling */}
+              {assignDone ? 'Done' : 'Cancel'}
             </button>
             <button
               id="start-inspection-submit-btn"
               type="submit"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer"
+              disabled={kind === 'surprise' && availableInspectors.length === 0}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] disabled:bg-[#E6E7EB] disabled:text-[#9CA1A9] disabled:cursor-not-allowed text-white text-xs font-semibold rounded-md transition-colors cursor-pointer"
             >
-              <span>Start inspection</span>
+              {kind === 'surprise' ? (
+                <>
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Assign surprise visit</span>
+                </>
+              ) : (
+                <span>Start inspection</span>
+              )}
             </button>
           </div>
         </form>
@@ -713,3 +1038,47 @@ const RemoveBranchDialog: React.FC<{
     </div>
   );
 };
+
+/**
+ * One of the two kinds of visit, as a card rather than a radio.
+ *
+ * The difference between them is not a label — one is started now and filled
+ * in, the other is handed to somebody else — so each carries the sentence
+ * that says which. A pair of radios would have made them look interchangeable.
+ */
+const KindCard: React.FC<{
+  id: string;
+  selected: boolean;
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  blurb: string;
+  onSelect: () => void;
+}> = ({ id, selected, icon: Icon, title, blurb, onSelect }) => (
+  <button
+    type="button"
+    id={id}
+    onClick={onSelect}
+    aria-pressed={selected}
+    className={`p-4 rounded-md border text-left transition-colors cursor-pointer ${
+      selected
+        ? 'border-[#C8202D] bg-[#FDECEE] shadow-xs'
+        : 'border-[#E6E7EB] bg-white hover:border-[#C8202D]/40'
+    }`}
+  >
+    <span className="flex items-center gap-2.5">
+      <span
+        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+          selected ? 'bg-[#C8202D] text-white' : 'bg-[#F6F6F8] text-[#6B6F76]'
+        }`}
+      >
+        <Icon className="w-4 h-4" />
+      </span>
+      <span
+        className={`text-[13px] font-bold ${selected ? 'text-[#C8202D]' : 'text-[#17181D]'}`}
+      >
+        {title}
+      </span>
+    </span>
+    <span className="block mt-2 text-[11px] text-[#6B6F76] leading-relaxed">{blurb}</span>
+  </button>
+);

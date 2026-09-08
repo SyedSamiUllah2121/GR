@@ -25,6 +25,9 @@ import {
 } from '../services/reportModel';
 import { PriorityBadge } from './PriorityBadge';
 import { ScorePill } from './ScorePill';
+import { canEditInspection, canViewInspection } from '../services/permissions';
+import { AccessNotice, NOT_YOURS } from './AccessNotice';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useRouter } from 'next/navigation';
 
 interface SummaryScreenProps {
@@ -41,6 +44,7 @@ interface SummaryScreenProps {
 export const SummaryScreen: React.FC<SummaryScreenProps> = ({ inspectionId }) => {
   const router = useRouter();
   const checklist = useChecklist();
+  const user = useCurrentUser();
 
   const [inspection, setInspection] = useState<Inspection | null>(() =>
     getInspectionById(inspectionId)
@@ -78,6 +82,12 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({ inspectionId }) =>
     );
   }
 
+  // Another branch's record, or another inspector's visit — the same rule the
+  // full report applies, since this screen reads the same findings.
+  if (!canViewInspection(user, inspection)) {
+    return <AccessNotice {...NOT_YOURS} />;
+  }
+
   const unanswered = model.rows.filter((row) => row.outcome === 'unanswered');
   // Weakest categories first — where the branch needs attention
   const byCategory = [...model.sections].sort((a, b) => a.rate - b.rate);
@@ -96,14 +106,21 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({ inspectionId }) =>
         </button>
 
         <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer shadow-xs"
-          >
-            <Edit3 className="w-3.5 h-3.5 text-[#C8202D]" />
-            <span>Edit answers</span>
-          </button>
+          {/*
+            A submitted record is locked, and only the main admin may reopen
+            it. Hidden rather than disabled, for the same reason as on the
+            records table: a button that refuses is worse than no button.
+          */}
+          {canEditInspection(user, inspection) && (
+            <button
+              type="button"
+              onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer shadow-xs"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-[#C8202D]" />
+              <span>{inspection.status === 'submitted' ? 'Reopen answers' : 'Edit answers'}</span>
+            </button>
+          )}
           <button
             id="summary-full-report-btn"
             type="button"
@@ -410,7 +427,7 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({ inspectionId }) =>
       {/* Sign-off */}
       <section id="summary-signoff">
         <h2 className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-2.5">
-          Manager sign-off
+          Sign-off
         </h2>
         <div className="bg-white border border-[#E6E7EB] rounded-md p-4 shadow-xs flex flex-wrap items-center gap-6">
           {inspection.signature ? (
@@ -427,6 +444,13 @@ export const SummaryScreen: React.FC<SummaryScreenProps> = ({ inspectionId }) =>
             </div>
           )}
           <div className="text-xs text-[#6B6F76] space-y-1">
+            {inspection.signatoryName && (
+              <p>
+                Signed by:{' '}
+                <strong className="text-[#17181D]">{inspection.signatoryName}</strong>
+                {inspection.signatoryRole && <> — {inspection.signatoryRole}</>}
+              </p>
+            )}
             <p>
               Branch: <strong className="text-[#17181D]">{inspection.branchName}</strong>
             </p>

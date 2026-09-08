@@ -31,6 +31,14 @@ import {
   SEVERITY_LABEL,
 } from '../services/priority';
 import { PriorityBadge } from './PriorityBadge';
+import {
+  canEditInspection,
+  canPerformInspection,
+  canViewInspection,
+} from '../services/permissions';
+import { AccessNotice, LOCKED, NOT_YOURS } from './AccessNotice';
+import { startAssignment } from '../services/assignments';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useRouter } from 'next/navigation';
 
 interface ChecklistScreenProps {
@@ -40,6 +48,7 @@ interface ChecklistScreenProps {
 export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }) => {
   const router = useRouter();
   const checklist = useChecklist();
+  const user = useCurrentUser();
   const [inspection, setInspection] = useState<Inspection | null>(() =>
     getInspectionById(inspectionId)
   );
@@ -55,6 +64,23 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
       if (found) setInspection(found);
     }
   }, [inspectionId, inspection]);
+
+  /*
+   * An assigned surprise visit opened straight from its URL rather than from
+   * the Start button. Promote it to a draft here too, otherwise answers would
+   * be typed into a record that is still only an assignment — the draft slot
+   * is only written for records already marked as drafts, so nothing would
+   * be saved.
+   */
+  useEffect(() => {
+    if (
+      inspection &&
+      inspection.status === 'assigned' &&
+      canPerformInspection(user, inspection)
+    ) {
+      setInspection(startAssignment(inspection));
+    }
+  }, [inspection, user]);
 
   // Past failures at this branch, so repeat issues get escalated. Depends only
   // on which inspection this is, not on the answers being edited right now.
@@ -85,6 +111,25 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
           Return to records
         </button>
       </div>
+    );
+  }
+
+  /*
+   * Whether this person may fill this record in at all.
+   *
+   * Two ways to arrive here without the right, and they are refused
+   * differently: a record you may see but that has been signed off is
+   * *locked*, and its report is still worth offering. A record belonging to
+   * another branch or another inspector was never yours, and there is no
+   * report to send you to either.
+   */
+  if (!canEditInspection(user, inspection)) {
+    const mayRead = canViewInspection(user, inspection);
+    return (
+      <AccessNotice
+        {...(mayRead ? LOCKED : NOT_YOURS)}
+        reportHref={mayRead ? `/inspections/${inspection.id}` : undefined}
+      />
     );
   }
 

@@ -12,14 +12,19 @@ import {
   MapPin,
   PenLine,
   Search,
+  UserCog,
   Wrench,
   X,
 } from 'lucide-react';
-import { Inspection, MaintenanceJob } from '../types';
-import { getInspections, setAuthenticated, subscribeToStorage } from '../services/storage';
+import { Inspection, MaintenanceJob, USER_ROLE_LABEL } from '../types';
+import { getInspections, subscribeToStorage } from '../services/storage';
 import { getJobs, subscribeToMaintenance } from '../services/maintenanceStore';
 import { formatDate } from '../services/reportModel';
-import { CURRENT_USER } from '../data/user';
+import { signOut } from '../services/session';
+import { can, visibleInspections } from '../services/permissions';
+import { assignmentsFor } from '../services/assignments';
+import { mondayStatusFor } from '../services/mondaySchedule';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useBranches } from '../hooks/useBranches';
 import { activeBranches } from '../services/branchStore';
 
@@ -27,7 +32,10 @@ import { activeBranches } from '../services/branchStore';
  * The bar above every screen: find a record, see what is outstanding, sign out.
  *
  * Everything in it reads the same stores the screens do, so the alert count
- * cannot disagree with what the dashboard says needs doing.
+ * cannot disagree with what the dashboard says needs doing — and everything
+ * is filtered by what the signed-in account may see, so a branch manager is
+ * not chased about a branch that is not theirs, and an inspector is not
+ * offered records they cannot open.
  */
 
 const MAX_RESULTS = 6;
@@ -68,10 +76,10 @@ function daysBetween(from: string, to: string): number {
 
 export const Topbar: React.FC = () => {
   const router = useRouter();
-  const [inspections, setInspections] = useState<Inspection[]>(() => getInspections());
-  const [jobs, setJobs] = useState<MaintenanceJob[]>(() => getJobs());
-  // Closed branches are not chased for being overdue
-  const branches = activeBranches(useBranches());
+  const user = useCurrentUser();
+  const [allInspections, setInspections] = useState<Inspection[]>(() => getInspections());
+  const [allJobs, setJobs] = useState<MaintenanceJob[]>(() => getJobs());
+  const allBranches = useBranches();
 
   useEffect(() => {
     const refresh = () => setInspections(getInspections());
@@ -84,6 +92,32 @@ export const Topbar: React.FC = () => {
     refresh();
     return subscribeToMaintenance(refresh);
   }, []);
+
+  /*
+   * Scoped to the account before anything else looks at it, so neither the
+   * search nor the alert list can leak a branch someone has no business
+   * seeing. Closed branches drop out too: they are not chased for being
+   * overdue.
+   */
+  const inspections = useMemo(
+    () => visibleInspections(user, allInspections),
+    [user, allInspections]
+  );
+
+  const branches = useMemo(() => {
+    const open = activeBranches(allBranches);
+    if (can(user, 'inspections.viewAll')) return open;
+    if (user?.role === 'branch-manager') return open.filter((b) => b.name === user.branchName);
+    // An inspector has no standing at a branch beyond the visit itself
+    return [];
+  }, [user, allBranches]);
+
+  // The maintenance module is the admin's. Nobody else is shown its jobs,
+  // and nobody else can open the screens these hits and alerts link to.
+  const jobs = useMemo(
+    () => (can(user, 'maintenance.view') ? allJobs : []),
+    [user, allJobs]
+  );
 
   // Which panel, if any, is showing. Only one may be open at a time.
   const [open, setOpen] = useState<'search' | 'alerts' | 'user' | null>(null);
@@ -192,7 +226,52 @@ export const Topbar: React.FC = () => {
       });
     }
 
-    branches.forEach((b) => {
+    /*
+     * The one thing an inspector is here for: the visits handed to them.
+     * Nothing else in this list applies — they hold no branch, so being
+     * overdue is not theirs to answer for.
+     */
+    if (user?.role === 'inspector') {
+      assignmentsFor(user.id, inspections).forEach((visit) => {
+        out.push({
+          key: `assigned-${visit.id}`,
+          href: '/inspections',
+          icon: CalendarClock,
+          text: `Surprise visit to ${visit.branchName} waiting to be started`,
+          tone: 'warn',
+        });
+      });
+      return out;
+    }
+
+    /*
+     * A branch manager is chased about one thing: this week's round. The
+     * generic overdue alert below would say the same thing less precisely —
+     * it counts seven days from the last visit of any kind, where the round
+     * is due on the Monday whether or not an inspector called on Thursday.
+     */
+    if (user?.role === 'branch-manager' && user.branchName) {
+      const monday = mondayStatusFor(user.branchName, inspections);
+      if (!monday.done) {
+        out.push({
+          key: 'monday',
+          href: '/inspections',
+          icon: CalendarClock,
+          text: monday.overdue
+            ? `Monday inspection is ${monday.daysLate} day${
+                monday.daysLate === 1 ? '' : 's'
+              } late`
+            : 'Monday inspection is due today',
+          tone: monday.overdue ? 'bad' : 'warn',
+        });
+      }
+    }
+
+    // Chasing every branch's cadence is the admin's job — the manager above
+    // has already been told about their own, more precisely.
+    const chased = can(user, 'inspections.viewAll') ? branches : [];
+
+    chased.forEach((b) => {
       const latest = submitted
         .filter((i) => i.branchName === b.name)
         .sort((x, y) => y.date.localeCompare(x.date))[0];
@@ -250,7 +329,7 @@ export const Topbar: React.FC = () => {
     }
 
     return out;
-  }, [inspections, jobs, branches]);
+  }, [user, inspections, jobs, branches]);
 
   const go = (href: string) => {
     setOpen(null);
@@ -259,9 +338,20 @@ export const Topbar: React.FC = () => {
   };
 
   const handleSignOut = () => {
-    setAuthenticated(false);
+    signOut();
     router.replace('/login');
   };
+
+  /*
+   * A branch manager's role is not the whole answer to "who am I signed in
+   * as" — which branch they run is the part that decides what they see, so
+   * it belongs on the same line.
+   */
+  const roleLine = user
+    ? user.role === 'branch-manager' && user.branchName
+      ? `${USER_ROLE_LABEL[user.role]} · ${user.branchName}`
+      : USER_ROLE_LABEL[user.role]
+    : '';
 
   return (
     <div
@@ -400,30 +490,46 @@ export const Topbar: React.FC = () => {
             className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-full hover:bg-[#F6F6F8] transition-colors cursor-pointer"
           >
             <span className="w-9 h-9 rounded-full bg-[#C8202D] text-white text-xs font-bold flex items-center justify-center shrink-0">
-              {CURRENT_USER.initials}
+              {user?.initials ?? '?'}
             </span>
             <span className="hidden md:block text-left leading-tight">
-              <span className="block text-xs font-bold text-[#17181D]">{CURRENT_USER.name}</span>
-              <span className="block text-[11px] text-[#6B6F76]">{CURRENT_USER.role}</span>
+              <span className="block text-xs font-bold text-[#17181D]">{user?.name ?? ''}</span>
+              <span className="block text-[11px] text-[#6B6F76]">{roleLine}</span>
             </span>
             <ChevronDown className="hidden md:block w-4 h-4 text-[#9CA1A9]" />
           </button>
 
           {open === 'user' && (
-            <Panel className="right-0 w-56">
-              <div className="px-4 py-3 border-b border-[#EFEFF2] md:hidden">
-                <p className="text-xs font-bold text-[#17181D]">{CURRENT_USER.name}</p>
-                <p className="text-[11px] text-[#6B6F76]">{CURRENT_USER.role}</p>
+            <Panel className="right-0 w-60">
+              <div className="px-4 py-3 border-b border-[#EFEFF2]">
+                <p className="text-xs font-bold text-[#17181D]">{user?.name ?? ''}</p>
+                <p className="text-[11px] text-[#6B6F76]">{roleLine}</p>
+                {user && (
+                  <p className="mt-1 text-[10px] text-[#9CA1A9] break-all">{user.email}</p>
+                )}
               </div>
               <div className="py-1.5">
-                <Link
-                  href="/checklist"
-                  onClick={() => setOpen(null)}
-                  className="w-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-[#17181D] hover:bg-[#FAFAFA] transition-colors"
-                >
-                  <ClipboardList className="w-4 h-4 text-[#6B6F76]" />
-                  Checklist setup
-                </Link>
+                {/* Only the admin has a checklist to set up */}
+                {can(user, 'checklist.manage') && (
+                  <Link
+                    href="/checklist"
+                    onClick={() => setOpen(null)}
+                    className="w-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-[#17181D] hover:bg-[#FAFAFA] transition-colors"
+                  >
+                    <ClipboardList className="w-4 h-4 text-[#6B6F76]" />
+                    Checklist setup
+                  </Link>
+                )}
+                {can(user, 'users.manage') && (
+                  <Link
+                    href="/users"
+                    onClick={() => setOpen(null)}
+                    className="w-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-[#17181D] hover:bg-[#FAFAFA] transition-colors"
+                  >
+                    <UserCog className="w-4 h-4 text-[#6B6F76]" />
+                    Users &amp; access
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={handleSignOut}

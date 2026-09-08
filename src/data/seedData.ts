@@ -145,10 +145,48 @@ function visitTimes(
 
 const ROUTINE: InspectionType = 'routine';
 
+/**
+ * Who carried out each seeded visit, matched to the accounts in
+ * services/userStore.ts.
+ *
+ * The two kinds of visit have different people behind them, and the demo data
+ * has to show that or the roles look interchangeable: a Monday round is the
+ * branch manager's own, and a surprise visit belongs to the inspector the
+ * admin sent. The ids matter as much as the names — an inspector's own list
+ * is filtered by `assignedToUserId`, so a surprise visit with only a name on
+ * it would never appear for the person who supposedly made it.
+ */
+const ADMIN = 'usr-admin';
+
+/** A submitted Monday round, filled in and signed by the branch's manager. */
+function mondayRound(managerId: string, managerName: string) {
+  return {
+    kind: 'monday' as const,
+    inspectorName: managerName,
+    inspectionType: ROUTINE,
+    submittedByUserId: managerId,
+    signatoryName: managerName,
+    signatoryRole: 'Branch manager',
+  };
+}
+
+/** A submitted surprise visit, raised by the admin and carried out unannounced. */
+function surpriseVisit(inspectorId: string, inspectorName: string) {
+  return {
+    kind: 'surprise' as const,
+    inspectorName,
+    assignedToUserId: inspectorId,
+    assignedByUserId: ADMIN,
+    submittedByUserId: inspectorId,
+    signatoryName: inspectorName,
+    signatoryRole: 'Inspector',
+  };
+}
+
 export const SEED_INSPECTIONS: Inspection[] = [
   {
     id: 'insp-seed-1',
-    inspectorName: 'A. Rahman',
+    ...surpriseVisit('usr-insp-rahman', 'A. Rahman'),
     inspectionType: ROUTINE,
     ...visitTimes('2026-08-24', 12, 30, 74),
     branchName: 'Naan House Metro',
@@ -159,11 +197,11 @@ export const SEED_INSPECTIONS: Inspection[] = [
     signature: SAMPLE_SIGNATURE,
     answers: seed1Answers,
     itemIds: SEED_ITEM_IDS,
+    lockedAt: visitTimes('2026-08-24', 12, 30, 74).submittedAt,
   },
   {
     id: 'insp-seed-2',
-    inspectorName: 'S. Iqbal',
-    inspectionType: ROUTINE,
+    ...mondayRound('usr-bm-gujrat', 'Bilal Tariq'),
     ...visitTimes('2026-08-24', 16, 10, 88),
     branchName: 'Gujrat Restaurant',
     date: '2026-08-24',
@@ -173,10 +211,12 @@ export const SEED_INSPECTIONS: Inspection[] = [
     signature: SAMPLE_SIGNATURE,
     answers: seed2Answers,
     itemIds: SEED_ITEM_IDS,
+    lockedAt: visitTimes('2026-08-24', 16, 10, 88).submittedAt,
   },
   {
     id: 'insp-seed-3',
-    inspectorName: 'A. Rahman',
+    ...surpriseVisit('usr-insp-rahman', 'A. Rahman'),
+    // A repeat call after the previous visit's findings, hence the type
     inspectionType: 'follow-up',
     ...visitTimes('2026-08-24', 16, 10, 95),
     branchName: "Zahra's Kitchen",
@@ -187,11 +227,11 @@ export const SEED_INSPECTIONS: Inspection[] = [
     signature: SAMPLE_SIGNATURE,
     answers: seed3Answers,
     itemIds: SEED_ITEM_IDS,
+    lockedAt: visitTimes('2026-08-24', 16, 10, 95).submittedAt,
   },
   {
     id: 'insp-seed-4',
-    inspectorName: 'M. Farooq',
-    inspectionType: ROUTINE,
+    ...mondayRound('usr-bm-mafraq', 'Adeel Nawaz'),
     ...visitTimes('2026-08-17', 14, 0, 112),
     branchName: 'Mafraq Gujrat Restaurant',
     date: '2026-08-17',
@@ -201,11 +241,11 @@ export const SEED_INSPECTIONS: Inspection[] = [
     signature: SAMPLE_SIGNATURE,
     answers: seed4Answers,
     itemIds: SEED_ITEM_IDS,
+    lockedAt: visitTimes('2026-08-17', 14, 0, 112).submittedAt,
   },
   {
     id: 'insp-seed-5',
-    inspectorName: 'S. Iqbal',
-    inspectionType: ROUTINE,
+    ...mondayRound('usr-bm-zahras', 'Imran Yousaf'),
     ...visitTimes('2026-08-17', 11, 15, 68),
     branchName: "Zahra's Kitchen",
     date: '2026-08-17',
@@ -215,5 +255,30 @@ export const SEED_INSPECTIONS: Inspection[] = [
     signature: SAMPLE_SIGNATURE,
     answers: seed5Answers,
     itemIds: SEED_ITEM_IDS,
+    lockedAt: visitTimes('2026-08-17', 11, 15, 68).submittedAt,
+  },
+  {
+    /*
+     * An outstanding assignment: raised by the admin, not yet started.
+     *
+     * Seeded because the inspector's whole role is answering these, and
+     * signing in as one to an empty screen says nothing about what the role
+     * is for. No answers and no score — it has not happened yet.
+     */
+    id: 'insp-seed-assigned',
+    branchName: 'Naan House Metro',
+    date: '2026-09-07',
+    time: '9:00 am',
+    status: 'assigned',
+    score: 0,
+    signature: null,
+    answers: {},
+    currentSectionIndex: 0,
+    kind: 'surprise',
+    inspectionType: ROUTINE,
+    inspectorName: 'A. Rahman',
+    assignedToUserId: 'usr-insp-rahman',
+    assignedByUserId: ADMIN,
+    assignedAt: '2026-09-07T09:00:00.000Z',
   },
 ];
