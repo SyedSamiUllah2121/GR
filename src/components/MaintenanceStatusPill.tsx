@@ -3,9 +3,9 @@ import { CheckCircle2, Timer, Wrench } from 'lucide-react';
 import { MAINTENANCE_STATUS_LABEL, MaintenanceStatus } from '../types';
 
 const STYLES: Record<MaintenanceStatus, string> = {
-  reported: 'bg-[#F4E4DF] text-[#9C3B2E] border-[#9C3B2E]/25',
-  'in-progress': 'bg-[#F3ECD8] text-[#8A6318] border-[#8A6318]/25',
-  completed: 'bg-[#E7EEE4] text-[#2F5233] border-[#2F5233]/25',
+  reported: 'bg-[#FDECEE] text-[#C8202D] border-[#C8202D]/25',
+  'in-progress': 'bg-[#FDF3E2] text-[#B4740A] border-[#B4740A]/25',
+  completed: 'bg-[#E6F4EC] text-[#157F4B] border-[#157F4B]/25',
 };
 
 const ICONS: Record<MaintenanceStatus, typeof Wrench> = {

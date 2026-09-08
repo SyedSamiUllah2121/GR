@@ -1,4 +1,4 @@
-import { BRANCHES, Inspection, Item, ReasonGroup, Severity } from '../types';
+import { Branch, Inspection, Item, ReasonGroup, Severity } from '../types';
 import { ChecklistView } from './checklistStore';
 import { RankedIssue, SeverityCounts } from './priority';
 import { ReportModel, buildReportModel } from './reportModel';
@@ -17,6 +17,8 @@ import { ReportModel, buildReportModel } from './reportModel';
 
 export interface BranchSnapshot {
   name: string;
+  /** Where the branch is, for the row subtitle. Empty for a name only found in records. */
+  location: string;
   visitCount: number;
   latest: ReportModel | null;
   /** Score change against the visit before the latest one. */
@@ -72,8 +74,6 @@ export interface DashboardModel {
   /** Findings on each branch's latest visit, by priority. */
   severityTotals: SeverityCounts;
   findingsTotal: number;
-  /** Findings that need a repair or a service call, estate-wide. */
-  maintenanceTotal: number;
   /** Submitted records with no manager signature — a compliance gap. */
   unsignedCount: number;
 
@@ -103,9 +103,15 @@ function daysBetween(from: string, to: string): number {
   return Math.round((b - a) / 86400000);
 }
 
+/**
+ * @param branches the configured branch list. Passed in rather than imported
+ *   so this stays a pure function of its inputs — branches are editable now,
+ *   and a model that read them itself would not recompute when one is added.
+ */
 export function buildDashboardModel(
   allInspections: Inspection[],
-  checklist: ChecklistView
+  checklist: ChecklistView,
+  branches: Branch[]
 ): DashboardModel {
   const today = todayIso();
   const draft = allInspections.find((i) => i.status === 'draft') ?? null;
@@ -119,13 +125,20 @@ export function buildDashboardModel(
     buildReportModel(inspection, checklist, allInspections)
   );
 
-  // Branch names come from the configured list plus anything in the records,
-  // so a record for a branch since removed from the list is still counted
+  // A closed branch keeps its records but drops off the board — there is
+  // nothing left to chase it for.
+  const closed = new Set(branches.filter((b) => b.archived).map((b) => b.name));
+
+  // Names come from the open branches plus anything in the records, so a
+  // record filed against a branch since removed from the list still counts.
   const names = Array.from(
-    new Set([...BRANCHES.map((b) => b.name), ...submitted.map((i) => i.branchName)])
+    new Set([
+      ...branches.filter((b) => !b.archived).map((b) => b.name),
+      ...submitted.map((i) => i.branchName).filter((name) => !closed.has(name)),
+    ])
   );
 
-  const branches: BranchSnapshot[] = names
+  const snapshots: BranchSnapshot[] = names
     .map((name) => {
       const forBranch = models.filter((m) => m.inspection.branchName === name);
       const latest = forBranch.length > 0 ? forBranch[forBranch.length - 1] : null;
@@ -134,6 +147,7 @@ export function buildDashboardModel(
 
       return {
         name,
+        location: branches.find((b) => b.name === name)?.location ?? '',
         visitCount: forBranch.length,
         latest,
         delta:
@@ -155,7 +169,7 @@ export function buildDashboardModel(
     });
 
   // "Where the estate stands" reads each branch's latest visit only
-  const latestModels = branches
+  const latestModels = snapshots
     .map((b) => b.latest)
     .filter((m): m is ReportModel => m !== null);
 
@@ -246,12 +260,11 @@ export function buildDashboardModel(
     latestVisitDate:
       submitted.length > 0 ? submitted[submitted.length - 1].date : null,
     today,
-    branches,
-    overdue: branches.filter((b) => !b.neverInspected && b.daysOverdue > 0),
-    neverInspected: branches.filter((b) => b.neverInspected),
+    branches: snapshots,
+    overdue: snapshots.filter((b) => !b.neverInspected && b.daysOverdue > 0),
+    neverInspected: snapshots.filter((b) => b.neverInspected),
     severityTotals,
     findingsTotal,
-    maintenanceTotal: latestModels.reduce((n, m) => n + m.maintenance.length, 0),
     unsignedCount: submitted.filter((i) => !i.signature).length,
     byCategory,
     weakestSections,

@@ -1,10 +1,10 @@
 import type {Metadata} from 'next';
-import {MaintenanceScreen} from '@/components/MaintenanceScreen';
+import {MaintenanceOverviewScreen} from '@/components/MaintenanceOverviewScreen';
 
 export const metadata: Metadata = {
   title: 'Maintenance | Inspection Log',
 };
 
 export default function MaintenancePage() {
-  return <MaintenanceScreen />;
+  return <MaintenanceOverviewScreen />;
 }

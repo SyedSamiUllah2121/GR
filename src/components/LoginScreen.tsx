@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckSquare, Lock, Mail, AlertCircle } from 'lucide-react';
+import { Lock, Mail, AlertCircle } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 import { setAuthenticated } from '../services/storage';
 import { useRouter } from 'next/navigation';
 
@@ -29,34 +30,32 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F3EC] flex flex-col justify-center items-center px-4 py-12">
+    <div className="min-h-screen bg-[#F6F6F8] flex flex-col justify-center items-center px-4 py-12">
       <div className="w-full max-w-md">
         {/* Brand header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-md bg-[#213B26] text-white shadow-sm mb-3">
-            <CheckSquare className="w-6 h-6 text-[#E7EEE4]" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#242217]">
+          <BrandLogo className="w-[17rem] mx-auto mb-5 border border-[#E6E7EB] shadow-xs" />
+          <h1 className="text-2xl font-bold tracking-tight text-[#17181D]">
             Inspection Log
           </h1>
-          <p className="text-[10px] uppercase tracking-widest text-[#635E4F] mt-1 font-semibold">
-            Weekly Hygiene &amp; Service
+          <p className="text-[10px] uppercase tracking-widest text-[#6B6F76] mt-1 font-semibold">
+            Food Safety &amp; Quality
           </p>
         </div>
 
         {/* Login Card */}
         <div
           id="login-card"
-          className="bg-white border border-[#DEDACB] rounded-md p-6 md:p-8 shadow-xs"
+          className="bg-white border border-[#E6E7EB] rounded-md p-6 md:p-8 shadow-xs"
         >
-          <h2 className="text-lg font-bold text-[#242217] mb-5">
+          <h2 className="text-lg font-bold text-[#17181D] mb-5">
             Sign in to inspector account
           </h2>
 
           {errorMessage && (
             <div
               id="login-error-banner"
-              className="mb-5 p-3 rounded-md bg-[#F4E4DF] border border-[#9C3B2E]/30 text-[#9C3B2E] text-sm flex items-center gap-2"
+              className="mb-5 p-3 rounded-md bg-[#FDECEE] border border-[#C8202D]/30 text-[#C8202D] text-sm flex items-center gap-2"
             >
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMessage}</span>
@@ -67,12 +66,12 @@ export const LoginScreen: React.FC = () => {
             <div>
               <label
                 htmlFor="email-input"
-                className="block text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1.5"
+                className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
               >
                 Email
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#635E4F]">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6B6F76]">
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
@@ -84,7 +83,7 @@ export const LoginScreen: React.FC = () => {
                     if (errorMessage) setErrorMessage('');
                   }}
                   placeholder="Enter email (or 123)"
-                  className="w-full pl-9 pr-4 py-2.5 bg-[#F5F3EC] border border-[#DEDACB] rounded-md text-sm text-[#242217] placeholder:text-[#635E4F]/50 focus:outline-none focus:ring-1 focus:ring-[#2F5233]"
+                  className="w-full pl-9 pr-4 py-2.5 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
                   autoComplete="username"
                   required
                 />
@@ -94,12 +93,12 @@ export const LoginScreen: React.FC = () => {
             <div>
               <label
                 htmlFor="password-input"
-                className="block text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1.5"
+                className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
               >
                 Password
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#635E4F]">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6B6F76]">
                   <Lock className="w-4 h-4" />
                 </div>
                 <input
@@ -111,7 +110,7 @@ export const LoginScreen: React.FC = () => {
                     if (errorMessage) setErrorMessage('');
                   }}
                   placeholder="Enter password (or 123)"
-                  className="w-full pl-9 pr-4 py-2.5 bg-[#F5F3EC] border border-[#DEDACB] rounded-md text-sm text-[#242217] placeholder:text-[#635E4F]/50 focus:outline-none focus:ring-1 focus:ring-[#2F5233]"
+                  className="w-full pl-9 pr-4 py-2.5 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
                   autoComplete="current-password"
                   required
                 />
@@ -121,7 +120,7 @@ export const LoginScreen: React.FC = () => {
             <button
               id="login-submit-btn"
               type="submit"
-              className="w-full mt-2 py-3 px-4 bg-[#2F5233] hover:bg-[#3d6a42] text-white text-sm font-semibold rounded-md transition-colors cursor-pointer"
+              className="w-full mt-2 py-3 px-4 bg-[#C8202D] hover:bg-[#A81823] text-white text-sm font-semibold rounded-md transition-colors cursor-pointer"
             >
               Sign in
             </button>
@@ -129,21 +128,21 @@ export const LoginScreen: React.FC = () => {
 
           {/* Demo Hint */}
           <div className="mt-5 text-center">
-            <p className="text-xs text-[#635E4F]">
-              Demo access — email <span className="font-semibold text-[#242217]">123</span>, password{' '}
-              <span className="font-semibold text-[#242217]">123</span>
+            <p className="text-xs text-[#6B6F76]">
+              Demo access — email <span className="font-semibold text-[#17181D]">123</span>, password{' '}
+              <span className="font-semibold text-[#17181D]">123</span>
             </p>
             <button
               type="button"
               onClick={fillDemo}
-              className="mt-2 text-xs text-[#2F5233] hover:underline font-semibold cursor-pointer"
+              className="mt-2 text-xs text-[#C8202D] hover:underline font-semibold cursor-pointer"
             >
               Fill demo credentials
             </button>
           </div>
         </div>
 
-        <div className="mt-6 text-center text-xs text-[#635E4F]">
+        <div className="mt-6 text-center text-xs text-[#6B6F76]">
           Internal weekly restaurant inspection system
         </div>
       </div>

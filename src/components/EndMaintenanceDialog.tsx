@@ -6,10 +6,10 @@ import { MaintenanceJob } from '../types';
 import { completeJob, getLastPerson, rememberPerson } from '../services/maintenanceStore';
 
 const inputClass =
-  'w-full px-3 py-2.5 bg-white border border-[#DEDACB] rounded-md text-sm text-[#242217] placeholder:text-[#635E4F]/50 focus:outline-none focus:border-[#2F5233] focus:ring-1 focus:ring-[#2F5233]';
+  'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
 
 const labelClass =
-  'block text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1.5';
+  'block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5';
 
 /**
  * Closes a job off.
@@ -55,11 +55,11 @@ export const EndMaintenanceDialog: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#242217]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white border border-[#DEDACB] rounded-lg shadow-lg w-full max-w-lg my-8">
-        <div className="px-6 py-4 border-b border-[#DEDACB]">
-          <h3 className="text-base font-bold text-[#242217]">End maintenance</h3>
-          <p className="text-xs text-[#635E4F] mt-0.5 truncate">{job.title}</p>
+    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-lg my-8">
+        <div className="px-6 py-4 border-b border-[#E6E7EB]">
+          <h3 className="text-base font-bold text-[#17181D]">End maintenance</h3>
+          <p className="text-xs text-[#6B6F76] mt-0.5 truncate">{job.title}</p>
         </div>
 
         <form onSubmit={submit} className="p-6 space-y-5">
@@ -77,7 +77,7 @@ export const EndMaintenanceDialog: React.FC<{
               className={`${inputClass} resize-y`}
             />
             {errors.resolutionNote && (
-              <p className="text-xs font-semibold text-[#9C3B2E] mt-1">
+              <p className="text-xs font-semibold text-[#C8202D] mt-1">
                 {errors.resolutionNote}
               </p>
             )}
@@ -111,23 +111,23 @@ export const EndMaintenanceDialog: React.FC<{
                 className={inputClass}
               />
               {errors.cost && (
-                <p className="text-xs font-semibold text-[#9C3B2E] mt-1">{errors.cost}</p>
+                <p className="text-xs font-semibold text-[#C8202D] mt-1">{errors.cost}</p>
               )}
             </div>
           </div>
 
-          <div className="pt-3 border-t border-[#DEDACB] flex items-center justify-end gap-3">
+          <div className="pt-3 border-t border-[#E6E7EB] flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-[#DEDACB] rounded-md text-xs font-semibold text-[#635E4F] hover:text-[#242217] hover:bg-[#F5F3EC] transition-colors cursor-pointer"
+              className="px-4 py-2 border border-[#E6E7EB] rounded-md text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               id="mnt-complete-btn"
               type="submit"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#2F5233] hover:bg-[#3d6a42] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Mark done</span>

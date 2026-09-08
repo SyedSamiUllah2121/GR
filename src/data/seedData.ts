@@ -20,7 +20,7 @@ const SAMPLE_SIGNATURE =
   encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="280" height="90" viewBox="0 0 280 90">
       <path d="M 20 55 Q 45 15, 60 48 T 90 40 T 120 52 Q 140 20, 160 55 T 195 45 Q 220 58, 260 40 M 45 68 Q 120 72, 240 60"
-        fill="none" stroke="#213B26" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+        fill="none" stroke="#17181D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
     </svg>`
   );
 
@@ -30,12 +30,12 @@ const SAMPLE_EVIDENCE =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200">
-      <rect width="300" height="200" fill="#F4E4DF"/>
-      <rect x="12" y="12" width="276" height="176" rx="6" fill="#FFFFFF" stroke="#9C3B2E" stroke-width="2" stroke-dasharray="4,4"/>
-      <circle cx="150" cy="78" r="22" fill="#F4E4DF" stroke="#9C3B2E" stroke-width="2"/>
-      <path d="M150 68v14M150 88v2" stroke="#9C3B2E" stroke-width="3" stroke-linecap="round"/>
-      <text x="150" y="130" fill="#9C3B2E" font-family="sans-serif" font-size="13" font-weight="bold" text-anchor="middle">Photo Evidence Attached</text>
-      <text x="150" y="152" fill="#635E4F" font-family="sans-serif" font-size="11" text-anchor="middle">Critical finding capture</text>
+      <rect width="300" height="200" fill="#FDECEE"/>
+      <rect x="12" y="12" width="276" height="176" rx="6" fill="#FFFFFF" stroke="#C8202D" stroke-width="2" stroke-dasharray="4,4"/>
+      <circle cx="150" cy="78" r="22" fill="#FDECEE" stroke="#C8202D" stroke-width="2"/>
+      <path d="M150 68v14M150 88v2" stroke="#C8202D" stroke-width="3" stroke-linecap="round"/>
+      <text x="150" y="130" fill="#C8202D" font-family="sans-serif" font-size="13" font-weight="bold" text-anchor="middle">Photo Evidence Attached</text>
+      <text x="150" y="152" fill="#6B6F76" font-family="sans-serif" font-size="11" text-anchor="middle">Critical finding capture</text>
     </svg>`
   );
 

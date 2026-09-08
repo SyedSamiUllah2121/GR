@@ -7,7 +7,12 @@ export type ReasonGroup =
   | 'PEST'
   | 'RECORDS'
   | 'SAFETY'
-  | 'TEMPERATURE';
+  | 'TEMPERATURE'
+  /**
+   * Routes straight to the maintenance board: a check in this group that is
+   * answered No raises a job on submit. See services/maintenanceIntake.ts.
+   */
+  | 'MAINTENANCE';
 
 export const REASON_GROUP_KEYS: ReasonGroup[] = [
   'STAFF',
@@ -19,12 +24,24 @@ export const REASON_GROUP_KEYS: ReasonGroup[] = [
   'RECORDS',
   'SAFETY',
   'TEMPERATURE',
+  'MAINTENANCE',
 ];
 
 /** How serious a failure of an item is. Ordered low -> critical. */
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 
 export const SEVERITY_KEYS: Severity[] = ['low', 'medium', 'high', 'critical'];
+
+/**
+ * A named fact about the thing a question concerns — an AC unit's serial
+ * number, its make, where it is. Free-form label/value pairs rather than
+ * fixed columns, because what identifies a chiller is not what identifies a
+ * fire extinguisher, and every branch labels its kit differently.
+ */
+export interface ItemDetail {
+  label: string;
+  value: string;
+}
 
 export interface Item {
   /**
@@ -39,6 +56,12 @@ export interface Item {
    * own history are taken into account. See services/priority.ts.
    */
   severity: Severity;
+  /**
+   * Which piece of kit this question is about, when it matters. Carried onto
+   * the inspector's screen so they check the right unit, and onto any
+   * maintenance job the failure raises so the technician knows what to find.
+   */
+  details?: ItemDetail[];
   /**
    * Removed from the checklist but kept so reports that already recorded an
    * answer for it still render. Excluded from new inspections.
@@ -87,6 +110,14 @@ export interface FullSection extends Section {
 export interface Branch {
   id: string;
   name: string;
+  /** Where the branch is, shown under its name on the dashboard. */
+  location: string;
+  /**
+   * Closed. Records name their branch as text, so a branch with history is
+   * archived rather than deleted — its past inspections and jobs still read
+   * correctly, but it is not offered for new work or chased for being due.
+   */
+  archived?: boolean;
 }
 
 export interface Answer {
@@ -313,12 +344,35 @@ export const REASON_GROUPS: Record<ReasonGroup, string[]> = {
     'Probe not available or not calibrated',
     'Reading not taken at the required time',
     'Other',
+    ],
+  MAINTENANCE: [
+    'Broken, needs repair',
+    'Not working, needs a technician',
+    'Worn out, needs replacing',
+    'Leaking or damaged',
+    'Service or inspection overdue',
+    'Reported already, awaiting parts',
+    'Other',
   ],
 };
 
+/**
+ * The inspectors who carry out visits, offered as a list on the New
+ * Inspection screen. "Other" there still allows a name that is not on it, so
+ * a stand-in or a new starter is never blocked from recording a visit.
+ */
+export const INSPECTORS: string[] = [
+  'A. Rahman',
+  'S. Iqbal',
+  'M. Farooq',
+  'H. Siddiqui',
+  'N. Abbas',
+  'R. Chowdhury',
+];
+
 export const BRANCHES: Branch[] = [
-  { id: 'zahras-kitchen', name: "Zahra's Kitchen" },
-  { id: 'gujrat-restaurant', name: 'Gujrat Restaurant' },
-  { id: 'mafraq-gujrat', name: 'Mafraq Gujrat Restaurant' },
-  { id: 'naan-house-metro', name: 'Naan House Metro' },
+  { id: 'zahras-kitchen', name: "Zahra's Kitchen", location: 'Kharian, Gujrat' },
+  { id: 'gujrat-restaurant', name: 'Gujrat Restaurant', location: 'Gujrat City' },
+  { id: 'mafraq-gujrat', name: 'Mafraq Gujrat Restaurant', location: 'Mafraq, Gujrat' },
+  { id: 'naan-house-metro', name: 'Naan House Metro', location: 'Metro, Gujrat' },
 ];

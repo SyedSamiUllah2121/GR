@@ -1,29 +1,25 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import {usePathname, useRouter} from 'next/navigation';
-import {
-  ClipboardList,
-  LayoutDashboard,
-  ListChecks,
-  LogOut,
-  Plus,
-  Wrench,
-} from 'lucide-react';
-import {setAuthenticated} from '../services/storage';
+import { usePathname } from 'next/navigation';
+import { ChevronDown, ClipboardList, LayoutDashboard, ListChecks, Wrench } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 
 interface NavEntry {
   id: string;
   href: string;
   label: string;
-  icon: React.ComponentType<{className?: string}>;
+  icon: React.ComponentType<{ className?: string }>;
   /** True when the current path belongs to this section. */
   isActive: (pathname: string) => boolean;
+  /** Draws a rule above this row, separating configuration from daily work. */
+  startsGroup?: boolean;
+  /** Pages within this section, revealed under it. */
+  children?: { id: string; href: string; label: string; isActive: (p: string) => boolean }[];
 }
 
-/** The day-to-day screens. */
-const MAIN: NavEntry[] = [
+const NAV: NavEntry[] = [
   {
     id: 'sidebar-nav-dashboard',
     href: '/dashboard',
@@ -45,112 +41,80 @@ const MAIN: NavEntry[] = [
     label: 'Maintenance',
     icon: Wrench,
     isActive: (p) => p.startsWith('/maintenance'),
+    children: [
+      {
+        id: 'sidebar-nav-maintenance-overview',
+        href: '/maintenance',
+        label: 'Overview',
+        isActive: (p) => p === '/maintenance',
+      },
+      {
+        id: 'sidebar-nav-maintenance-jobs',
+        href: '/maintenance/jobs',
+        label: 'Job board',
+        // A job opened from the board still counts as being on it
+        isActive: (p) =>
+          p === '/maintenance/jobs' || /^\/maintenance\/(?!report$)[^/]+$/.test(p),
+      },
+      {
+        id: 'sidebar-nav-maintenance-report',
+        href: '/maintenance/report',
+        label: 'Month-end report',
+        isActive: (p) => p === '/maintenance/report',
+      },
+    ],
   },
-];
-
-/** Screens that configure the app rather than record work. */
-const SETUP: NavEntry[] = [
   {
+    // Configures the app rather than recording work, so it sits below a rule.
+    // The rule alone says that — a "Setup" heading over a single row was more
+    // label than list.
     id: 'sidebar-nav-checklist',
     href: '/checklist',
     label: 'Checklist',
     icon: ListChecks,
     isActive: (p) => p === '/checklist',
+    startsGroup: true,
   },
 ];
 
+/**
+ * The left rail: the brand and the four screens.
+ *
+ * Deliberately nothing else. Sign-out lives in the top bar's user menu and
+ * starting an inspection is offered by the screens that list them, so a
+ * second copy of either here was only ever something more to read past.
+ */
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
-  const router = useRouter();
-
-  const handleSignOut = () => {
-    setAuthenticated(false);
-    router.replace('/login');
-  };
 
   return (
     <aside
       id="main-sidebar"
-      className="no-print w-full md:w-64 bg-[#213B26] text-[#F5F3EC] flex flex-col md:min-h-screen shrink-0 shadow-lg select-none z-30"
+      className="no-print w-full md:w-[16rem] bg-[#A81823] text-white flex flex-col md:min-h-screen md:sticky md:top-0 md:h-screen shrink-0 select-none z-30"
     >
-      {/* Brand */}
-      <div className="p-4 md:p-6 border-b border-[#ffffff15] flex items-center justify-between md:block">
+      <div className="px-4 md:px-5 py-4 md:py-6">
         <Link
           href="/dashboard"
-          className="block text-left focus:outline-none cursor-pointer"
+          className="block min-w-0 cursor-pointer"
           id="brand-logo-btn"
         >
-          <h1 className="text-xl font-bold tracking-tight text-[#F5F3EC]">Inspection Log</h1>
-          <p className="text-[10px] uppercase tracking-widest opacity-60 mt-1">
-            Weekly Hygiene &amp; Service
-          </p>
+          {/* Reversed out of the rail rather than boxed on a white plate */}
+          <BrandLogo variant="knockout" className="w-full max-w-[9rem] md:max-w-[12rem] md:mx-auto" />
         </Link>
-
-        {/* Mobile quick actions, where there is no room for the full column */}
-        <div className="flex md:hidden items-center gap-2">
-          <Link
-            id="mobile-new-btn"
-            href="/inspections/new"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-[#2F5233] hover:bg-[#3d6a42] text-white transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New</span>
-          </Link>
-          <button
-            id="mobile-signout-btn"
-            onClick={handleSignOut}
-            className="p-1.5 opacity-60 hover:opacity-100 rounded-md transition-opacity text-[#F5F3EC]"
-            title="Sign out"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
       </div>
 
-      <nav className="flex-1 px-3 md:px-4 py-3 md:py-5 flex md:flex-col gap-1 md:gap-0 overflow-x-auto md:overflow-visible">
-        {/*
-          The one action people come here to take. It is the only route to a new
-          inspection in this column — it used to also appear as a nav item just
-          below, which read as two different things.
-        */}
-        <Link
-          id="sidebar-new-inspection-btn"
-          href="/inspections/new"
-          className="hidden md:flex w-full bg-[#2F5233] hover:bg-[#3d6a42] text-white py-2.5 px-4 rounded-md mb-5 font-semibold text-sm items-center justify-center gap-2 transition-colors cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New inspection</span>
-        </Link>
-
-        <div className="flex md:flex-col gap-1 md:gap-0.5 w-full">
-          {MAIN.map((entry) => (
-            <NavItem key={entry.id} entry={entry} active={entry.isActive(pathname)} />
-          ))}
-        </div>
-
-        <div className="hidden md:block mt-6 mb-3 border-t border-[#ffffff15] pt-4">
-          <p className="px-3.5 text-[10px] font-bold uppercase tracking-widest opacity-40">
-            Setup
-          </p>
-        </div>
-
-        <div className="flex md:flex-col gap-1 md:gap-0.5 w-full">
-          {SETUP.map((entry) => (
-            <NavItem key={entry.id} entry={entry} active={entry.isActive(pathname)} />
+      <nav className="flex-1 px-3 md:px-4 pb-3 md:pb-5 flex md:flex-col gap-1 md:gap-0 overflow-x-auto md:overflow-visible">
+        <div className="flex md:flex-col gap-1 w-full">
+          {NAV.map((entry) => (
+            <React.Fragment key={entry.id}>
+              {entry.startsGroup && (
+                <span className="hidden md:block h-px bg-white/15 my-3" aria-hidden />
+              )}
+              <NavItem entry={entry} active={entry.isActive(pathname)} pathname={pathname} />
+            </React.Fragment>
           ))}
         </div>
       </nav>
-
-      <div className="hidden md:block p-6 border-t border-[#ffffff15]">
-        <button
-          id="sidebar-signout-btn"
-          onClick={handleSignOut}
-          className="text-sm opacity-60 hover:opacity-100 flex items-center gap-2 transition-opacity text-[#F5F3EC] cursor-pointer"
-        >
-          <LogOut className="w-4 h-4 shrink-0" />
-          <span>Sign out</span>
-        </button>
-      </div>
     </aside>
   );
 };
@@ -158,25 +122,90 @@ export const Sidebar: React.FC = () => {
 /**
  * One nav row.
  *
- * The left rule is drawn on every item and only coloured on the active one, so
- * the label sits in the same place whichever screen you are on — highlighting
- * the active item alone used to shift its text sideways.
+ * The active row is a filled panel with its icon in a tile of its own, which
+ * is what marks it — not a shift in position, so the label sits in the same
+ * place whichever screen you are on.
  */
-const NavItem: React.FC<{entry: NavEntry; active: boolean}> = ({entry, active}) => {
-  const {href, id, label, icon: Icon} = entry;
+const NavItem: React.FC<{ entry: NavEntry; active: boolean; pathname: string }> = ({
+  entry,
+  active,
+  pathname,
+}) => {
+  const { href, id, label, icon: Icon, children } = entry;
+
+  /*
+   * A section opens itself when you are inside it, and can be opened from
+   * outside to jump straight to one of its pages. State rather than derived
+   * from the route, so closing it by hand sticks while you are still in it.
+   */
+  const [expanded, setExpanded] = useState(active);
+
+  // Arriving in the section from anywhere — a link on another screen, the top
+  // bar, the back button — opens it, not just clicking the row itself.
+  useEffect(() => {
+    if (active) setExpanded(true);
+  }, [active]);
+
   return (
-    <Link
-      id={id}
-      href={href}
-      aria-current={active ? 'page' : undefined}
-      className={`flex items-center gap-3 px-3.5 py-2.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors cursor-pointer md:border-l-4 ${
-        active
-          ? 'bg-[#ffffff15] md:border-[#F5F3EC] text-[#F5F3EC]'
-          : 'md:border-transparent text-[#F5F3EC]/60 hover:text-[#F5F3EC] hover:bg-[#ffffff0a]'
-      }`}
-    >
-      <Icon className="w-4 h-4 shrink-0" />
-      <span>{label}</span>
-    </Link>
+    <div>
+      <div className="flex items-center">
+        <Link
+          id={id}
+          href={href}
+          aria-current={active ? 'page' : undefined}
+          onClick={() => children && setExpanded(true)}
+          className={`flex-1 min-w-0 flex items-center gap-3 pl-2 pr-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+            active ? 'bg-white/15 text-white' : 'text-white/70 hover:text-white hover:bg-white/10'
+          }`}
+        >
+          <span
+            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+              active ? 'bg-white text-[#A81823]' : 'bg-white/10 text-white/80'
+            }`}
+          >
+            <Icon className="w-[18px] h-[18px]" />
+          </span>
+          <span>{label}</span>
+        </Link>
+
+        {children && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            aria-label={`${expanded ? 'Hide' : 'Show'} ${label} pages`}
+            className="hidden md:flex p-1.5 ml-0.5 rounded-md text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+          >
+            <ChevronDown
+              className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
+            />
+          </button>
+        )}
+      </div>
+
+      {children && expanded && (
+        <ul className="hidden md:block mt-1 ml-[1.35rem] pl-3.5 border-l border-white/15 space-y-0.5">
+          {children.map((child) => {
+            const childActive = child.isActive(pathname);
+            return (
+              <li key={child.id}>
+                <Link
+                  id={child.id}
+                  href={child.href}
+                  aria-current={childActive ? 'page' : undefined}
+                  className={`block px-2.5 py-1.5 rounded-md text-[13px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                    childActive
+                      ? 'bg-white/15 text-white font-semibold'
+                      : 'text-white/60 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  {child.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 };

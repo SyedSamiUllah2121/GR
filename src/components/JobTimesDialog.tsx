@@ -11,10 +11,10 @@ import {
 import { formatDateTime } from '../services/reportModel';
 
 const inputClass =
-  'w-full px-3 py-2.5 bg-white border border-[#DEDACB] rounded-md text-sm text-[#242217] focus:outline-none focus:border-[#2F5233] focus:ring-1 focus:ring-[#2F5233]';
+  'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
 
 const labelClass =
-  'block text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1.5';
+  'block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5';
 
 /**
  * Sets the start and finish times by hand.
@@ -48,13 +48,13 @@ export const JobTimesDialog: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-[#242217]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white border border-[#DEDACB] rounded-lg shadow-lg w-full max-w-md my-8">
-        <div className="px-6 py-4 border-b border-[#DEDACB]">
-          <h3 className="text-base font-bold text-[#242217]">
+    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-md my-8">
+        <div className="px-6 py-4 border-b border-[#E6E7EB]">
+          <h3 className="text-base font-bold text-[#17181D]">
             {job.startedAt ? 'Adjust the times' : 'Start maintenance'}
           </h3>
-          <p className="text-xs text-[#635E4F] mt-0.5">
+          <p className="text-xs text-[#6B6F76] mt-0.5">
             Problem reported {formatDateTime(job.reportedAt)}
           </p>
         </div>
@@ -74,7 +74,7 @@ export const JobTimesDialog: React.FC<{
               }}
               className={inputClass}
             />
-            <p className="text-[11px] text-[#635E4F] mt-1">
+            <p className="text-[11px] text-[#6B6F76] mt-1">
               Defaults to now. Change it if the work began earlier.
             </p>
           </div>
@@ -95,30 +95,30 @@ export const JobTimesDialog: React.FC<{
                 }}
                 className={inputClass}
               />
-              <p className="text-[11px] text-[#635E4F] mt-1">
+              <p className="text-[11px] text-[#6B6F76] mt-1">
                 Leave blank while the job is still running.
               </p>
             </div>
           )}
 
           {error && (
-            <p className="text-xs font-semibold text-[#9C3B2E] bg-[#F4E4DF] border border-[#9C3B2E]/25 rounded-md px-3 py-2">
+            <p className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/25 rounded-md px-3 py-2">
               {error}
             </p>
           )}
 
-          <div className="pt-3 border-t border-[#DEDACB] flex items-center justify-end gap-3">
+          <div className="pt-3 border-t border-[#E6E7EB] flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-[#DEDACB] rounded-md text-xs font-semibold text-[#635E4F] hover:text-[#242217] hover:bg-[#F5F3EC] transition-colors cursor-pointer"
+              className="px-4 py-2 border border-[#E6E7EB] rounded-md text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               id="job-times-save-btn"
               type="submit"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#2F5233] hover:bg-[#3d6a42] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer"
             >
               <Clock className="w-4 h-4" />
               <span>{job.startedAt ? 'Save times' : 'Start maintenance'}</span>

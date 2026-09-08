@@ -165,7 +165,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="#EDEAE0"
+        stroke="#EFEFF2"
         strokeWidth={thickness}
       />
 
@@ -200,7 +200,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({
         y={size / 2 - 4}
         textAnchor="middle"
         dominantBaseline="middle"
-        className="fill-[#242217] font-bold tabular-nums"
+        className="fill-[#17181D] font-bold tabular-nums"
         style={{ fontSize: 30 }}
       >
         {shownValue}
@@ -211,7 +211,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({
         y={size / 2 + 20}
         textAnchor="middle"
         dominantBaseline="middle"
-        className="fill-[#635E4F] font-semibold uppercase"
+        className="fill-[#6B6F76] font-semibold uppercase"
         style={{ fontSize: 9, letterSpacing: '0.08em' }}
       >
         {centerLabel}

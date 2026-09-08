@@ -11,13 +11,13 @@ export const ScorePill: React.FC<ScorePillProps> = ({ score, size = 'md', showLa
   let statusText = '';
 
   if (score >= 90) {
-    colorClasses = 'bg-[#E7EEE4] text-[#2F5233]';
+    colorClasses = 'bg-[#E6F4EC] text-[#157F4B]';
     statusText = 'Pass';
   } else if (score >= 75) {
-    colorClasses = 'bg-[#F3ECD8] text-[#8A6318]';
+    colorClasses = 'bg-[#FDF3E2] text-[#B4740A]';
     statusText = 'Warning';
   } else {
-    colorClasses = 'bg-[#F4E4DF] text-[#9C3B2E]';
+    colorClasses = 'bg-[#FDECEE] text-[#C8202D]';
     statusText = 'Fail';
   }
 

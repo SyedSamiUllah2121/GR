@@ -34,6 +34,7 @@ import {
 } from '../services/priority';
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastProvider';
+import { raiseMaintenanceJobs } from '../services/maintenanceIntake';
 
 interface ReviewScreenProps {
   inspectionId: string;
@@ -77,7 +78,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.lineWidth = 2.5;
-    ctx.strokeStyle = '#213B26';
+    ctx.strokeStyle = '#17181D';
 
     const getCanvasPos = (clientX: number, clientY: number) => {
       const b = canvas.getBoundingClientRect();
@@ -193,10 +194,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
   if (!inspection) {
     return (
       <div className="p-8 max-w-2xl mx-auto text-center">
-        <h2 className="text-xl font-bold text-[#242217]">Inspection not found</h2>
+        <h2 className="text-xl font-bold text-[#17181D]">Inspection not found</h2>
         <button
           onClick={() => router.push('/inspections')}
-          className="mt-4 px-4 py-2 bg-[#2F5233] text-white text-sm font-medium rounded-[6px]"
+          className="mt-4 px-4 py-2 bg-[#C8202D] text-white text-sm font-medium rounded-[6px]"
         >
           Return to records
         </button>
@@ -303,7 +304,21 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     saveInspection(submittedInspection);
     clearActiveDraft();
 
-    showToast('Inspection saved');
+    /*
+     * Failures in the maintenance group describe something that needs
+     * repairing, so they go on the maintenance board as unstarted jobs. Done
+     * here rather than when "No" was tapped, because a draft answer can be
+     * changed any number of times and each flip would raise another job.
+     */
+    const { raised } = raiseMaintenanceJobs(submittedInspection, flaggedItems, checklist);
+
+    showToast(
+      raised.length > 0
+        ? `Inspection saved — ${raised.length} maintenance job${
+            raised.length === 1 ? '' : 's'
+          } raised`
+        : 'Inspection saved'
+    );
     router.push(`/inspections/${inspection.id}/summary`);
   };
 
@@ -313,18 +328,18 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       <button
         type="button"
         onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-[#635E4F] hover:text-[#242217] transition cursor-pointer mb-4"
+        className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6B6F76] hover:text-[#17181D] transition cursor-pointer mb-4"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
         <span>Return to checklist</span>
       </button>
 
       {/* Header */}
-      <div className="mb-6 border-b border-[#DEDACB] pb-4">
-        <h1 className="text-xl font-bold tracking-tight text-[#242217]">
+      <div className="mb-6 border-b border-[#E6E7EB] pb-4">
+        <h1 className="text-xl font-bold tracking-tight text-[#17181D]">
           Review before submitting
         </h1>
-        <p className="text-xs font-medium text-[#635E4F] mt-1">
+        <p className="text-xs font-medium text-[#6B6F76] mt-1">
           {flaggedItems.length === 0
             ? 'Every item passed'
             : `${flaggedItems.length} item${flaggedItems.length === 1 ? '' : 's'} flagged` +
@@ -338,12 +353,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       </div>
 
       {/* Score Preview Banner */}
-      <div className="mb-6 p-4 rounded-md bg-white border border-[#DEDACB] flex items-center justify-between shadow-xs">
+      <div className="mb-6 p-4 rounded-md bg-white border border-[#E6E7EB] flex items-center justify-between shadow-xs">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F]">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76]">
             Calculated score
           </p>
-          <p className="text-xs text-[#635E4F] mt-0.5">
+          <p className="text-xs text-[#6B6F76] mt-0.5">
             {yesCount} of {totalItemsCount} items passed standards
           </p>
         </div>
@@ -356,9 +371,9 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       {flaggedItems.length > 0 && (
         <div
           id="review-priority-summary"
-          className="mb-6 p-4 rounded-md bg-white border border-[#DEDACB] shadow-xs"
+          className="mb-6 p-4 rounded-md bg-white border border-[#E6E7EB] shadow-xs"
         >
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-2.5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-2.5">
             Priority breakdown
           </p>
           <div className="flex flex-wrap gap-2">
@@ -367,8 +382,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                 key={severity}
                 className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-semibold ${
                   severityCounts[severity] === 0
-                    ? 'border-[#DEDACB] bg-[#F9F8F4] text-[#635E4F]/60'
-                    : 'border-[#DEDACB] bg-white text-[#242217]'
+                    ? 'border-[#E6E7EB] bg-[#FAFAFA] text-[#6B6F76]/60'
+                    : 'border-[#E6E7EB] bg-white text-[#17181D]'
                 }`}
               >
                 <PriorityBadge severity={severity} size="sm" />
@@ -383,19 +398,19 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       {needEvidence.length > 0 && (
         <div
           id="review-evidence-banner"
-          className="mb-6 p-4 rounded-md bg-[#F4E4DF] border border-[#9C3B2E]/40 shadow-xs"
+          className="mb-6 p-4 rounded-md bg-[#FDECEE] border border-[#C8202D]/40 shadow-xs"
           role="alert"
         >
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-[#9C3B2E] shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-[#C8202D] shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-[#242217]">
+              <p className="text-sm font-semibold text-[#17181D]">
                 {needEvidence.length} critical issue{needEvidence.length === 1 ? '' : 's'} need
                 {needEvidence.length === 1 ? 's' : ''} photo evidence
               </p>
               <ul className="mt-1.5 space-y-0.5">
                 {needEvidence.map(({ item }) => (
-                  <li key={item.id} className="text-xs text-[#635E4F]">
+                  <li key={item.id} className="text-xs text-[#6B6F76]">
                     {displayNumber(item.id)}. {item.text}
                   </li>
                 ))}
@@ -403,7 +418,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
               <button
                 type="button"
                 onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-                className="mt-2 text-xs font-bold text-[#2F5233] hover:underline cursor-pointer"
+                className="mt-2 text-xs font-bold text-[#C8202D] hover:underline cursor-pointer"
               >
                 Return to checklist
               </button>
@@ -416,24 +431,24 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       {unansweredItems.length > 0 && (
         <div
           id="review-unanswered-banner"
-          className="mb-6 p-4 rounded-md bg-[#F3ECD8] border border-[#8A6318]/30 shadow-xs"
+          className="mb-6 p-4 rounded-md bg-[#FDF3E2] border border-[#B4740A]/30 shadow-xs"
           role="alert"
         >
           <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-[#8A6318] shrink-0 mt-0.5" />
+            <AlertTriangle className="w-5 h-5 text-[#B4740A] shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-[#242217]">
+              <p className="text-sm font-semibold text-[#17181D]">
                 {unansweredItems.length} item{unansweredItems.length === 1 ? '' : 's'} still
                 unanswered
               </p>
-              <p className="text-xs text-[#635E4F] mt-0.5">
+              <p className="text-xs text-[#6B6F76] mt-0.5">
                 Mark item{unansweredItems.length === 1 ? '' : 's'}{' '}
                 {unansweredItems.map((item) => displayNumber(item.id)).join(', ')} before submitting.
               </p>
               <button
                 type="button"
                 onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-                className="mt-2 text-xs font-bold text-[#2F5233] hover:underline cursor-pointer"
+                className="mt-2 text-xs font-bold text-[#C8202D] hover:underline cursor-pointer"
               >
                 Return to checklist
               </button>
@@ -444,15 +459,15 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
 
       {/* Flagged items list */}
       <div className="mb-8">
-        <h2 className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-3">
+        <h2 className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-3">
           Non-compliant items ({flaggedItems.length}) — most serious first
         </h2>
 
         {flaggedItems.length === 0 ? (
-          <div className="p-6 bg-[#E7EEE4]/60 border border-[#2F5233]/20 rounded-md text-center">
-            <CheckCircle className="w-8 h-8 text-[#2F5233] mx-auto mb-2" />
-            <p className="text-sm font-bold text-[#2F5233]">Every item passed</p>
-            <p className="text-xs text-[#2F5233]/80 mt-1">
+          <div className="p-6 bg-[#E6F4EC]/60 border border-[#157F4B]/20 rounded-md text-center">
+            <CheckCircle className="w-8 h-8 text-[#157F4B] mx-auto mb-2" />
+            <p className="text-sm font-bold text-[#157F4B]">Every item passed</p>
+            <p className="text-xs text-[#157F4B]/80 mt-1">
               All checklist points conform to inspection guidelines.
             </p>
           </div>
@@ -468,20 +483,20 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                 <div
                   key={item.id}
                   id={`review-flagged-item-${item.id}`}
-                  className={`bg-[#F4E4DF]/40 border rounded-md p-4 text-[#242217] ${
+                  className={`bg-[#FDECEE]/40 border rounded-md p-4 text-[#17181D] ${
                     priority.severity === 'critical'
-                      ? 'border-[#9C3B2E] border-l-4'
-                      : 'border-[#9C3B2E]/30'
+                      ? 'border-[#C8202D] border-l-4'
+                      : 'border-[#C8202D]/30'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-2.5">
-                      <span className="text-xs font-bold text-[#9C3B2E] bg-white border border-[#9C3B2E]/30 min-w-5 h-5 px-1 rounded flex items-center justify-center shrink-0 mt-0.5 tabular-nums">
+                      <span className="text-xs font-bold text-[#C8202D] bg-white border border-[#C8202D]/30 min-w-5 h-5 px-1 rounded flex items-center justify-center shrink-0 mt-0.5 tabular-nums">
                         {displayNumber(item.id)}
                       </span>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-sm font-semibold text-[#242217]">{item.text}</p>
+                          <p className="text-sm font-semibold text-[#17181D]">{item.text}</p>
                           <PriorityBadge
                             severity={priority.severity}
                             size="sm"
@@ -489,17 +504,17 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                           />
                         </div>
                         <div className="mt-1.5 text-xs">
-                          <span className="font-semibold text-[#9C3B2E]">Reason: </span>
-                          <span className="text-[#242217]">{displayReason}</span>
+                          <span className="font-semibold text-[#C8202D]">Reason: </span>
+                          <span className="text-[#17181D]">{displayReason}</span>
                         </div>
                         {answer.note && (
-                          <div className="mt-1 text-xs text-[#635E4F]">
+                          <div className="mt-1 text-xs text-[#6B6F76]">
                             <span className="font-semibold">Note: </span>
                             <span>{answer.note}</span>
                           </div>
                         )}
                         {priority.repeatCount > 0 && (
-                          <div className="mt-1 text-xs font-semibold text-[#8A6318]">
+                          <div className="mt-1 text-xs font-semibold text-[#B4740A]">
                             Repeat issue — flagged in {priority.repeatCount} of the last{' '}
                             {priority.historyVisits} visit
                             {priority.historyVisits === 1 ? '' : 's'} to this branch
@@ -513,7 +528,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                         <img
                           src={answer.photo}
                           alt={`Evidence item ${item.id}`}
-                          className="w-14 h-14 object-cover rounded-md border border-[#DEDACB] bg-white"
+                          className="w-14 h-14 object-cover rounded-md border border-[#E6E7EB] bg-white"
                           referrerPolicy="no-referrer"
                         />
                       </div>
@@ -527,16 +542,16 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       </div>
 
       {/* Signature Pad Section */}
-      <div className="bg-white border border-[#DEDACB] rounded-md p-6 mb-8 shadow-xs">
+      <div className="bg-white border border-[#E6E7EB] rounded-md p-6 mb-8 shadow-xs">
         <div className="flex items-center justify-between mb-2">
           <div>
             <label
               htmlFor="signature-canvas"
-              className="block text-sm font-bold text-[#242217]"
+              className="block text-sm font-bold text-[#17181D]"
             >
-              Branch manager sign-off <span className="text-[#9C3B2E]">*</span>
+              Branch manager sign-off <span className="text-[#C8202D]">*</span>
             </label>
-            <p className="text-xs text-[#635E4F] mt-0.5">
+            <p className="text-xs text-[#6B6F76] mt-0.5">
               Draw manager signature with touch or mouse to acknowledge this inspection.
             </p>
           </div>
@@ -544,7 +559,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
           <button
             type="button"
             onClick={handleClearSignature}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#635E4F] hover:text-[#9C3B2E] border border-[#DEDACB] rounded-md hover:bg-[#F5F3EC] transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#6B6F76] hover:text-[#C8202D] border border-[#E6E7EB] rounded-md hover:bg-[#F6F6F8] transition-colors cursor-pointer"
           >
             <Eraser className="w-3.5 h-3.5" />
             <span>Clear</span>
@@ -554,21 +569,21 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
         {signError && (
           <div
             id="signature-error-msg"
-            className="mb-3 p-2.5 rounded-md bg-[#F4E4DF] border border-[#9C3B2E]/30 text-[#9C3B2E] text-xs font-semibold flex items-center gap-1.5"
+            className="mb-3 p-2.5 rounded-md bg-[#FDECEE] border border-[#C8202D]/30 text-[#C8202D] text-xs font-semibold flex items-center gap-1.5"
           >
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{signError}</span>
           </div>
         )}
 
-        <div className="relative border-2 border-dashed border-[#DEDACB] rounded-md bg-[#F9F8F4] overflow-hidden touch-none">
+        <div className="relative border-2 border-dashed border-[#E6E7EB] rounded-md bg-[#FAFAFA] overflow-hidden touch-none">
           <canvas
             id="signature-canvas"
             ref={canvasRef}
             className="w-full h-36 md:h-44 cursor-crosshair block"
           />
           {!hasDrawn && (
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-xs text-[#635E4F]/50">
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-xs text-[#6B6F76]/50">
               <PenTool className="w-4 h-4 mr-1.5 opacity-60" />
               Sign here using mouse or finger
             </div>
@@ -581,7 +596,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
         <button
           type="button"
           onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-          className="px-4 py-2.5 border border-[#DEDACB] rounded-md text-xs font-semibold text-[#635E4F] hover:text-[#242217] bg-white hover:bg-[#F5F3EC] transition-colors cursor-pointer"
+          className="px-4 py-2.5 border border-[#E6E7EB] rounded-md text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] bg-white hover:bg-[#F6F6F8] transition-colors cursor-pointer"
         >
           Edit checklist
         </button>
@@ -590,7 +605,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
           id="submit-inspection-btn"
           type="button"
           onClick={handleSubmitInspection}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md text-xs font-semibold bg-[#2F5233] text-white hover:bg-[#3d6a42] transition-colors shadow-xs cursor-pointer"
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md text-xs font-semibold bg-[#C8202D] text-white hover:bg-[#A81823] transition-colors shadow-xs cursor-pointer"
         >
           <FileCheck className="w-4 h-4" />
           <span>Submit inspection</span>

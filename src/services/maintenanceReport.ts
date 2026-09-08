@@ -1,10 +1,11 @@
 import {
+  MAINTENANCE_CATEGORY_LABEL,
   MaintenanceCategory,
   MaintenanceJob,
   MaintenanceStatus,
   Severity,
 } from '../types';
-import { statusOf, turnaroundHours, workMinutes } from './maintenanceStore';
+import { daysOpen, statusOf, turnaroundHours, workMinutes } from './maintenanceStore';
 
 /**
  * The month-end maintenance report.
@@ -246,3 +247,288 @@ export function formatTurnaround(hours: number | null): string {
 }
 
 export { SEVERITIES };
+
+// ---------------------------------------------------------------------------
+// Kit that keeps breaking
+// ---------------------------------------------------------------------------
+
+/**
+ * A unit at a branch that has been reported more than once.
+ *
+ * Grouped by the equipment rather than the fault, because "the dining AC has
+ * failed three times" is the thing worth acting on — whether it was warm air
+ * twice and a noisy fan once does not change that it is the unit at fault.
+ * Jobs with no equipment recorded fall back to their title, which is the best
+ * identity a hand-logged job has.
+ */
+export interface RepeatGroup {
+  key: string;
+  /** The unit, as most recently written. */
+  label: string;
+  branchName: string;
+  /** Every occurrence, newest first. */
+  jobs: MaintenanceJob[];
+  times: number;
+  firstReportedAt: string;
+  lastReportedAt: string;
+  /** Occurrences still outstanding. */
+  openCount: number;
+  /** Days from the first report to the most recent. */
+  spanDays: number;
+  worstPriority: Severity;
+  /** Total of the costs recorded; null when none were. */
+  totalCost: number | null;
+}
+
+/** Same unit written two ways — "Split AC 2" and "split ac  2" — is one unit. */
+function unitKey(job: MaintenanceJob): string {
+  const raw = job.equipment.trim() || job.title.trim();
+  return raw.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function daysBetweenIso(from: string, to: string): number {
+  const a = new Date(from).getTime();
+  const b = new Date(to).getTime();
+  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+  return Math.max(Math.round((b - a) / 86400000), 0);
+}
+
+/**
+ * Units reported more than once, worst offenders first.
+ *
+ * A single job is not a repeat, so groups of one are dropped — this list is
+ * only useful if everything on it is a pattern.
+ */
+export function buildRepeats(jobs: MaintenanceJob[]): RepeatGroup[] {
+  const groups = new Map<string, MaintenanceJob[]>();
+
+  jobs.forEach((job) => {
+    const key = `${job.branchName.toLowerCase()}::${unitKey(job)}`;
+    const found = groups.get(key);
+    if (found) found.push(job);
+    else groups.set(key, [job]);
+  });
+
+  const rank: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+  return Array.from(groups.entries())
+    .filter(([, group]) => group.length > 1)
+    .map(([key, group]) => {
+      const byNewest = [...group].sort((a, b) => b.reportedAt.localeCompare(a.reportedAt));
+      const costs = group.map((j) => j.cost).filter((c): c is number => c !== null);
+      const first = byNewest[byNewest.length - 1].reportedAt;
+      const last = byNewest[0].reportedAt;
+
+      return {
+        key,
+        // The newest spelling wins; older jobs may name the unit less precisely
+        label: byNewest[0].equipment.trim() || byNewest[0].title.trim(),
+        branchName: byNewest[0].branchName,
+        jobs: byNewest,
+        times: group.length,
+        firstReportedAt: first,
+        lastReportedAt: last,
+        openCount: group.filter((j) => statusOf(j) !== 'completed').length,
+        spanDays: daysBetweenIso(first, last),
+        worstPriority: group.reduce<Severity>(
+          (worst, j) => (rank[j.priority] < rank[worst] ? j.priority : worst),
+          'low'
+        ),
+        totalCost: costs.length > 0 ? costs.reduce((sum, c) => sum + c, 0) : null,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.times - a.times ||
+        b.openCount - a.openCount ||
+        b.lastReportedAt.localeCompare(a.lastReportedAt)
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Live overview — the maintenance dashboard
+// ---------------------------------------------------------------------------
+
+/**
+ * Where maintenance stands right now, across every branch and all of time.
+ *
+ * Deliberately a different question from the month-end report above: that one
+ * closes a period and counts work *done in it*, this one is about the state of
+ * the estate today and what keeps going wrong. A job that has been open for
+ * three months is invisible in a month-end report and is exactly what this
+ * page exists to surface.
+ */
+
+/** An open job past this many days is chased rather than merely counted. */
+export const AGEING_DAYS = 7;
+
+export interface CategoryStat {
+  key: MaintenanceCategory;
+  label: string;
+  total: number;
+  open: number;
+  /** Mean hours from report to completion, where any were completed. */
+  averageTurnaroundHours: number | null;
+  cost: number | null;
+}
+
+export interface BranchStat {
+  branchName: string;
+  total: number;
+  open: number;
+  urgentOpen: number;
+  /** Units at this branch that have been reported more than once. */
+  repeatUnits: number;
+  averageTurnaroundHours: number | null;
+  cost: number | null;
+}
+
+export interface TrendPoint {
+  month: string;
+  label: string;
+  raised: number;
+  completed: number;
+}
+
+export interface MaintenanceOverview {
+  empty: boolean;
+  total: number;
+  open: number;
+  inProgress: number;
+  notStarted: number;
+  completed: number;
+  urgentOpen: number;
+
+  /** Open jobs past AGEING_DAYS, oldest first. */
+  ageing: MaintenanceJob[];
+  oldestOpen: MaintenanceJob | null;
+  /** Days the oldest open job has been waiting. */
+  oldestOpenDays: number;
+
+  averageTurnaroundHours: number | null;
+  /** Share of all jobs that have been finished, 0-100. */
+  completionRate: number;
+  totalCost: number | null;
+
+  bySeverity: Record<Severity, number>;
+  byCategory: CategoryStat[];
+  byBranch: BranchStat[];
+  /** Worst repeat offenders, most frequent first. */
+  repeats: RepeatGroup[];
+  /** Jobs on units that keep failing — the share of all work that is rework. */
+  repeatShare: number;
+  /** Newest month last, for a left-to-right chart. */
+  trend: TrendPoint[];
+  /** Still open, worst priority then longest waiting. */
+  attention: MaintenanceJob[];
+}
+
+function sumCosts(jobs: MaintenanceJob[]): number | null {
+  const costs = jobs.map((j) => j.cost).filter((c): c is number => c !== null);
+  return costs.length > 0 ? costs.reduce((sum, c) => sum + c, 0) : null;
+}
+
+/** The last `count` months ending with the current one, oldest first. */
+function recentMonths(count: number, now: Date): string[] {
+  const out: string[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+}
+
+export function buildMaintenanceOverview(
+  jobs: MaintenanceJob[],
+  now: Date = new Date()
+): MaintenanceOverview {
+  const open = jobs.filter((j) => statusOf(j) !== 'completed');
+  const completed = jobs.filter((j) => statusOf(j) === 'completed');
+  const rank: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+  const ageing = open
+    .filter((j) => daysOpen(j, now) >= AGEING_DAYS)
+    .sort((a, b) => a.reportedAt.localeCompare(b.reportedAt));
+
+  const oldestOpen =
+    open.length > 0
+      ? [...open].sort((a, b) => a.reportedAt.localeCompare(b.reportedAt))[0]
+      : null;
+
+  const { byCategory: categoryCounts, bySeverity } = tally(jobs);
+
+  const byCategory: CategoryStat[] = categoryCounts.map(({ key, count }) => {
+    const inCategory = jobs.filter((j) => j.category === key);
+    return {
+      key,
+      label: MAINTENANCE_CATEGORY_LABEL[key],
+      total: count,
+      open: inCategory.filter((j) => statusOf(j) !== 'completed').length,
+      averageTurnaroundHours: averageTurnaround(inCategory),
+      cost: sumCosts(inCategory),
+    };
+  });
+
+  const repeats = buildRepeats(jobs);
+  const repeatJobIds = new Set(repeats.flatMap((g) => g.jobs.map((j) => j.id)));
+
+  const branchNames = Array.from(new Set(jobs.map((j) => j.branchName))).sort();
+  const byBranch: BranchStat[] = branchNames
+    .map((branchName) => {
+      const atBranch = jobs.filter((j) => j.branchName === branchName);
+      const openHere = atBranch.filter((j) => statusOf(j) !== 'completed');
+      return {
+        branchName,
+        total: atBranch.length,
+        open: openHere.length,
+        urgentOpen: openHere.filter(
+          (j) => j.priority === 'critical' || j.priority === 'high'
+        ).length,
+        repeatUnits: repeats.filter((g) => g.branchName === branchName).length,
+        averageTurnaroundHours: averageTurnaround(atBranch),
+        cost: sumCosts(atBranch),
+      };
+    })
+    // Worst first: most still open, then most repeat offenders
+    .sort((a, b) => b.open - a.open || b.repeatUnits - a.repeatUnits || b.total - a.total);
+
+  const months = recentMonths(6, now);
+  const trend: TrendPoint[] = months.map((month) => ({
+    month,
+    label: monthLabel(month).replace(/ \d{4}$/, ''),
+    raised: jobs.filter((j) => monthKeyOf(j.reportedAt) === month).length,
+    completed: jobs.filter((j) => j.completedAt && monthKeyOf(j.completedAt) === month).length,
+  }));
+
+  return {
+    empty: jobs.length === 0,
+    total: jobs.length,
+    open: open.length,
+    inProgress: open.filter((j) => statusOf(j) === 'in-progress').length,
+    notStarted: open.filter((j) => statusOf(j) === 'reported').length,
+    completed: completed.length,
+    urgentOpen: open.filter((j) => j.priority === 'critical' || j.priority === 'high').length,
+
+    ageing,
+    oldestOpen,
+    oldestOpenDays: oldestOpen ? daysOpen(oldestOpen, now) : 0,
+
+    averageTurnaroundHours: averageTurnaround(jobs),
+    completionRate: jobs.length > 0 ? Math.round((completed.length / jobs.length) * 100) : 0,
+    totalCost: sumCosts(jobs),
+
+    bySeverity,
+    byCategory,
+    byBranch,
+    repeats,
+    repeatShare: jobs.length > 0 ? Math.round((repeatJobIds.size / jobs.length) * 100) : 0,
+    trend,
+
+    attention: [...open]
+      .sort(
+        (a, b) =>
+          rank[a.priority] - rank[b.priority] || a.reportedAt.localeCompare(b.reportedAt)
+      )
+      .slice(0, 6),
+  };
+}

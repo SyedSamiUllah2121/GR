@@ -74,6 +74,13 @@ const REASON_DELTAS: Partial<Record<ReasonGroup, Record<string, number>>> = {
     'Staff not trained to maintain it': 1,
     'Filled late, entries have gaps': -1,
   },
+  MAINTENANCE: {
+    'Not working, needs a technician': 1,
+    'Broken, needs repair': 1,
+    'Leaking or damaged': 1,
+    // Already in hand, so it is not the same neglect as an unreported fault
+    'Reported already, awaiting parts': -1,
+  },
   SAFETY: {
     'Inspection or service expired': 1,
     'Unit missing from its location': 1,

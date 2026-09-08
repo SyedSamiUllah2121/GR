@@ -98,7 +98,7 @@ export interface ReportModel {
 }
 
 /** Reason groups whose failures mean something has to be repaired or serviced. */
-const MAINTENANCE_GROUPS = new Set(['EQUIPMENT', 'TEMPERATURE', 'SAFETY', 'PEST']);
+const MAINTENANCE_GROUPS = new Set(['MAINTENANCE', 'EQUIPMENT', 'TEMPERATURE', 'SAFETY', 'PEST']);
 
 /**
  * Reasons that name a repair explicitly, so a failure in any group is treated

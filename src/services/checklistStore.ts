@@ -228,6 +228,7 @@ export interface NewItem {
   text: string;
   reasonGroup: Item['reasonGroup'];
   severity: Severity;
+  details?: Item['details'];
 }
 
 export function addItem(

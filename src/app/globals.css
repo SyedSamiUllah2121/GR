@@ -2,12 +2,67 @@
 
 @theme {
   --font-sans: var(--font-ibm-plex-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /*
+   * Brand red. The rail takes the deepest step so the content beside it reads
+   * as the lighter surface; actions and links sit at 600, which clears AA for
+   * text against white.
+   */
+  --color-brand-900: #6B0F16;
+  --color-brand-800: #8C141D;
+  --color-brand-700: #A81823;
+  --color-brand-600: #C8202D;
+  --color-brand-500: #E0313D;
+  --color-brand-100: #FBDCDF;
+  --color-brand-50: #FDECEE;
+
+  /*
+   * Status. Green stays the pass colour — a red brand must not make a passing
+   * score look like a failure.
+   */
+  --color-good: #157F4B;
+  --color-good-50: #E6F4EC;
+  --color-warn: #B4740A;
+  --color-warn-50: #FDF3E2;
+  --color-bad: #C8202D;
+  --color-bad-50: #FDECEE;
+
+  /* Neutrals */
+  --color-ink: #17181D;
+  --color-muted: #6B6F76;
+  --color-line: #E6E7EB;
+  --color-line-soft: #EFEFF2;
+  --color-canvas: #F6F6F8;
 }
 
-body {
-  font-family: var(--font-sans);
-  background-color: #F5F3EC;
-  color: #242217;
+/*
+ * Base styles belong in the base layer. Left unlayered they beat every
+ * Tailwind utility — cascade layers lose to unlayered CSS whatever the
+ * specificity — so a `focus-visible:outline-none` on a component silently
+ * did nothing and the ring below drew anyway.
+ */
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: #F6F6F8;
+    color: #17181D;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /*
+   * One focus treatment for the whole app. The rail is dark red, so on it the
+   * ring flips to white — a red ring on red is invisible.
+   */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid #C8202D;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  #main-sidebar :where(a, button):focus-visible {
+    outline-color: #FFFFFF;
+  }
 }
 
 @media print {

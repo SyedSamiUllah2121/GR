@@ -2,41 +2,71 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowRight,
+  Bug,
   CalendarClock,
   ChevronRight,
+  ClipboardCheck,
+  ClipboardList,
+  Clock,
+  FileText,
+  Hammer,
   History,
+  MapPin,
+  Package,
   PenLine,
-  Plus,
+  ShieldAlert,
+  Sparkles,
+  Thermometer,
   TrendingDown,
   TrendingUp,
+  UtensilsCrossed,
+  Users,
   Wrench,
 } from 'lucide-react';
-import { Inspection } from '../types';
+import { Inspection, ReasonGroup, Severity } from '../types';
 import { useChecklist } from '../hooks/useChecklist';
+import { useBranches } from '../hooks/useBranches';
 import { getInspections, subscribeToStorage } from '../services/storage';
-import { getJobs, subscribeToMaintenance } from '../services/maintenanceStore';
-import { buildBoard } from '../services/maintenanceReport';
 import { SEVERITY_LABEL } from '../services/priority';
 import { formatDate } from '../services/reportModel';
-import { MaintenanceJob } from '../types';
 import { BranchSnapshot, buildDashboardModel } from '../services/dashboardModel';
 import { PriorityBadge } from './PriorityBadge';
-import { ScorePill } from './ScorePill';
+import { ScoreRing } from './ScoreRing';
 
-/** Status palette, the same steps the report uses. */
-const GOOD = '#2F5233';
-const BAD = '#C25A33';
-const TRACK = '#EDEAE0';
+/** Status palette, the same steps the report and the rings use. */
+const GOOD = '#157F4B';
+const WARN = '#B4740A';
+const BAD = '#C8202D';
+
+/**
+ * A friendly name and a mark for each reason group. The stored keys are
+ * shouty enum values; nobody reading a dashboard wants to see "PEST".
+ */
+const CATEGORY_META: Record<
+  ReasonGroup,
+  { label: string; icon: React.ComponentType<{ className?: string }> }
+> = {
+  MAINTENANCE: { label: 'Maintenance', icon: Hammer },
+  FOOD: { label: 'Food safety', icon: UtensilsCrossed },
+  CLEANING: { label: 'Cleaning', icon: Sparkles },
+  TEMPERATURE: { label: 'Temperature', icon: Thermometer },
+  EQUIPMENT: { label: 'Equipment', icon: Wrench },
+  SUPPLY: { label: 'Supply', icon: Package },
+  STAFF: { label: 'Staff', icon: Users },
+  PEST: { label: 'Pest control', icon: Bug },
+  RECORDS: { label: 'Records', icon: FileText },
+  SAFETY: { label: 'Safety', icon: ShieldAlert },
+};
+
+const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low'];
 
 export const DashboardScreen: React.FC = () => {
-  const router = useRouter();
   const checklist = useChecklist();
+  const branches = useBranches();
   const [inspections, setInspections] = useState<Inspection[]>(() => getInspections());
-  const [jobs, setJobs] = useState<MaintenanceJob[]>(() => getJobs());
 
   useEffect(() => {
     const refresh = () => setInspections(getInspections());
@@ -44,278 +74,314 @@ export const DashboardScreen: React.FC = () => {
     return subscribeToStorage(refresh);
   }, []);
 
-  useEffect(() => {
-    const refresh = () => setJobs(getJobs());
-    refresh();
-    return subscribeToMaintenance(refresh);
-  }, []);
-
   const model = useMemo(
-    () => buildDashboardModel(inspections, checklist),
-    [inspections, checklist]
+    () => buildDashboardModel(inspections, checklist, branches),
+    [inspections, checklist, branches]
   );
-  // Real maintenance jobs, rather than what the findings imply about repairs
-  const board = useMemo(() => buildBoard(jobs), [jobs]);
-
   const needsAction = model.severityTotals.critical + model.severityTotals.high;
+  const inspectedCount = model.branches.filter((b) => !b.neverInspected).length;
+  const averageScore = model.averageScore ?? 0;
 
   return (
-    <div className="flex-1 flex flex-col min-w-0">
-      <header className="min-h-[5rem] bg-white border-b border-[#DEDACB] flex flex-col sm:flex-row sm:items-center justify-between px-6 md:px-10 shrink-0 gap-4 py-4 sm:py-0">
+    <div className="p-5 sm:p-6 md:p-8 flex-1 space-y-5">
+      {/* Page heading */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-[#242217]">Dashboard</h2>
-          <p className="text-[#635E4F] text-xs mt-0.5">
-            {model.empty
-              ? 'No inspections submitted yet'
-              : `${model.totalInspections} inspection${
-                  model.totalInspections === 1 ? '' : 's'
-                } across ${model.branches.filter((b) => !b.neverInspected).length} branch${
-                  model.branches.filter((b) => !b.neverInspected).length === 1 ? '' : 'es'
-                } • latest ${formatDate(model.latestVisitDate)}`}
+          <h1 className="text-2xl md:text-[26px] font-bold tracking-tight text-[#17181D]">
+            Dashboard
+          </h1>
+          <p className="text-xs text-[#6B6F76] mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {model.empty ? (
+              'No inspections submitted yet'
+            ) : (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#C8202D] shrink-0" />
+                <span>
+                  {model.totalInspections} inspection
+                  {model.totalInspections === 1 ? '' : 's'} across {inspectedCount} branch
+                  {inspectedCount === 1 ? '' : 'es'}
+                </span>
+                <span className="text-[#C9CCD2]">•</span>
+                <span>Latest {formatDate(model.latestVisitDate)}</span>
+              </>
+            )}
           </p>
         </div>
-        <Link
-          href="/inspections/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#2F5233] hover:bg-[#3d6a42] text-white text-xs font-semibold rounded-md transition-colors shadow-xs shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New inspection</span>
-        </Link>
-      </header>
+      </div>
 
-      <div className="p-6 md:p-10 flex-1 space-y-6">
-        {model.empty ? (
-          <div className="bg-white border border-[#DEDACB] rounded-lg p-10 text-center shadow-xs">
-            <p className="text-sm font-bold text-[#242217]">Nothing to summarise yet</p>
-            <p className="text-xs text-[#635E4F] mt-1">
-              Run the first inspection and this page will fill in.
-            </p>
-            <Link
-              href="/inspections/new"
-              className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-[#2F5233] hover:bg-[#3d6a42] text-white text-xs font-semibold rounded-md transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Start an inspection
-            </Link>
+      {model.empty ? (
+        <div className="bg-white border border-[#E6E7EB] rounded-xl p-12 text-center shadow-sm">
+          <ClipboardList className="w-9 h-9 text-[#9CA1A9] mx-auto mb-3" />
+          <p className="text-sm font-bold text-[#17181D]">Nothing to summarise yet</p>
+          <p className="text-xs text-[#6B6F76] mt-1">
+            Run the first inspection and this page will fill in.
+          </p>
+          <Link
+            href="/inspections"
+            className="inline-flex items-center gap-2 mt-5 px-4 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-bold rounded-lg transition-colors"
+          >
+            <ClipboardList className="w-3.5 h-3.5" />
+            Go to inspections
+          </Link>
+        </div>
+      ) : (
+        <>
+          {/* Four figures a manager acts on */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <Kpi
+              icon={ClipboardCheck}
+              label="Needs Action"
+              value={needsAction}
+              tone={needsAction > 0 ? 'bad' : 'good'}
+              href="/inspections"
+              caption={
+                needsAction === 0 ? (
+                  'No critical or high findings'
+                ) : (
+                  <>
+                    <span className="font-bold text-[#C8202D]">
+                      {model.severityTotals.critical} critical
+                    </span>
+                    {' · '}
+                    <span>{model.severityTotals.high} high</span>
+                  </>
+                )
+              }
+              // Share of the estate's findings that are serious enough to act on now
+              fill={model.findingsTotal > 0 ? needsAction / model.findingsTotal : 0}
+              fillTitle={`${needsAction} of ${model.findingsTotal} findings are critical or high`}
+            />
+            <Kpi
+              icon={TrendingUp}
+              label="Average Score"
+              value={averageScore}
+              suffix="%"
+              tone={averageScore >= 90 ? 'good' : averageScore >= 75 ? 'warn' : 'bad'}
+              caption="Mean of each branch's latest visit"
+              fill={averageScore / 100}
+              fillTitle={`${averageScore}% average across ${inspectedCount} branches`}
+            />
+            <Kpi
+              icon={Clock}
+              label="Overdue"
+              value={model.overdue.length}
+              tone={model.overdue.length > 0 ? 'bad' : 'good'}
+              href={model.overdue.length > 0 ? '/inspections' : undefined}
+              caption={
+                model.overdue.length === 0
+                  ? 'Every branch is within schedule'
+                  : `Longest ${model.overdue[0].daysOverdue} days past due`
+              }
+              fill={
+                model.branches.length > 0 ? model.overdue.length / model.branches.length : 0
+              }
+              fillTitle={`${model.overdue.length} of ${model.branches.length} branches are past due`}
+            />
+            <Kpi
+              icon={History}
+              label="Repeat Issues"
+              value={model.repeatIssues.length}
+              tone={model.repeatIssues.length > 0 ? 'warn' : 'good'}
+              caption={
+                model.repeatIssues.length === 0
+                  ? 'Nothing recurring'
+                  : 'Flagged on more than one visit'
+              }
+              fill={
+                model.findingsTotal > 0
+                  ? Math.min(model.repeatIssues.length / model.findingsTotal, 1)
+                  : 0
+              }
+              fillTitle={`${model.repeatIssues.length} checks have been flagged more than once`}
+            />
           </div>
-        ) : (
-          <>
-            {/* Four figures a manager acts on */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <Kpi
-                label="Needs action"
-                value={needsAction}
-                caption={
-                  needsAction === 0
-                    ? 'No critical or high findings'
-                    : `${model.severityTotals.critical} critical · ${model.severityTotals.high} high`
-                }
-                tone={needsAction > 0 ? 'bad' : 'good'}
-              />
-              <Kpi
-                label="Average score"
-                value={model.averageScore ?? 0}
-                suffix="%"
-                caption="Mean of each branch's latest visit"
-                tone={
-                  (model.averageScore ?? 0) >= 90
-                    ? 'good'
-                    : (model.averageScore ?? 0) >= 75
-                      ? 'warn'
-                      : 'bad'
-                }
-              />
-              <Kpi
-                label="Overdue"
-                value={model.overdue.length}
-                caption={
-                  model.overdue.length === 0
-                    ? 'Every branch is within schedule'
-                    : `Longest ${model.overdue[0].daysOverdue} days past due`
-                }
-                tone={model.overdue.length > 0 ? 'warn' : 'good'}
-              />
-              <Kpi
-                label="Repeat issues"
-                value={model.repeatIssues.length}
-                caption={
-                  model.repeatIssues.length === 0
-                    ? 'Nothing recurring'
-                    : 'Flagged on more than one visit'
-                }
-                tone={model.repeatIssues.length > 0 ? 'warn' : 'good'}
-              />
-            </div>
 
-            {/* Things that need doing. Absent entirely when there are none. */}
-            <AttentionStrip model={model} board={board} />
+          {/* Things that need doing. Absent entirely when there are none. */}
+          <AttentionStrip model={model} />
 
-            {/* The core panel: where every branch stands */}
-            <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-[#DEDACB] flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-bold text-[#242217]">Branches</h3>
-                  <p className="text-xs text-[#635E4F] mt-0.5">
+          {/* The core panel: where every branch stands */}
+          <section className="bg-white border border-[#E6E7EB] rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-8 h-8 rounded-lg bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
+                  <MapPin className="w-[18px] h-[18px]" />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-[15px] font-bold text-[#17181D]">Branches</h2>
+                  <p className="text-xs text-[#6B6F76] mt-0.5">
                     Latest visit at each branch, most in need of attention first
                   </p>
                 </div>
-                <Link
-                  href="/inspections"
-                  className="text-[11px] font-bold text-[#2F5233] hover:underline shrink-0"
-                >
-                  All records
-                </Link>
               </div>
-
-              <div className="divide-y divide-[#DEDACB]">
-                {model.branches.map((branch) => (
-                  <BranchRow
-                    key={branch.name}
-                    branch={branch}
-                    onOpen={(id) => router.push(`/inspections/${id}`)}
-                  />
-                ))}
-              </div>
-            </section>
-
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-              {/* What kind of problem dominates right now */}
-              {model.byCategory.length > 0 && (
-                <Panel
-                  title="Where failures are coming from"
-                  caption="Findings on the latest visit to each branch"
-                >
-                  <ul className="space-y-2.5">
-                    {model.byCategory.map((cat) => (
-                      <li key={cat.key} className="flex items-center gap-3">
-                        <span className="w-24 shrink-0 text-[10px] font-bold uppercase tracking-wider text-[#635E4F]">
-                          {cat.key}
-                        </span>
-                        <div className="flex-1 min-w-0 h-2.5 bg-[#F5F3EC] rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${(cat.failures / model.byCategory[0].failures) * 100}%`,
-                              backgroundColor: BAD,
-                            }}
-                            title={`${cat.failures} finding${
-                              cat.failures === 1 ? '' : 's'
-                            } across ${cat.branches} branch${cat.branches === 1 ? '' : 'es'}`}
-                          />
-                        </div>
-                        <span className="text-xs font-bold text-[#242217] tabular-nums w-6 text-right shrink-0">
-                          {cat.failures}
-                        </span>
-                        <span className="text-[11px] text-[#635E4F] tabular-nums w-20 text-right shrink-0">
-                          {cat.branches} branch{cat.branches === 1 ? '' : 'es'}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </Panel>
-              )}
-
-              {/* Which checklist areas are weakest across the estate */}
-              {model.weakestSections.length > 0 && (
-                <Panel
-                  title="Weakest checklist areas"
-                  caption="Pass rate pooled across the latest visits"
-                >
-                  <ul className="space-y-2.5">
-                    {model.weakestSections.slice(0, 6).map((section) => (
-                      <li key={section.key} className="flex items-center gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-[#242217] truncate">
-                            {section.title}
-                          </p>
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F]">
-                            {section.listLabel}
-                          </p>
-                        </div>
-                        <div className="w-20 sm:w-28 h-2.5 bg-[#F5F3EC] rounded-full overflow-hidden shrink-0">
-                          <div
-                            className="h-full rounded-full"
-                            style={{
-                              width: `${Math.max(section.rate, 3)}%`,
-                              backgroundColor: section.rate >= 75 ? GOOD : BAD,
-                            }}
-                          />
-                        </div>
-                        <span className="text-xs font-bold text-[#242217] tabular-nums w-16 text-right shrink-0">
-                          {section.passed}/{section.total}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </Panel>
-              )}
+              <Link
+                href="/inspections"
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#C8202D] hover:underline shrink-0"
+              >
+                All records
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
 
-            {/* Things that did not get fixed between visits */}
-            {model.repeatIssues.length > 0 && (
+            {/* Column headings. Hidden where the rows stack and the labels would lie. */}
+            <div className="hidden lg:grid grid-cols-[1.6fr_9.5rem_8rem_1.1fr_9rem_1.25rem] gap-x-5 px-5 py-2 border-y border-[#EFEFF2] bg-[#FBFBFC] text-[9px] font-bold uppercase tracking-[0.14em] text-[#9CA1A9]">
+              <span>Branch</span>
+              <span>Last visit</span>
+              <span>Overall score</span>
+              <span>Issues</span>
+              <span>Priority</span>
+              <span />
+            </div>
+
+            <div className="divide-y divide-[#EFEFF2] border-t border-[#EFEFF2] lg:border-t-0">
+              {model.branches.map((branch) => (
+                <BranchRow key={branch.name} branch={branch} />
+              ))}
+            </div>
+          </section>
+
+          {/*
+            No `items-start` here: letting the two panels stretch to the taller
+            of the pair keeps the row squared off, rather than leaving one card
+            short because it happens to have fewer rows in it.
+          */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            {/* What kind of problem dominates right now */}
+            {model.byCategory.length > 0 && (
               <Panel
-                title="Repeat issues"
-                caption="Flagged on more than one visit to the same branch"
+                icon={AlertTriangle}
+                title="Where failures are coming from"
+                caption="Findings on the latest visit to each branch"
               >
-                <ul className="divide-y divide-[#EDEAE0] -my-1">
-                  {model.repeatIssues.slice(0, 8).map((repeat) => (
-                    <li
-                      key={`${repeat.branchName}-${repeat.item.id}`}
-                      className="py-2.5 flex items-start gap-3"
-                    >
-                      <History className="w-4 h-4 text-[#8A6318] shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-[#242217]">
-                          {repeat.item.text}
-                        </p>
-                        <p className="text-xs text-[#635E4F] mt-0.5">
-                          {repeat.branchName} • flagged on {repeat.visits} visits
-                        </p>
+                <div className="flex flex-wrap gap-x-6 gap-y-4">
+                  {model.byCategory.slice(0, 6).map((cat) => {
+                    const meta = CATEGORY_META[cat.key];
+                    return (
+                      <div
+                        key={cat.key}
+                        className="flex items-center gap-2.5 min-w-[8.5rem]"
+                        title={`${cat.failures} finding${
+                          cat.failures === 1 ? '' : 's'
+                        } across ${cat.branches} branch${cat.branches === 1 ? '' : 'es'}`}
+                      >
+                        <span className="w-9 h-9 rounded-full bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
+                          <meta.icon className="w-[18px] h-[18px]" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-xs font-semibold text-[#17181D] leading-tight">
+                            {meta.label}
+                          </span>
+                          <span className="block text-[11px] text-[#6B6F76] tabular-nums">
+                            <span className="font-bold text-[#17181D]">{cat.failures}</span> at{' '}
+                            {cat.branches} branch{cat.branches === 1 ? '' : 'es'}
+                          </span>
+                        </span>
                       </div>
-                      <PriorityBadge severity={repeat.severity} size="sm" />
-                    </li>
-                  ))}
-                </ul>
+                    );
+                  })}
+                </div>
               </Panel>
             )}
 
-            {/* Quick way back into the records */}
-            <Panel title="Recent inspections">
-              <ul className="divide-y divide-[#EDEAE0] -my-1">
-                {model.recent.slice(0, 5).map((report) => (
-                  <li key={report.inspection.id}>
-                    <Link
-                      href={`/inspections/${report.inspection.id}`}
-                      className="py-2.5 flex items-center gap-4 group"
+            {/* Which checklist areas are weakest across the estate */}
+            {model.weakestSections.length > 0 && (
+              <Panel
+                icon={ClipboardCheck}
+                title="Weakest checklist areas"
+                caption="Pass rate pooled across the latest visits"
+              >
+                <div className="flex flex-wrap gap-x-6 gap-y-4">
+                  {model.weakestSections.slice(0, 4).map((section) => (
+                    <div
+                      key={section.key}
+                      className="flex items-center gap-3 min-w-[10rem]"
+                      title={`${section.passed} of ${section.total} checks passed`}
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-[#242217] truncate">
-                          {report.inspection.branchName}
-                        </p>
-                        <p className="text-xs text-[#635E4F]">
-                          {formatDate(report.inspection.date)}
-                          {report.inspection.inspectorName
-                            ? ` • ${report.inspection.inspectorName}`
-                            : ''}
-                        </p>
-                      </div>
-                      <span className="text-xs text-[#635E4F] tabular-nums shrink-0">
-                        {report.issues.length === 0
-                          ? 'No findings'
-                          : `${report.issues.length} finding${
-                              report.issues.length === 1 ? '' : 's'
-                            }`}
+                      <ScoreRing score={section.rate} size={44} thickness={4} />
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold text-[#17181D] leading-tight">
+                          {section.title}
+                        </span>
+                        <span className="block text-[11px] text-[#6B6F76] tabular-nums mt-0.5">
+                          {section.passed}/{section.total} passed
+                        </span>
                       </span>
-                      <ScorePill score={report.inspection.score} />
-                      <ChevronRight className="w-4 h-4 text-[#635E4F] group-hover:text-[#242217] shrink-0" />
-                    </Link>
+                    </div>
+                  ))}
+                </div>
+              </Panel>
+            )}
+          </div>
+
+          {/* Things that did not get fixed between visits */}
+          {model.repeatIssues.length > 0 && (
+            <Panel
+              icon={History}
+              title="Repeat issues"
+              caption="Flagged on more than one visit to the same branch"
+            >
+              <ul className="divide-y divide-[#EFEFF2] -my-1">
+                {model.repeatIssues.slice(0, 8).map((repeat) => (
+                  <li
+                    key={`${repeat.branchName}-${repeat.item.id}`}
+                    className="py-2.5 flex items-start gap-3"
+                  >
+                    <span className="w-7 h-7 rounded-lg bg-[#FDF3E2] text-[#B4740A] flex items-center justify-center shrink-0 mt-0.5">
+                      <History className="w-3.5 h-3.5" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-[#17181D]">
+                        {repeat.item.text}
+                      </p>
+                      <p className="text-xs text-[#6B6F76] mt-0.5">
+                        {repeat.branchName} • flagged on {repeat.visits} visits
+                      </p>
+                    </div>
+                    <PriorityBadge severity={repeat.severity} size="sm" />
                   </li>
                 ))}
               </ul>
             </Panel>
-          </>
-        )}
-      </div>
+          )}
+
+          {/* Quick way back into the records */}
+          <Panel icon={ClipboardList} title="Recent inspections">
+            <ul className="divide-y divide-[#EFEFF2] -my-1">
+              {model.recent.slice(0, 5).map((report) => (
+                <li key={report.inspection.id}>
+                  <Link
+                    href={`/inspections/${report.inspection.id}`}
+                    className="py-2.5 flex items-center gap-4 group"
+                  >
+                    <span className="w-9 h-9 rounded-lg bg-[#F1F1F4] text-[#6B6F76] text-[11px] font-bold flex items-center justify-center shrink-0">
+                      {initials(report.inspection.branchName)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px] font-semibold text-[#17181D] truncate">
+                        {report.inspection.branchName}
+                      </p>
+                      <p className="text-xs text-[#6B6F76]">
+                        {formatDate(report.inspection.date)}
+                        {report.inspection.inspectorName
+                          ? ` • ${report.inspection.inspectorName}`
+                          : ''}
+                      </p>
+                    </div>
+                    <span className="hidden sm:block text-xs text-[#6B6F76] tabular-nums shrink-0">
+                      {report.issues.length === 0
+                        ? 'No findings'
+                        : `${report.issues.length} finding${
+                            report.issues.length === 1 ? '' : 's'
+                          }`}
+                    </span>
+                    <ScoreRing score={report.inspection.score} size={38} thickness={3.5} />
+                    <ChevronRight className="w-4 h-4 text-[#9CA1A9] group-hover:text-[#17181D] shrink-0" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </>
+      )}
     </div>
   );
 };
@@ -324,55 +390,60 @@ export const DashboardScreen: React.FC = () => {
 // Pieces
 // ---------------------------------------------------------------------------
 
+/** Up to two initials, for the tile that stands in for a branch photo. */
+function initials(name: string): string {
+  return name
+    .replace(/[^A-Za-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('');
+}
+
 /**
  * Only rendered when something actually needs doing — an empty version of this
  * strip would be noise on every visit to the page.
  */
 const AttentionStrip: React.FC<{
   model: ReturnType<typeof buildDashboardModel>;
-  board: ReturnType<typeof buildBoard>;
-}> = ({ model, board }) => {
-  const items: { icon: React.ComponentType<{ className?: string }>; text: string; href: string }[] =
-    [];
+}> = ({ model }) => {
+  const items: {
+    icon: React.ComponentType<{ className?: string }>;
+    lead: string;
+    detail: string;
+    href: string;
+  }[] = [];
 
   if (model.draft) {
     items.push({
       icon: PenLine,
-      text: `Unfinished inspection at ${model.draft.branchName}`,
+      lead: 'Unfinished inspection',
+      detail: model.draft.branchName,
       href: `/inspections/${model.draft.id}/checklist`,
     });
   }
   model.neverInspected.forEach((b) =>
     items.push({
       icon: AlertTriangle,
-      text: `${b.name} has never been inspected`,
-      href: '/inspections/new',
+      lead: `${b.name}`,
+      detail: 'has never been inspected',
+      href: '/inspections',
     })
   );
   if (model.overdue.length > 0) {
     items.push({
       icon: CalendarClock,
-      text: `${model.overdue.length} branch${
-        model.overdue.length === 1 ? '' : 'es'
-      } overdue — ${model.overdue.map((b) => b.name).join(', ')}`,
-      href: '/inspections/new',
-    });
-  }
-  if (board.openCount > 0) {
-    items.push({
-      icon: Wrench,
-      text: `${board.openCount} maintenance job${board.openCount === 1 ? '' : 's'} outstanding${
-        board.urgentCount > 0 ? ` — ${board.urgentCount} urgent` : ''
-      }`,
-      href: '/maintenance',
+      lead: `${model.overdue.length} branch${model.overdue.length === 1 ? '' : 'es'} overdue`,
+      detail: model.overdue.map((b) => b.name).join(', '),
+      href: '/inspections',
     });
   }
   if (model.unsignedCount > 0) {
     items.push({
       icon: PenLine,
-      text: `${model.unsignedCount} submitted record${
-        model.unsignedCount === 1 ? '' : 's'
-      } with no manager signature`,
+      lead: `${model.unsignedCount} record${model.unsignedCount === 1 ? '' : 's'} unsigned`,
+      detail: 'no manager signature',
       href: '/inspections',
     });
   }
@@ -380,19 +451,20 @@ const AttentionStrip: React.FC<{
   if (items.length === 0) return null;
 
   return (
-    <section className="bg-[#F3ECD8] border border-[#8A6318]/30 rounded-lg overflow-hidden">
-      <ul className="divide-y divide-[#8A6318]/15">
+    <section className="bg-[#FDECEE] border border-[#C8202D]/20 rounded-xl overflow-hidden">
+      <ul className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-[#C8202D]/15">
         {items.map((item, i) => (
-          <li key={i}>
+          <li key={i} className={i >= 2 ? 'md:border-t md:border-[#C8202D]/15' : undefined}>
             <Link
               href={item.href}
-              className="px-5 py-3 flex items-center gap-3 hover:bg-[#8A6318]/5 transition-colors group"
+              className="h-full px-5 py-3.5 flex items-center gap-3 hover:bg-[#C8202D]/5 transition-colors group"
             >
-              <item.icon className="w-4 h-4 text-[#8A6318] shrink-0" />
-              <span className="text-xs font-semibold text-[#242217] flex-1 min-w-0">
-                {item.text}
+              <item.icon className="w-[18px] h-[18px] text-[#C8202D] shrink-0" />
+              <span className="flex-1 min-w-0 text-xs leading-snug">
+                <span className="font-bold text-[#17181D]">{item.lead}</span>
+                <span className="text-[#6B6F76]"> — {item.detail}</span>
               </span>
-              <ArrowRight className="w-3.5 h-3.5 text-[#8A6318] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <ChevronRight className="w-4 h-4 text-[#C8202D]/50 group-hover:text-[#C8202D] shrink-0 transition-colors" />
             </Link>
           </li>
         ))}
@@ -401,181 +473,225 @@ const AttentionStrip: React.FC<{
   );
 };
 
+const TONE_TEXT = { good: GOOD, warn: WARN, bad: BAD } as const;
+const TONE_TILE = {
+  good: 'bg-[#E6F4EC] text-[#157F4B]',
+  warn: 'bg-[#FDF3E2] text-[#B4740A]',
+  bad: 'bg-[#FDECEE] text-[#C8202D]',
+} as const;
+
 const Kpi: React.FC<{
+  icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   suffix?: string;
-  caption: string;
+  caption: React.ReactNode;
   tone: 'good' | 'bad' | 'warn';
-}> = ({ label, value, suffix = '', caption, tone }) => {
-  const color =
-    tone === 'good' ? 'text-[#2F5233]' : tone === 'bad' ? 'text-[#9C3B2E]' : 'text-[#8A6318]';
-  return (
-    <div className="bg-white border border-[#DEDACB] rounded-lg p-4 shadow-xs">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F]">{label}</p>
-      <p className={`text-3xl font-bold tabular-nums mt-1 ${color}`}>
+  /** 0–1. The bar is a reading in its own right, so every card says what it measures. */
+  fill: number;
+  fillTitle: string;
+  href?: string;
+}> = ({ icon: Icon, label, value, suffix = '', caption, tone, fill, fillTitle, href }) => {
+  const body = (
+    <>
+      <div className="flex items-center gap-2.5">
+        <span
+          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${TONE_TILE[tone]}`}
+        >
+          <Icon className="w-[18px] h-[18px]" />
+        </span>
+        <span className="text-[13px] font-bold text-[#17181D] flex-1 min-w-0">{label}</span>
+        {href && (
+          <ChevronRight className="w-4 h-4 text-[#C9CCD2] group-hover:text-[#17181D] shrink-0 transition-colors" />
+        )}
+      </div>
+
+      <p
+        className="text-[34px] leading-none font-bold tabular-nums mt-4"
+        style={{ color: TONE_TEXT[tone] }}
+      >
         {value}
         {suffix}
       </p>
-      <p className="text-[11px] text-[#635E4F] mt-1 leading-snug">{caption}</p>
-    </div>
+      <p className="text-[11px] text-[#6B6F76] mt-2 leading-snug">{caption}</p>
+
+      <div
+        className="mt-4 h-1 rounded-full bg-[#EFEFF2] overflow-hidden"
+        title={fillTitle}
+        role="img"
+        aria-label={fillTitle}
+      >
+        <div
+          className="h-full rounded-full transition-[width] duration-500"
+          style={{
+            width: `${Math.round(Math.min(Math.max(fill, 0), 1) * 100)}%`,
+            backgroundColor: TONE_TEXT[tone],
+          }}
+        />
+      </div>
+    </>
+  );
+
+  const shell =
+    'bg-white border border-[#E6E7EB] rounded-xl p-4 shadow-sm block transition-shadow';
+
+  return href ? (
+    <Link href={href} className={`${shell} group hover:shadow-md`}>
+      {body}
+    </Link>
+  ) : (
+    <div className={shell}>{body}</div>
   );
 };
 
 const Panel: React.FC<{
+  icon?: React.ComponentType<{ className?: string }>;
   title: string;
   caption?: string;
   children: React.ReactNode;
-}> = ({ title, caption, children }) => (
-  <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs">
-    <div className="px-5 py-3.5 border-b border-[#DEDACB]">
-      <h3 className="text-sm font-bold text-[#242217]">{title}</h3>
-      {caption && <p className="text-xs text-[#635E4F] mt-0.5">{caption}</p>}
+}> = ({ icon: Icon, title, caption, children }) => (
+  <section className="bg-white border border-[#E6E7EB] rounded-xl shadow-sm">
+    <div className="px-5 py-4 border-b border-[#EFEFF2] flex items-center gap-2.5">
+      {Icon && (
+        <span className="w-8 h-8 rounded-lg bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
+          <Icon className="w-[18px] h-[18px]" />
+        </span>
+      )}
+      <div className="min-w-0">
+        <h2 className="text-[15px] font-bold text-[#17181D]">{title}</h2>
+        {caption && <p className="text-xs text-[#6B6F76] mt-0.5">{caption}</p>}
+      </div>
     </div>
     <div className="p-5">{children}</div>
   </section>
 );
 
-const BranchRow: React.FC<{
-  branch: BranchSnapshot;
-  onOpen: (id: string) => void;
-}> = ({ branch, onOpen }) => {
+/**
+ * One branch, on the same column grid as the headings above it. Below `lg`
+ * the grid collapses and each cell carries its own label, because a bare date
+ * or a bare percentage means nothing once the heading row is gone.
+ */
+const BranchRow: React.FC<{ branch: BranchSnapshot }> = ({ branch }) => {
+  const rowClasses =
+    'px-5 py-4 grid grid-cols-1 lg:grid-cols-[1.6fr_9.5rem_8rem_1.1fr_9rem_1.25rem] gap-x-5 gap-y-3 lg:items-center hover:bg-[#FAFAFA] transition-colors group';
+
+  const identity = (
+    <div className="flex items-center gap-3 min-w-0">
+      <span className="w-11 h-11 rounded-lg bg-[#FDECEE] text-[#C8202D] text-sm font-bold flex items-center justify-center shrink-0">
+        {initials(branch.name)}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[13px] font-bold text-[#17181D] truncate">{branch.name}</p>
+        {branch.location && (
+          <p className="text-[11px] text-[#6B6F76] flex items-center gap-1 mt-0.5 truncate">
+            <MapPin className="w-3 h-3 shrink-0" />
+            {branch.location}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
   if (branch.neverInspected) {
     return (
-      <div className="px-5 py-4 flex flex-wrap items-center gap-4">
-        <div className="flex-1 min-w-[10rem]">
-          <p className="text-sm font-bold text-[#242217]">{branch.name}</p>
-          <p className="text-xs text-[#8A6318] font-semibold mt-0.5">Never inspected</p>
+      <Link href="/inspections" className={rowClasses}>
+        {identity}
+        <div className="lg:col-span-4">
+          <p className="text-xs font-bold text-[#C8202D]">Never inspected</p>
+          <p className="text-[11px] text-[#6B6F76] mt-0.5">Start the first visit</p>
         </div>
-        <Link
-          href="/inspections/new"
-          className="text-[11px] font-bold text-[#2F5233] hover:underline shrink-0"
-        >
-          Inspect now
-        </Link>
-      </div>
+        <ChevronRight className="hidden lg:block w-4 h-4 text-[#C9CCD2] group-hover:text-[#17181D]" />
+      </Link>
     );
   }
 
   const report = branch.latest!;
   const counts = report.severityCounts;
+  const worst = SEVERITY_ORDER.find((s) => counts[s] > 0);
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(report.inspection.id)}
-      className="w-full px-5 py-4 flex flex-wrap items-center gap-x-5 gap-y-3 text-left hover:bg-[#F9F8F4] transition-colors cursor-pointer"
-    >
-      {/* Branch and when it was last seen */}
-      <div className="flex-1 min-w-[11rem]">
-        <p className="text-sm font-bold text-[#242217]">{branch.name}</p>
-        <p className="text-xs text-[#635E4F] mt-0.5">
+    <Link href={`/inspections/${report.inspection.id}`} className={rowClasses}>
+      {identity}
+
+      {/* When it was last seen, and whether that is late */}
+      <div>
+        <p className="text-xs font-semibold text-[#17181D] tabular-nums">
           {formatDate(report.inspection.date)}
-          {branch.daysOverdue > 0 ? (
-            <span className="text-[#8A6318] font-semibold">
-              {' '}
-              • {branch.daysOverdue} days overdue
-            </span>
-          ) : (
-            <span> • next {formatDate(branch.nextDueDate)}</span>
-          )}
         </p>
+        {branch.daysOverdue > 0 ? (
+          <p className="text-[11px] font-semibold text-[#C8202D] flex items-center gap-1.5 mt-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#C8202D] shrink-0" />
+            {branch.daysOverdue} day{branch.daysOverdue === 1 ? '' : 's'} overdue
+          </p>
+        ) : (
+          <p className="text-[11px] text-[#6B6F76] mt-0.5">
+            Next {formatDate(branch.nextDueDate)}
+          </p>
+        )}
       </div>
 
-      {/* Score, its direction, and the shape of the last few visits */}
-      <div className="flex items-center gap-3 shrink-0">
-        <Sparkline points={branch.scoreHistory.map((h) => h.score)} />
-        <div className="w-14 text-right">
-          <ScorePill score={report.inspection.score} />
-        </div>
-        <div className="w-14 shrink-0">
-          {branch.delta === null ? (
-            <span className="text-[11px] text-[#635E4F]">first visit</span>
-          ) : branch.delta === 0 ? (
-            <span className="text-[11px] text-[#635E4F]">no change</span>
-          ) : (
-            <span
-              className={`inline-flex items-center gap-1 text-[11px] font-bold tabular-nums ${
-                branch.delta > 0 ? 'text-[#2F5233]' : 'text-[#9C3B2E]'
-              }`}
-            >
-              {branch.delta > 0 ? (
-                <TrendingUp className="w-3.5 h-3.5" />
-              ) : (
-                <TrendingDown className="w-3.5 h-3.5" />
-              )}
-              {branch.delta > 0 ? '+' : ''}
-              {branch.delta}
-            </span>
-          )}
-        </div>
+      {/* Score, and which way it moved since the visit before */}
+      <div className="flex items-center gap-2">
+        <ScoreRing score={report.inspection.score} size={46} thickness={4} />
+        {branch.delta !== null && branch.delta !== 0 && (
+          <span
+            className={`inline-flex items-center gap-0.5 text-[11px] font-bold tabular-nums ${
+              branch.delta > 0 ? 'text-[#157F4B]' : 'text-[#C8202D]'
+            }`}
+            title={`${branch.delta > 0 ? 'Up' : 'Down'} ${Math.abs(
+              branch.delta
+            )} points on the previous visit`}
+          >
+            {branch.delta > 0 ? (
+              <TrendingUp className="w-3.5 h-3.5" />
+            ) : (
+              <TrendingDown className="w-3.5 h-3.5" />
+            )}
+            {branch.delta > 0 ? '+' : ''}
+            {branch.delta}
+          </span>
+        )}
       </div>
 
       {/* What was found, worst first */}
-      <div className="flex flex-wrap items-center gap-1.5 min-w-[9rem] justify-end">
+      <div className="flex flex-wrap items-center gap-1.5">
         {report.issues.length === 0 ? (
-          <span className="text-xs font-semibold text-[#2F5233]">No findings</span>
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#E6F4EC] text-[#157F4B]">
+            No findings
+          </span>
         ) : (
-          (['critical', 'high', 'medium', 'low'] as const)
-            .filter((s) => counts[s] > 0)
-            .map((s) => (
-              <span
-                key={s}
-                className="inline-flex items-center gap-1"
-                title={`${counts[s]} ${SEVERITY_LABEL[s]}`}
-              >
-                <PriorityBadge severity={s} size="sm" />
-                <span className="text-xs font-bold text-[#242217] tabular-nums">{counts[s]}</span>
-              </span>
-            ))
+          SEVERITY_ORDER.filter((s) => counts[s] > 0).map((s) => (
+            <PriorityBadge
+              key={s}
+              severity={s}
+              size="sm"
+              count={counts[s]}
+              title={`${counts[s]} ${SEVERITY_LABEL[s]}`}
+            />
+          ))
         )}
       </div>
-    </button>
-  );
-};
 
-/**
- * Score across the visits on record. One hue, 2px line, no axes — it is there
- * to show direction beside the number, not to be read off precisely.
- *
- * Needs three visits before it draws anything. Two points are a
- * before-and-after, which the delta beside it states exactly; drawing them as
- * a line would imply a trend that two readings cannot support.
- */
-const Sparkline: React.FC<{ points: number[] }> = ({ points }) => {
-  const width = 56;
-  const height = 22;
+      {/* The single number that says how hard to push, and how much there is */}
+      <div className="flex items-center gap-2">
+        {worst ? (
+          <>
+            <PriorityBadge severity={worst} size="sm" />
+            <span
+              className="w-5 h-5 rounded-full border border-[#E6E7EB] text-[10px] font-bold text-[#6B6F76] flex items-center justify-center tabular-nums shrink-0"
+              title={`${report.issues.length} finding${
+                report.issues.length === 1 ? '' : 's'
+              } in total`}
+            >
+              {report.issues.length}
+            </span>
+          </>
+        ) : (
+          <span className="text-[11px] text-[#6B6F76]">Clear</span>
+        )}
+      </div>
 
-  if (points.length < 3) {
-    return <div className="w-14 h-[22px] shrink-0" aria-hidden />;
-  }
-
-  // Fixed 0-100 scale, so two branches' sparklines are comparable
-  const step = width / (points.length - 1);
-  const y = (score: number) => height - 2 - (score / 100) * (height - 4);
-  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${i * step} ${y(p)}`).join(' ');
-  const last = points[points.length - 1];
-  const rising = last >= points[points.length - 2];
-
-  return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      className="shrink-0 overflow-visible"
-      role="img"
-      aria-label={`Score across ${points.length} visits: ${points.join(', ')} percent`}
-    >
-      <line x1="0" y1={height - 1} x2={width} y2={height - 1} stroke={TRACK} strokeWidth="1" />
-      <path
-        d={path}
-        fill="none"
-        stroke={rising ? GOOD : BAD}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx={(points.length - 1) * step} cy={y(last)} r="2.5" fill={rising ? GOOD : BAD} />
-    </svg>
+      <ChevronRight className="hidden lg:block w-4 h-4 text-[#C9CCD2] group-hover:text-[#17181D]" />
+    </Link>
   );
 };

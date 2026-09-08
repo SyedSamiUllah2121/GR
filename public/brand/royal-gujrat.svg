@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 763 165" width="763" height="165" role="img" aria-label="Royal Gujrat — Restaurant &amp; Sweets">
+  <title>Royal Gujrat — Restaurant &amp; Sweets</title>
+
+  <!-- Bowl: a shallow wide arc, not a half circle -->
+  <path d="M18 92H222A102 63 0 0 1 18 92Z" fill="#CE2130"/>
+
+  <!-- Two crescents lifting out of the bowl -->
+  <g fill="#FFFFFF">
+    <path d="M52 106Q84 88 116 111Q84 111 52 106Z"/>
+    <path d="M110 106Q142 88 174 111Q142 111 110 106Z"/>
+  </g>
+
+  <!--
+       Cutlery is outline only and sits above the bowl, so the red shows
+       through where the handles cross it — filling them would hide the bowl.
+  -->
+  <g fill="none" stroke="#6E747C" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round">
+    <g transform="translate(20 8) rotate(-49) scale(1.29)">
+      <path d="M-14 52V4a1.9 1.9 0 0 1 3.8 0v32h5.4V4a1.9 1.9 0 0 1 3.8 0v32h5.4V4a1.9 1.9 0 0 1 3.8 0v32h5.4V4a1.9 1.9 0 0 1 3.8 0v48c0 9-4.8 13.2-10 15V163a4 4 0 0 1-8 0V67c-5.2-1.8-10-6-10-15Z"/>
+    </g>
+    <g transform="translate(220 8) rotate(49) scale(1.29)">
+      <path d="M0 3c5.8 11 8.6 27 8.6 45v20H4v95a4 4 0 0 1-8 0V68h-5.6V27C-9.6 14-4.6 6 0 3Z"/>
+    </g>
+  </g>
+
+  <!-- Steam -->
+  <g fill="none" stroke="#F2C300" stroke-width="6" stroke-linecap="round">
+    <path d="M104 76c-6.5-12 8.5-18.5 2-31-4.6-9 5.6-15 1-23"/>
+    <path d="M122 74c-6.5-12 8.5-18.5 2-31-4.6-9 5.6-15 1-25"/>
+    <path d="M140 76c-6.5-12 8.5-18.5 2-31-4.6-9 5.6-15 1-23"/>
+  </g>
+
+  <!--
+       textLength pins each line to an exact width, so the mark keeps its shape
+       on a machine without Arial. The strapline adjusts spacing only — letting
+       it stretch the glyphs too would fatten the letterforms.
+  -->
+  <text x="252" y="101" textLength="505" lengthAdjust="spacingAndGlyphs"
+        font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="800"
+        fill="#CE2130">ROYAL GUJRAT</text>
+  <text x="253" y="141" textLength="500" lengthAdjust="spacing"
+        font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700"
+        fill="#CE2130">RESTAURANT &amp; SWEETS</text>
+</svg>

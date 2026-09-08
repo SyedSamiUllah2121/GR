@@ -61,8 +61,8 @@ interface ReportScreenProps {
  * and a written label so the colour never carries the meaning by itself.
  */
 const OUTCOME_COLOR: Record<Outcome, string> = {
-  passed: '#2F5233',
-  failed: '#C25A33',
+  passed: '#157F4B',
+  failed: '#D9542B',
   unanswered: '#7A8288',
 };
 
@@ -115,13 +115,13 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
   if (!inspection || !model) {
     return (
       <div className="p-8 max-w-xl mx-auto text-center">
-        <h2 className="text-xl font-bold text-[#242217]">Report not found</h2>
-        <p className="text-sm text-[#635E4F] mt-2">
+        <h2 className="text-xl font-bold text-[#17181D]">Report not found</h2>
+        <p className="text-sm text-[#6B6F76] mt-2">
           The requested inspection report does not exist or has been removed.
         </p>
         <button
           onClick={() => router.push('/inspections')}
-          className="mt-4 px-4 py-2 bg-[#2F5233] text-white text-sm font-medium rounded-md cursor-pointer"
+          className="mt-4 px-4 py-2 bg-[#C8202D] text-white text-sm font-medium rounded-md cursor-pointer"
         >
           Back to records
         </button>
@@ -169,31 +169,31 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
   return (
     <div className="p-4 md:p-6 lg:p-8 w-full max-w-[1400px] mx-auto">
       {/* Breadcrumb */}
-      <nav className="no-print text-xs text-[#635E4F] mb-3 flex items-center gap-1.5">
+      <nav className="no-print text-xs text-[#6B6F76] mb-3 flex items-center gap-1.5">
         <button
           type="button"
           onClick={() => router.push('/inspections')}
-          className="hover:text-[#242217] transition-colors cursor-pointer"
+          className="hover:text-[#17181D] transition-colors cursor-pointer"
         >
           Inspections
         </button>
         <ChevronRight className="w-3 h-3" />
-        <span className="text-[#242217] font-semibold">Inspection details</span>
+        <span className="text-[#17181D] font-semibold">Inspection details</span>
       </nav>
 
       {/* Title row */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[#242217]">
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[#17181D]">
             Inspection <span className="font-mono text-[0.9em]">#{inspection.id}</span>
           </h1>
           {isLocked ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#E7EEE4] text-[#2F5233] border border-[#2F5233]/25">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#E6F4EC] text-[#157F4B] border border-[#157F4B]/25">
               <Lock className="w-3 h-3" />
               Locked
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F3ECD8] text-[#8A6318] border border-[#8A6318]/25">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FDF3E2] text-[#B4740A] border border-[#B4740A]/25">
               <PenLine className="w-3 h-3" />
               Draft
             </span>
@@ -204,24 +204,24 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
           <button
             type="button"
             onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F5F3EC] border border-[#DEDACB] text-xs font-semibold text-[#242217] rounded-md transition-colors cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer shadow-xs"
           >
-            <Edit3 className="w-3.5 h-3.5 text-[#2F5233]" />
+            <Edit3 className="w-3.5 h-3.5 text-[#C8202D]" />
             <span>Edit answers</span>
           </button>
           <button
             type="button"
             onClick={handleExportCsv}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F5F3EC] border border-[#DEDACB] text-xs font-semibold text-[#242217] rounded-md transition-colors cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer shadow-xs"
           >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-[#2F5233]" />
+            <FileSpreadsheet className="w-3.5 h-3.5 text-[#C8202D]" />
             <span>Export CSV</span>
           </button>
           <button
             id="download-pdf-btn"
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#2F5233] hover:bg-[#3d6a42] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Export PDF</span>
@@ -229,7 +229,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
           <button
             type="button"
             onClick={() => router.push('/inspections')}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F5F3EC] border border-[#DEDACB] text-xs font-semibold text-[#242217] rounded-md transition-colors cursor-pointer shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer shadow-xs"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to list</span>
@@ -238,9 +238,9 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
       </div>
 
       {(model.missingCount > 0 || model.scoreMismatch) && (
-        <div className="mb-5 p-4 rounded-lg bg-[#F3ECD8] border border-[#8A6318]/30 flex items-start gap-3 page-break-inside-avoid">
-          <AlertTriangle className="w-4 h-4 text-[#8A6318] shrink-0 mt-0.5" />
-          <div className="text-xs text-[#242217] space-y-1">
+        <div className="mb-5 p-4 rounded-lg bg-[#FDF3E2] border border-[#B4740A]/30 flex items-start gap-3 page-break-inside-avoid">
+          <AlertTriangle className="w-4 h-4 text-[#B4740A] shrink-0 mt-0.5" />
+          <div className="text-xs text-[#17181D] space-y-1">
             <p className="font-bold">This record does not line up with the current checklist</p>
             {model.missingCount > 0 && (
               <p>
@@ -265,14 +265,14 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
         {/* ---------------------------------------------------------------- */}
         <div className="min-w-0 space-y-5">
           {/* Header card */}
-          <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs overflow-hidden page-break-inside-avoid">
+          <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden page-break-inside-avoid">
             <div className="p-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-5">
               <MetaField icon={Building2} label="Branch" prominent>
                 {inspection.branchName}
               </MetaField>
               <MetaField icon={Calendar} label="Inspection date">
                 {formatDate(inspection.date)}
-                <span className="block text-[11px] font-normal text-[#635E4F] mt-0.5">
+                <span className="block text-[11px] font-normal text-[#6B6F76] mt-0.5">
                   {inspection.time}
                 </span>
               </MetaField>
@@ -289,17 +289,17 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
               </MetaField>
             </div>
 
-            <div className="border-t border-[#DEDACB] bg-[#F9F8F4] p-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-5">
+            <div className="border-t border-[#E6E7EB] bg-[#FAFAFA] p-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-5">
               <MetaField icon={ClipboardList} label="Checklist">
                 {FULL_CHECKLIST_LABEL}
-                <span className="block text-[11px] font-normal text-[#635E4F] mt-0.5">
+                <span className="block text-[11px] font-normal text-[#6B6F76] mt-0.5">
                   {model.missingCount > 0
                     ? `${model.frozenTotal} covered, ${model.total} shown`
                     : `${model.total} items covered`}
                 </span>
               </MetaField>
               <MetaField icon={ShieldCheck} label="Status">
-                <span className={isLocked ? 'text-[#2F5233]' : 'text-[#8A6318]'}>
+                <span className={isLocked ? 'text-[#157F4B]' : 'text-[#B4740A]'}>
                   {isLocked ? 'Submitted & locked' : 'Draft — in progress'}
                 </span>
               </MetaField>
@@ -320,7 +320,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
           </section>
 
           {/* Tabs */}
-          <div className="no-print border-b border-[#DEDACB] flex gap-1 overflow-x-auto">
+          <div className="no-print border-b border-[#E6E7EB] flex gap-1 overflow-x-auto">
             {tabs.map(({ key, label, count }) => (
               <button
                 key={key}
@@ -328,15 +328,15 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                 onClick={() => setTab(key)}
                 className={`px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors cursor-pointer ${
                   tab === key
-                    ? 'border-[#2F5233] text-[#2F5233]'
-                    : 'border-transparent text-[#635E4F] hover:text-[#242217]'
+                    ? 'border-[#C8202D] text-[#C8202D]'
+                    : 'border-transparent text-[#6B6F76] hover:text-[#17181D]'
                 }`}
               >
                 {label}
                 {count !== undefined && (
                   <span
                     className={`ml-1.5 tabular-nums ${
-                      tab === key ? 'text-[#2F5233]' : 'text-[#635E4F]'
+                      tab === key ? 'text-[#C8202D]' : 'text-[#6B6F76]'
                     }`}
                   >
                     ({count})
@@ -349,22 +349,22 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
           {/* Every panel stays in the DOM so printing lays out the whole report,
               not just whichever tab happened to be open. */}
           <Panel active={tab === 'checklist'} title="Inspection checklist">
-            <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs overflow-hidden">
-              <div className="px-4 py-3 border-b border-[#DEDACB] flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-sm font-bold text-[#242217]">Inspection checklist</h2>
+            <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden">
+              <div className="px-4 py-3 border-b border-[#E6E7EB] flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-sm font-bold text-[#17181D]">Inspection checklist</h2>
                 <div className="flex flex-wrap items-center gap-3">
                   <OutcomeLegend model={model} />
                   <button
                     type="button"
                     onClick={toggleAllSections}
-                    className="no-print px-2.5 py-1.5 text-[11px] font-semibold text-[#242217] border border-[#DEDACB] rounded-md hover:bg-[#F5F3EC] transition-colors cursor-pointer"
+                    className="no-print px-2.5 py-1.5 text-[11px] font-semibold text-[#17181D] border border-[#E6E7EB] rounded-md hover:bg-[#F6F6F8] transition-colors cursor-pointer"
                   >
                     {allOpen ? 'Collapse all' : 'Expand all'}
                   </button>
                 </div>
               </div>
 
-              <div className="divide-y divide-[#DEDACB]">
+              <div className="divide-y divide-[#E6E7EB]">
                 {model.sections.map((section) => {
                   const key = `${section.listKey}::${section.key}`;
                   const isOpen = open.has(key);
@@ -373,28 +373,28 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                       <button
                         type="button"
                         onClick={() => toggleSection(key)}
-                        className="print-keep w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-[#F9F8F4] transition-colors cursor-pointer"
+                        className="print-keep w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-[#FAFAFA] transition-colors cursor-pointer"
                       >
                         <ChevronDown
-                          className={`no-print w-4 h-4 text-[#635E4F] shrink-0 transition-transform ${
+                          className={`no-print w-4 h-4 text-[#6B6F76] shrink-0 transition-transform ${
                             isOpen ? '' : '-rotate-90'
                           }`}
                         />
                         <div className="flex-1 min-w-0">
-                          <span className="text-sm font-semibold text-[#242217]">
+                          <span className="text-sm font-semibold text-[#17181D]">
                             {section.index}. {section.title}
                           </span>
-                          <span className="block text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mt-0.5">
+                          <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mt-0.5">
                             {section.listLabel}
                           </span>
                         </div>
                         <span
                           className={`text-xs font-bold tabular-nums shrink-0 ${
                             section.failed > 0
-                              ? 'text-[#C25A33]'
+                              ? 'text-[#D9542B]'
                               : section.unanswered > 0
-                                ? 'text-[#8A6318]'
-                                : 'text-[#2F5233]'
+                                ? 'text-[#B4740A]'
+                                : 'text-[#157F4B]'
                           }`}
                         >
                           {section.passed} / {section.total} passed
@@ -402,7 +402,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                       </button>
 
                       <div className={`collapsible ${isOpen ? '' : 'hidden'}`}>
-                        <div className="divide-y divide-[#EDEAE0] border-t border-[#EDEAE0]">
+                        <div className="divide-y divide-[#EFEFF2] border-t border-[#EFEFF2]">
                           {section.rows.map((row) => (
                             <ChecklistRow
                               key={row.item.id}
@@ -443,7 +443,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
         {/* ---------------------------------------------------------------- */}
         {/* Right rail                                                        */}
         {/* ---------------------------------------------------------------- */}
-        <aside className="space-y-5 xl:sticky xl:top-6">
+        <aside className="space-y-5 xl:sticky xl:top-[5.5rem]">
           <RailCard title="Inspection summary">
             <div className="flex items-center gap-4">
               {/* The score sits in the middle because it is what differs from
@@ -499,7 +499,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
 
           <RailCard title="Priority summary">
             {model.issues.length === 0 ? (
-              <p className="text-xs text-[#635E4F]">Nothing was flagged on this visit.</p>
+              <p className="text-xs text-[#6B6F76]">Nothing was flagged on this visit.</p>
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {SEVERITY_ORDER.map((severity) => (
@@ -507,16 +507,16 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                     key={severity}
                     className={`border rounded-md p-2.5 ${
                       model.severityCounts[severity] > 0
-                        ? 'border-[#DEDACB] bg-white'
-                        : 'border-[#EDEAE0] bg-[#F9F8F4]'
+                        ? 'border-[#E6E7EB] bg-white'
+                        : 'border-[#EFEFF2] bg-[#FAFAFA]'
                     }`}
                   >
                     <PriorityBadge severity={severity} size="sm" />
                     <p
                       className={`text-xl font-bold tabular-nums mt-1.5 ${
                         model.severityCounts[severity] > 0
-                          ? 'text-[#242217]'
-                          : 'text-[#635E4F]/45'
+                          ? 'text-[#17181D]'
+                          : 'text-[#6B6F76]/45'
                       }`}
                     >
                       {model.severityCounts[severity]}
@@ -526,7 +526,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
               </div>
             )}
             {model.repeats.length > 0 && (
-              <p className="mt-3 text-[11px] font-semibold text-[#8A6318] flex items-start gap-1.5">
+              <p className="mt-3 text-[11px] font-semibold text-[#B4740A] flex items-start gap-1.5">
                 <History className="w-3.5 h-3.5 shrink-0 mt-px" />
                 <span>
                   {model.repeats.length} repeat issue
@@ -543,7 +543,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                 <button
                   type="button"
                   onClick={() => setTab('findings')}
-                  className="no-print text-[11px] font-bold text-[#2F5233] hover:underline cursor-pointer"
+                  className="no-print text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
                 >
                   View all ({model.issues.length})
                 </button>
@@ -551,7 +551,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
             }
           >
             {model.issues.length === 0 ? (
-              <p className="text-xs text-[#635E4F]">No findings — every item passed.</p>
+              <p className="text-xs text-[#6B6F76]">No findings — every item passed.</p>
             ) : (
               <ul className="space-y-3">
                 {model.issues.slice(0, 3).map(({ item, answer, priority }) => (
@@ -560,12 +560,12 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                       <img
                         src={answer.photo}
                         alt=""
-                        className="w-12 h-12 rounded-md object-cover border border-[#DEDACB] bg-[#F5F3EC] shrink-0"
+                        className="w-12 h-12 rounded-md object-cover border border-[#E6E7EB] bg-[#F6F6F8] shrink-0"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-md border border-[#DEDACB] bg-[#F5F3EC] shrink-0 flex items-center justify-center">
-                        <AlertTriangle className="w-4 h-4 text-[#635E4F]" />
+                      <div className="w-12 h-12 rounded-md border border-[#E6E7EB] bg-[#F6F6F8] shrink-0 flex items-center justify-center">
+                        <AlertTriangle className="w-4 h-4 text-[#6B6F76]" />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
@@ -574,13 +574,13 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                         size="sm"
                         escalated={priority.severity !== priority.base}
                       />
-                      <p className="text-xs font-semibold text-[#242217] mt-1 leading-snug">
+                      <p className="text-xs font-semibold text-[#17181D] mt-1 leading-snug">
                         {item.text}
                       </p>
-                      <p className="text-[11px] text-[#635E4F] mt-0.5 leading-snug">
+                      <p className="text-[11px] text-[#6B6F76] mt-0.5 leading-snug">
                         {reasonText(answer)}
                       </p>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mt-1">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mt-1">
                         {item.reasonGroup}
                       </p>
                     </div>
@@ -592,7 +592,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
 
           <RailCard title={`Photos (${model.photos.length})`}>
             {model.photos.length === 0 ? (
-              <p className="text-xs text-[#635E4F]">No photo evidence was attached.</p>
+              <p className="text-xs text-[#6B6F76]">No photo evidence was attached.</p>
             ) : (
               <div className="grid grid-cols-4 gap-2">
                 {model.photos.map((row) => (
@@ -601,7 +601,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                     src={row.answer!.photo as string}
                     alt={`Evidence for item ${row.number}: ${row.item.text}`}
                     title={`${row.number} ${row.item.text}`}
-                    className="w-full aspect-square rounded-md object-cover border border-[#DEDACB] bg-[#F5F3EC]"
+                    className="w-full aspect-square rounded-md object-cover border border-[#E6E7EB] bg-[#F6F6F8]"
                     referrerPolicy="no-referrer"
                   />
                 ))}
@@ -651,12 +651,12 @@ const MetaField: React.FC<{
   children: React.ReactNode;
 }> = ({ icon: Icon, label, prominent = false, children }) => (
   <div className="min-w-0">
-    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#635E4F]">
+    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#6B6F76]">
       <Icon className="w-3.5 h-3.5 shrink-0" />
       <span className="truncate">{label}</span>
     </div>
     <div
-      className={`mt-1 font-semibold text-[#242217] ${prominent ? 'text-base' : 'text-sm'}`}
+      className={`mt-1 font-semibold text-[#17181D] ${prominent ? 'text-base' : 'text-sm'}`}
     >
       {children}
     </div>
@@ -665,15 +665,15 @@ const MetaField: React.FC<{
 
 const OutcomeLegend: React.FC<{ model: ReportModel }> = ({ model }) => (
   <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold">
-    <span className="inline-flex items-center gap-1.5 text-[#2F5233]">
+    <span className="inline-flex items-center gap-1.5 text-[#157F4B]">
       <Check className="w-3.5 h-3.5" />
       Passed ({model.passed})
     </span>
-    <span className="inline-flex items-center gap-1.5 text-[#C25A33]">
+    <span className="inline-flex items-center gap-1.5 text-[#D9542B]">
       <X className="w-3.5 h-3.5" />
       Failed ({model.failed})
     </span>
-    <span className="inline-flex items-center gap-1.5 text-[#635E4F]">
+    <span className="inline-flex items-center gap-1.5 text-[#6B6F76]">
       <Minus className="w-3.5 h-3.5" />
       Not answered ({model.unanswered})
     </span>
@@ -692,9 +692,9 @@ const LegendRow: React.FC<{
       style={{ backgroundColor: color }}
       aria-hidden
     />
-    <span className="text-xs text-[#242217] flex-1 min-w-0">{label}</span>
-    <span className="text-sm font-bold text-[#242217] tabular-nums">{value}</span>
-    <span className="text-[11px] text-[#635E4F] tabular-nums w-8 text-right">
+    <span className="text-xs text-[#17181D] flex-1 min-w-0">{label}</span>
+    <span className="text-sm font-bold text-[#17181D] tabular-nums">{value}</span>
+    <span className="text-[11px] text-[#6B6F76] tabular-nums w-8 text-right">
       {total > 0 ? Math.round((value / total) * 100) : 0}%
     </span>
   </li>
@@ -709,16 +709,16 @@ const ChecklistRow: React.FC<{
   const hasDetail = outcome === 'failed' || !!answer?.note || !!answer?.photo;
 
   return (
-    <div className={outcome === 'failed' ? 'bg-[#F4E4DF]/25' : ''}>
+    <div className={outcome === 'failed' ? 'bg-[#FDECEE]/25' : ''}>
       <div className="px-4 py-2.5 flex items-start gap-3">
-        <span className="text-xs font-semibold text-[#635E4F] tabular-nums shrink-0 w-8 pt-0.5">
+        <span className="text-xs font-semibold text-[#6B6F76] tabular-nums shrink-0 w-8 pt-0.5">
           {number}
         </span>
 
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-[#242217] leading-snug">{item.text}</p>
+          <p className="text-sm text-[#17181D] leading-snug">{item.text}</p>
           <div className="flex flex-wrap items-center gap-1.5 mt-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] bg-[#F5F3EC] border border-[#DEDACB] px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] bg-[#F6F6F8] border border-[#E6E7EB] px-1.5 py-0.5 rounded">
               {item.reasonGroup}
             </span>
             {priority && (
@@ -735,12 +735,12 @@ const ChecklistRow: React.FC<{
           <OutcomePill outcome={outcome} />
           {answer?.note && (
             <MessageSquare
-              className="w-4 h-4 text-[#635E4F]"
+              className="w-4 h-4 text-[#6B6F76]"
               aria-label="Has a note"
             />
           )}
           {answer?.photo && (
-            <Camera className="w-4 h-4 text-[#635E4F]" aria-label="Has photo evidence" />
+            <Camera className="w-4 h-4 text-[#6B6F76]" aria-label="Has photo evidence" />
           )}
           {hasDetail && (
             <button
@@ -748,7 +748,7 @@ const ChecklistRow: React.FC<{
               onClick={onToggle}
               aria-expanded={expanded}
               aria-label={expanded ? 'Hide detail' : 'Show detail'}
-              className="no-print p-0.5 text-[#635E4F] hover:text-[#242217] transition-colors cursor-pointer"
+              className="no-print p-0.5 text-[#6B6F76] hover:text-[#17181D] transition-colors cursor-pointer"
             >
               <ChevronDown
                 className={`w-4 h-4 transition-transform ${expanded ? '' : '-rotate-90'}`}
@@ -761,25 +761,25 @@ const ChecklistRow: React.FC<{
       {hasDetail && (
         <div className={`collapsible ${expanded ? '' : 'hidden'}`}>
           <div className="px-4 pb-3.5 pl-15">
-            <div className="rounded-md border border-[#C25A33]/30 bg-[#F4E4DF]/50 p-3 space-y-2">
+            <div className="rounded-md border border-[#D9542B]/30 bg-[#FDECEE]/50 p-3 space-y-2">
               {outcome === 'failed' && (
                 <p className="text-xs">
-                  <span className="font-bold text-[#9C3B2E]">Reason: </span>
-                  <span className="text-[#242217] font-semibold">{reasonText(answer)}</span>
+                  <span className="font-bold text-[#C8202D]">Reason: </span>
+                  <span className="text-[#17181D] font-semibold">{reasonText(answer)}</span>
                 </p>
               )}
               {answer?.note && (
-                <p className="text-xs text-[#635E4F]">
-                  <span className="font-bold text-[#242217]">Note: </span>
+                <p className="text-xs text-[#6B6F76]">
+                  <span className="font-bold text-[#17181D]">Note: </span>
                   {answer.note}
                 </p>
               )}
               {priority && priority.factors.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1">
                     How this priority was reached
                   </p>
-                  <ul className="text-[11px] text-[#635E4F] space-y-0.5 list-disc list-inside">
+                  <ul className="text-[11px] text-[#6B6F76] space-y-0.5 list-disc list-inside">
                     {priority.factors.map((factor, i) => (
                       <li key={i}>{factor}</li>
                     ))}
@@ -788,13 +788,13 @@ const ChecklistRow: React.FC<{
               )}
               {answer?.photo && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mb-1">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1">
                     Attached evidence
                   </p>
                   <img
                     src={answer.photo}
                     alt={`Evidence for item ${number}`}
-                    className="w-28 h-28 object-cover rounded-md border border-[#DEDACB] bg-white"
+                    className="w-28 h-28 object-cover rounded-md border border-[#E6E7EB] bg-white"
                     referrerPolicy="no-referrer"
                   />
                 </div>
@@ -810,7 +810,7 @@ const ChecklistRow: React.FC<{
 const OutcomePill: React.FC<{ outcome: Outcome }> = ({ outcome }) => {
   if (outcome === 'passed') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E7EEE4] text-[#2F5233]">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E6F4EC] text-[#157F4B]">
         <Check className="w-3.5 h-3.5" />
         Yes
       </span>
@@ -818,14 +818,14 @@ const OutcomePill: React.FC<{ outcome: Outcome }> = ({ outcome }) => {
   }
   if (outcome === 'failed') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F4E4DF] text-[#9C3B2E]">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FDECEE] text-[#C8202D]">
         <X className="w-3.5 h-3.5" />
         No
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F5F3EC] text-[#635E4F] border border-[#DEDACB]">
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F6F6F8] text-[#6B6F76] border border-[#E6E7EB]">
       <Minus className="w-3.5 h-3.5" />
       Not answered
     </span>
@@ -839,7 +839,7 @@ const Panel: React.FC<{ active: boolean; title: string; children: React.ReactNod
 }) => (
   <div className={`report-panel ${active ? '' : 'hidden'}`}>
     {/* Only printing shows this — on screen the tab itself is the heading */}
-    <h2 className="print-only-heading hidden text-base font-bold text-[#242217] mb-3">
+    <h2 className="print-only-heading hidden text-base font-bold text-[#17181D] mb-3">
       {title}
     </h2>
     {children}
@@ -851,9 +851,9 @@ const RailCard: React.FC<{
   action?: React.ReactNode;
   children: React.ReactNode;
 }> = ({ title, action, children }) => (
-  <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs page-break-inside-avoid">
-    <div className="px-4 py-3 border-b border-[#DEDACB] flex items-center justify-between gap-2">
-      <h2 className="text-sm font-bold text-[#242217]">{title}</h2>
+  <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs page-break-inside-avoid">
+    <div className="px-4 py-3 border-b border-[#E6E7EB] flex items-center justify-between gap-2">
+      <h2 className="text-sm font-bold text-[#17181D]">{title}</h2>
       {action}
     </div>
     <div className="p-4">{children}</div>
@@ -866,9 +866,9 @@ const InfoRow: React.FC<{ label: string; mono?: boolean; children: React.ReactNo
   children,
 }) => (
   <div className="flex items-baseline justify-between gap-3">
-    <dt className="text-[11px] text-[#635E4F] shrink-0">{label}</dt>
+    <dt className="text-[11px] text-[#6B6F76] shrink-0">{label}</dt>
     <dd
-      className={`text-[11px] font-semibold text-[#242217] text-right min-w-0 truncate ${
+      className={`text-[11px] font-semibold text-[#17181D] text-right min-w-0 truncate ${
         mono ? 'font-mono' : ''
       }`}
     >
@@ -882,10 +882,10 @@ const EmptyState: React.FC<{
   title: string;
   children: React.ReactNode;
 }> = ({ icon: Icon, title, children }) => (
-  <div className="bg-white border border-[#DEDACB] rounded-lg shadow-xs p-8 text-center">
-    <Icon className="w-8 h-8 text-[#2F5233] mx-auto mb-2.5" />
-    <p className="text-sm font-bold text-[#242217]">{title}</p>
-    <p className="text-xs text-[#635E4F] mt-1">{children}</p>
+  <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs p-8 text-center">
+    <Icon className="w-8 h-8 text-[#9CA1A9] mx-auto mb-2.5" />
+    <p className="text-sm font-bold text-[#17181D]">{title}</p>
+    <p className="text-xs text-[#6B6F76] mt-1">{children}</p>
   </div>
 );
 
@@ -908,12 +908,12 @@ const FindingsPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
         <section key={severity} className="page-break-inside-avoid">
           <div className="flex items-center gap-2 mb-2">
             <PriorityBadge severity={severity} />
-            <span className="text-xs font-bold text-[#635E4F] tabular-nums">
+            <span className="text-xs font-bold text-[#6B6F76] tabular-nums">
               {model.severityCounts[severity]} finding
               {model.severityCounts[severity] === 1 ? '' : 's'}
             </span>
           </div>
-          <div className="bg-white border border-[#DEDACB] rounded-lg shadow-xs divide-y divide-[#DEDACB] overflow-hidden">
+          <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs divide-y divide-[#E6E7EB] overflow-hidden">
             {model.issues
               .filter((issue) => issue.priority.severity === severity)
               .map(({ item, answer, priority }) => {
@@ -922,28 +922,28 @@ const FindingsPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
                   <article key={item.id} className="p-4 flex items-start gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-semibold text-[#635E4F] tabular-nums">
+                        <span className="text-xs font-semibold text-[#6B6F76] tabular-nums">
                           {row?.number}
                         </span>
-                        <h3 className="text-sm font-semibold text-[#242217]">{item.text}</h3>
+                        <h3 className="text-sm font-semibold text-[#17181D]">{item.text}</h3>
                       </div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] mt-1">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mt-1">
                         {row?.item.reasonGroup} • {model.sections.find((s) =>
                           s.rows.some((r) => r.item.id === item.id)
                         )?.title}
                       </p>
-                      <p className="text-xs text-[#635E4F] mt-2">
-                        <span className="font-semibold text-[#9C3B2E]">Reason: </span>
+                      <p className="text-xs text-[#6B6F76] mt-2">
+                        <span className="font-semibold text-[#C8202D]">Reason: </span>
                         {reasonText(answer)}
                       </p>
                       {answer.note && (
-                        <p className="text-xs text-[#635E4F] mt-1">
-                          <span className="font-semibold text-[#242217]">Note: </span>
+                        <p className="text-xs text-[#6B6F76] mt-1">
+                          <span className="font-semibold text-[#17181D]">Note: </span>
                           {answer.note}
                         </p>
                       )}
                       {priority.repeatCount > 0 && (
-                        <p className="text-xs font-semibold text-[#8A6318] mt-1.5 flex items-center gap-1.5">
+                        <p className="text-xs font-semibold text-[#B4740A] mt-1.5 flex items-center gap-1.5">
                           <History className="w-3.5 h-3.5 shrink-0" />
                           Repeat — flagged in {priority.repeatCount} of the last{' '}
                           {priority.historyVisits} visit
@@ -951,7 +951,7 @@ const FindingsPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
                         </p>
                       )}
                       {priority.overridden && (
-                        <p className="text-xs text-[#635E4F] mt-1 italic">
+                        <p className="text-xs text-[#6B6F76] mt-1 italic">
                           Priority set by hand — the rules said{' '}
                           {SEVERITY_LABEL[priority.computed]}
                         </p>
@@ -961,7 +961,7 @@ const FindingsPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
                       <img
                         src={answer.photo}
                         alt={`Evidence for item ${row?.number}`}
-                        className="w-20 h-20 rounded-md object-cover border border-[#DEDACB] bg-[#F5F3EC] shrink-0"
+                        className="w-20 h-20 rounded-md object-cover border border-[#E6E7EB] bg-[#F6F6F8] shrink-0"
                         referrerPolicy="no-referrer"
                       />
                     )}
@@ -985,37 +985,37 @@ const MaintenancePanel: React.FC<{ model: ReportModel }> = ({ model }) => {
   }
 
   return (
-    <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs overflow-hidden">
-      <div className="px-4 py-3 border-b border-[#DEDACB]">
-        <h2 className="text-sm font-bold text-[#242217]">Repair &amp; service actions</h2>
-        <p className="text-xs text-[#635E4F] mt-0.5">
+    <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden">
+      <div className="px-4 py-3 border-b border-[#E6E7EB]">
+        <h2 className="text-sm font-bold text-[#17181D]">Repair &amp; service actions</h2>
+        <p className="text-xs text-[#6B6F76] mt-0.5">
           Findings whose cause is a broken, damaged or unserviced item — the work the
           branch has to raise with maintenance.
         </p>
       </div>
-      <div className="divide-y divide-[#DEDACB]">
+      <div className="divide-y divide-[#E6E7EB]">
         {model.maintenance.map(({ item, answer, priority }) => {
           const row = model.rows.find((r) => r.item.id === item.id);
           return (
             <div key={item.id} className="p-4 flex items-start gap-3">
-              <Wrench className="w-4 h-4 text-[#635E4F] shrink-0 mt-0.5" />
+              <Wrench className="w-4 h-4 text-[#6B6F76] shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-semibold text-[#635E4F] tabular-nums">
+                  <span className="text-xs font-semibold text-[#6B6F76] tabular-nums">
                     {row?.number}
                   </span>
-                  <span className="text-sm font-semibold text-[#242217]">{item.text}</span>
+                  <span className="text-sm font-semibold text-[#17181D]">{item.text}</span>
                   <PriorityBadge severity={priority.severity} size="sm" />
                 </div>
-                <p className="text-xs text-[#635E4F] mt-1">{reasonText(answer)}</p>
+                <p className="text-xs text-[#6B6F76] mt-1">{reasonText(answer)}</p>
                 {answer.note && (
-                  <p className="text-xs text-[#635E4F] mt-0.5">
-                    <span className="font-semibold text-[#242217]">Note: </span>
+                  <p className="text-xs text-[#6B6F76] mt-0.5">
+                    <span className="font-semibold text-[#17181D]">Note: </span>
                     {answer.note}
                   </p>
                 )}
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#635E4F] bg-[#F5F3EC] border border-[#DEDACB] px-1.5 py-0.5 rounded shrink-0">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] bg-[#F6F6F8] border border-[#E6E7EB] px-1.5 py-0.5 rounded shrink-0">
                 {item.reasonGroup}
               </span>
             </div>
@@ -1036,19 +1036,19 @@ const NotesPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
   }
 
   return (
-    <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs divide-y divide-[#DEDACB] overflow-hidden">
+    <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs divide-y divide-[#E6E7EB] overflow-hidden">
       {model.notes.map((row) => (
         <div key={row.item.id} className="p-4 flex items-start gap-3">
-          <StickyNote className="w-4 h-4 text-[#635E4F] shrink-0 mt-0.5" />
+          <StickyNote className="w-4 h-4 text-[#6B6F76] shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-[#635E4F] tabular-nums">
+              <span className="text-xs font-semibold text-[#6B6F76] tabular-nums">
                 {row.number}
               </span>
-              <span className="text-sm font-semibold text-[#242217]">{row.item.text}</span>
+              <span className="text-sm font-semibold text-[#17181D]">{row.item.text}</span>
               <OutcomePill outcome={row.outcome} />
             </div>
-            <p className="text-xs text-[#242217] mt-1.5 whitespace-pre-wrap">
+            <p className="text-xs text-[#17181D] mt-1.5 whitespace-pre-wrap">
               {row.answer?.note}
             </p>
           </div>
@@ -1074,26 +1074,26 @@ const HistoryPanel: React.FC<{
 
   return (
     <div className="space-y-5">
-      <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#DEDACB]">
-          <h2 className="text-sm font-bold text-[#242217]">
+      <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#E6E7EB]">
+          <h2 className="text-sm font-bold text-[#17181D]">
             Score history — {model.inspection.branchName}
           </h2>
-          <p className="text-xs text-[#635E4F] mt-0.5">
+          <p className="text-xs text-[#6B6F76] mt-0.5">
             Every submitted visit at this branch, newest first.
           </p>
         </div>
-        <div className="divide-y divide-[#DEDACB]">
+        <div className="divide-y divide-[#E6E7EB]">
           {branchHistory.map((visit) => (
             <div
               key={visit.id}
               className={`px-4 py-3 flex items-center gap-4 ${
-                visit.isThis ? 'bg-[#E7EEE4]/50' : ''
+                visit.isThis ? 'bg-[#FDECEE]/50' : ''
               }`}
             >
               <div className="w-32 shrink-0">
-                <p className="text-sm font-semibold text-[#242217]">{formatDate(visit.date)}</p>
-                <p className="text-[11px] text-[#635E4F]">{visit.time}</p>
+                <p className="text-sm font-semibold text-[#17181D]">{formatDate(visit.date)}</p>
+                <p className="text-[11px] text-[#6B6F76]">{visit.time}</p>
               </div>
 
               {/*
@@ -1101,32 +1101,32 @@ const HistoryPanel: React.FC<{
                 * being read is emphasised and the rest recede — the colour
                 * tracks which record this is, never how it ranks.
                 */}
-              <div className="flex-1 min-w-0 h-2 bg-[#EDEAE0] rounded-full overflow-hidden">
+              <div className="flex-1 min-w-0 h-2 bg-[#EFEFF2] rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full"
                   style={{
                     width: `${Math.max(visit.score, 2)}%`,
-                    backgroundColor: visit.isThis ? OUTCOME_COLOR.passed : '#A8BCA8',
+                    backgroundColor: visit.isThis ? OUTCOME_COLOR.passed : '#8FBFA4',
                   }}
                 />
               </div>
 
-              <span className="text-sm font-bold text-[#242217] tabular-nums w-12 text-right shrink-0">
+              <span className="text-sm font-bold text-[#17181D] tabular-nums w-12 text-right shrink-0">
                 {visit.score}%
               </span>
-              <span className="text-[11px] text-[#635E4F] tabular-nums w-20 text-right shrink-0">
+              <span className="text-[11px] text-[#6B6F76] tabular-nums w-20 text-right shrink-0">
                 {visit.failed} flagged
               </span>
 
               {visit.isThis ? (
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#2F5233] w-20 text-right shrink-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#C8202D] w-20 text-right shrink-0">
                   This visit
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={() => onOpen(visit.id)}
-                  className="no-print text-[11px] font-bold text-[#2F5233] hover:underline cursor-pointer w-20 text-right shrink-0"
+                  className="no-print text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer w-20 text-right shrink-0"
                 >
                   Open
                 </button>
@@ -1137,20 +1137,20 @@ const HistoryPanel: React.FC<{
       </section>
 
       {model.repeats.length > 0 && (
-        <section className="bg-[#F3ECD8] border border-[#8A6318]/30 rounded-lg p-4 page-break-inside-avoid">
-          <h2 className="text-sm font-bold text-[#242217] flex items-center gap-2">
-            <History className="w-4 h-4 text-[#8A6318]" />
+        <section className="bg-[#FDF3E2] border border-[#B4740A]/30 rounded-lg p-4 page-break-inside-avoid">
+          <h2 className="text-sm font-bold text-[#17181D] flex items-center gap-2">
+            <History className="w-4 h-4 text-[#B4740A]" />
             Repeat issues at this branch
           </h2>
           <ul className="mt-2.5 space-y-1.5">
             {model.repeats.map(({ item, priority }) => {
               const row = model.rows.find((r) => r.item.id === item.id);
               return (
-                <li key={item.id} className="text-xs text-[#242217]">
+                <li key={item.id} className="text-xs text-[#17181D]">
                   <span className="font-semibold">
                     {row?.number} {item.text}
                   </span>
-                  <span className="text-[#635E4F]">
+                  <span className="text-[#6B6F76]">
                     {' '}
                     — flagged in {priority.repeatCount} of the last {priority.historyVisits}{' '}
                     visit{priority.historyVisits === 1 ? '' : 's'}, raised to{' '}
@@ -1169,21 +1169,21 @@ const HistoryPanel: React.FC<{
 const SignOffCard: React.FC<{ model: ReportModel }> = ({ model }) => {
   const { inspection } = model;
   return (
-    <section className="bg-white border border-[#DEDACB] rounded-lg shadow-xs p-5 page-break-inside-avoid">
-      <h2 className="text-sm font-bold text-[#242217]">
+    <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs p-5 page-break-inside-avoid">
+      <h2 className="text-sm font-bold text-[#17181D]">
         Manager verification &amp; acknowledgment
       </h2>
-      <p className="text-xs text-[#635E4F] mt-0.5">
+      <p className="text-xs text-[#6B6F76] mt-0.5">
         The manager certifies that this inspection accurately reflects the branch condition.
       </p>
 
       <div className="mt-4 flex flex-col sm:flex-row sm:items-end justify-between gap-6">
         <div>
-          <span className="text-xs font-semibold text-[#242217] block mb-1.5">
+          <span className="text-xs font-semibold text-[#17181D] block mb-1.5">
             Branch manager signature
           </span>
           {inspection.signature ? (
-            <div className="w-60 h-24 border border-[#DEDACB] bg-[#F9F8F4] rounded-md flex items-center justify-center p-2">
+            <div className="w-60 h-24 border border-[#E6E7EB] bg-[#FAFAFA] rounded-md flex items-center justify-center p-2">
               <img
                 src={inspection.signature}
                 alt="Branch manager signature"
@@ -1191,29 +1191,29 @@ const SignOffCard: React.FC<{ model: ReportModel }> = ({ model }) => {
               />
             </div>
           ) : (
-            <div className="w-60 h-24 border border-dashed border-[#DEDACB] bg-[#F9F8F4] rounded-md flex items-center justify-center text-xs text-[#635E4F] italic">
+            <div className="w-60 h-24 border border-dashed border-[#E6E7EB] bg-[#FAFAFA] rounded-md flex items-center justify-center text-xs text-[#6B6F76] italic">
               Not signed yet
             </div>
           )}
         </div>
 
-        <dl className="text-xs text-[#635E4F] space-y-1 sm:text-right">
+        <dl className="text-xs text-[#6B6F76] space-y-1 sm:text-right">
           <div>
-            Branch: <strong className="text-[#242217]">{inspection.branchName}</strong>
+            Branch: <strong className="text-[#17181D]">{inspection.branchName}</strong>
           </div>
           <div>
             Inspected:{' '}
-            <strong className="text-[#242217]">
+            <strong className="text-[#17181D]">
               {formatDate(inspection.date)}, {inspection.time}
             </strong>
           </div>
           {inspection.inspectorName && (
             <div>
-              Inspector: <strong className="text-[#242217]">{inspection.inspectorName}</strong>
+              Inspector: <strong className="text-[#17181D]">{inspection.inspectorName}</strong>
             </div>
           )}
           <div>
-            Report ID: <span className="font-mono text-[#242217]">{inspection.id}</span>
+            Report ID: <span className="font-mono text-[#17181D]">{inspection.id}</span>
           </div>
         </dl>
       </div>

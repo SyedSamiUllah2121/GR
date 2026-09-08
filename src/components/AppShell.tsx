@@ -3,13 +3,14 @@
 import {useEffect, useState} from 'react';
 import {useRouter} from 'next/navigation';
 import {Sidebar} from './Sidebar';
+import {Topbar} from './Topbar';
 import {ToastProvider} from './ToastProvider';
 import {getInspections, isAuthenticated, subscribeToStorage} from '../services/storage';
 import {useMounted} from '../hooks/useMounted';
 
 /**
- * Signed-in chrome: sidebar, toasts and the auth guard. Shared by every route
- * behind the login screen.
+ * Signed-in chrome: sidebar, top bar, toasts and the auth guard. Shared by
+ * every route behind the login screen.
  */
 export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
   const router = useRouter();
@@ -38,11 +39,14 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-[#F5F3EC] flex flex-col md:flex-row text-[#242217]">
-        {/* Persistent left sidebar (top bar on mobile) */}
+      <div className="min-h-screen bg-[#F6F6F8] flex flex-col md:flex-row text-[#17181D]">
+        {/* Persistent left rail (top bar on mobile) */}
         <Sidebar />
 
-        <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">{children}</main>
+        <main className="flex-1 flex flex-col min-w-0">
+          <Topbar />
+          <div className="flex-1 flex flex-col min-w-0">{children}</div>
+        </main>
       </div>
     </ToastProvider>
   );

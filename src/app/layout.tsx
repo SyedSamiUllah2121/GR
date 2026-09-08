@@ -33,7 +33,7 @@ export default function RootLayout({
 }: Readonly<{children: React.ReactNode}>) {
   return (
     <html lang="en" className={ibmPlexSans.variable}>
-      <body className="bg-[#F5F3EC] text-[#242217] antialiased">{children}</body>
+      <body className="bg-[#F6F6F8] text-[#17181D] antialiased">{children}</body>
     </html>
   );
 }
