@@ -650,6 +650,13 @@ const QuestionRow: React.FC<QuestionRowProps> = ({
       {/*
         Kit details. The count sits on the button so a question carrying a
         serial number says so without the panel having to be open.
+
+        Always visible, on every screen size. It used to fade in on hover
+        while a question had no kit recorded, which read as the control
+        disappearing: open the panel, move the cursor away, and the button
+        that opened it was gone while the panel below stayed put. A control
+        that has to be hunted for is one nobody knows exists — which is how
+        this ended up looking like a field only new questions had.
       */}
       {!item.archived && (
         <button
@@ -660,7 +667,7 @@ const QuestionRow: React.FC<QuestionRowProps> = ({
           className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer shrink-0 ${
             details.length > 0
               ? 'text-[#C8202D] bg-[#FDECEE] hover:bg-[#FBDCDF]'
-              : 'text-[#9CA1A9] hover:bg-white hover:text-[#17181D] lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100'
+              : 'text-[#6B6F76] bg-[#F6F6F8] hover:bg-white hover:text-[#17181D]'
           }`}
         >
           <Tag className="w-3.5 h-3.5" />
