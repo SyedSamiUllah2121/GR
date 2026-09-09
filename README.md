@@ -34,6 +34,16 @@ inspections.
 | Job Manager    | The whole maintenance board, every branch                      | `jobs@royalgujrat.com` / `jobs123`      |
 | Inspector      | Only the surprise visits assigned to them                     | `rahman@royalgujrat.com` / `visit123`   |
 
+A surprise visit can be booked for a time — the **When** field on the form —
+in which case the inspector sees it due then and it is flagged late if that
+time passes unstarted. Left empty, it is due as soon as they can get there.
+
+Surprise visits can be placed by the system: the branch is drawn from a
+rotation that deals every branch once before repeating any, and the inspector
+from whoever is carrying the fewest outstanding visits. The Main Admin can
+turn this off with the **Automatic assignment** switch on the surprise-visit
+form, after which the branch and inspector are named by hand on every visit.
+
 A Job Manager has the maintenance module in full — the board, the overview,
 the month-end report, and starting, ending, re-timing, reopening, deleting and
 raising jobs. They have no inspections list, but may open the report of an

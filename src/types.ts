@@ -298,6 +298,20 @@ export interface Inspection {
   assignedByUserId?: string;
   /** ISO timestamp the assignment was raised. */
   assignedAt?: string;
+  /**
+   * When the admin wants a surprise visit carried out, as an ISO timestamp.
+   *
+   * Absent means as soon as the inspector can get there, which is how every
+   * assignment behaved before a time could be named. Set, it is what the
+   * visit's `date` and `time` are taken from, so the inspector's list reads
+   * as a diary rather than as a pile — and what "late" is measured against.
+   *
+   * It is the intention, not the event: `startedAt` records when the visit
+   * actually began, and starting one rewrites `date` and `time` to then. A
+   * visit carried out two hours late is still a visit, and the record should
+   * say when it happened while this still says when it was due.
+   */
+  scheduledFor?: string;
   /** ISO timestamp the visit was started, which the duration is measured from. */
   startedAt?: string;
   /** ISO timestamp the report was signed and submitted. */
@@ -623,4 +637,7 @@ export const BRANCHES: Branch[] = [
   { id: 'gujrat-restaurant', name: 'Gujrat Restaurant', location: 'Gujrat City' },
   { id: 'mafraq-gujrat', name: 'Mafraq Gujrat Restaurant', location: 'Mafraq, Gujrat' },
   { id: 'naan-house-metro', name: 'Naan House Metro', location: 'Metro, Gujrat' },
+  { id: 'royal-gujrat-sweets', name: 'Royal Gujrat Sweets', location: 'Jalalpur Jattan, Gujrat' },
+  { id: 'gujrat-grill-house', name: 'Gujrat Grill House', location: 'Sarai Alamgir, Gujrat' },
+  { id: 'naan-house-bazaar', name: 'Naan House Bazaar', location: 'Kutchery Bazaar, Gujrat' },
 ];

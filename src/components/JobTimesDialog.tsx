@@ -3,11 +3,8 @@
 import React, { useState } from 'react';
 import { Clock } from 'lucide-react';
 import { MaintenanceJob } from '../types';
-import {
-  fromLocalInputValue,
-  setJobTimes,
-  toLocalInputValue,
-} from '../services/maintenanceStore';
+import { setJobTimes } from '../services/maintenanceStore';
+import { fromLocalInputValue, toLocalInputValue } from '../services/localDateTime';
 import { formatDateTime } from '../services/reportModel';
 
 const inputClass =

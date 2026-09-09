@@ -30,7 +30,13 @@ import {
   canPerformInspection,
   visibleInspections,
 } from '../services/permissions';
-import { assignmentsFor, cancelAssignment, openAssignments, startAssignment } from '../services/assignments';
+import {
+  assignmentsFor,
+  cancelAssignment,
+  isOverdueAssignment,
+  openAssignments,
+  startAssignment,
+} from '../services/assignments';
 import { mondayStatusFor } from '../services/mondaySchedule';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
@@ -43,7 +49,7 @@ import {
 import { PriorityBadge } from './PriorityBadge';
 import { useRouter } from 'next/navigation';
 import { ScorePill } from './ScorePill';
-import { formatDate } from '../services/reportModel';
+import { formatDate, formatDateTime } from '../services/reportModel';
 
 export const RecordsListScreen: React.FC = () => {
   const router = useRouter();
@@ -371,10 +377,23 @@ export const RecordsListScreen: React.FC = () => {
                     <p className="text-[13px] font-bold text-[#17181D] truncate">
                       {visit.branchName}
                     </p>
-                    <p className="text-[11px] text-[#6B6F76] truncate">
-                      {user?.role === 'inspector'
-                        ? `Assigned ${formatDate(visit.date)} • ${FULL_CHECKLIST_LABEL}`
-                        : `${visit.inspectorName} • assigned ${formatDate(visit.date)}`}
+                    {/*
+                      A booked visit says when it is due; one with no time
+                      named says when it was handed over, which is all there
+                      is to say about it.
+                    */}
+                    <p
+                      className={`text-[11px] truncate ${
+                        isOverdueAssignment(visit) ? 'text-[#C8202D] font-semibold' : 'text-[#6B6F76]'
+                      }`}
+                    >
+                      {user?.role !== 'inspector' && `${visit.inspectorName} • `}
+                      {visit.scheduledFor
+                        ? `${isOverdueAssignment(visit) ? 'Was due' : 'Due'} ${formatDateTime(
+                            visit.scheduledFor
+                          )}`
+                        : `assigned ${formatDate(visit.date)}`}
+                      {user?.role === 'inspector' && ` • ${FULL_CHECKLIST_LABEL}`}
                     </p>
                   </div>
 

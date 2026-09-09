@@ -57,6 +57,12 @@ export type Capability =
   | 'branches.manage'
   /** Raise a surprise visit and hand it to an inspector. */
   | 'surprise.create'
+  /**
+   * Change the system-wide switches in services/settings.ts — which is only
+   * whether the system may place a surprise visit itself. Held by the admin
+   * alone: everyone is subject to these, so one person decides them.
+   */
+  | 'settings.manage'
   /** Start the branch's own weekly round. */
   | 'monday.perform'
   /** Reopen a submitted result and change its answers. */
@@ -85,6 +91,7 @@ const GRANTS: Record<UserRole, Capability[]> = {
     'users.manage',
     'branches.manage',
     'surprise.create',
+    'settings.manage',
     'monday.perform',
     'inspection.editSubmitted',
   ],

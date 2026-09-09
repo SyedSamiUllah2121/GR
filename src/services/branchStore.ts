@@ -18,6 +18,20 @@ import { getJobs } from './maintenanceStore';
 const KEY = 'inspection_log_branches_v1';
 const EVENT = 'inspection_log_branches_change';
 
+/**
+ * How far the seed list in types.ts has been applied to this store.
+ *
+ * Bumped whenever a branch is added to that list. Without it the addition is
+ * invisible to every installation already in use — the seed is only ever
+ * written to an *empty* store — and the surprise-visit rotation would keep
+ * dealing the old, shorter deck.
+ *
+ *   1  the original four
+ *   2  adds Royal Gujrat Sweets, Gujrat Grill House and Naan House Bazaar
+ */
+const SEED_VERSION = 2;
+const SEED_VERSION_KEY = 'inspection_log_branches_seed_version';
+
 /** Same shape as an id in the seed: lowercase, dashes, no punctuation. */
 function slugify(name: string): string {
   return (
@@ -43,6 +57,67 @@ function write(branches: Branch[]): boolean {
   }
 }
 
+/** Which seed version this store has had applied. */
+function storedSeedVersion(): number {
+  try {
+    const raw = localStorage.getItem(SEED_VERSION_KEY);
+    // No marker means a store written before the marker existed: version 1
+    const version = raw === null ? 1 : Number(raw);
+    return Number.isFinite(version) ? version : 1;
+  } catch {
+    // Storage unreadable: claim to be current, so nothing is written either
+    return SEED_VERSION;
+  }
+}
+
+function markSeeded(): void {
+  try {
+    localStorage.setItem(SEED_VERSION_KEY, String(SEED_VERSION));
+  } catch {
+    // Nothing to do — reconciliation is retried on the next read
+  }
+}
+
+/**
+ * Brings a store created under an earlier seed version up to date, once.
+ *
+ * Matched on id *and* name, because a branch is a name as far as records are
+ * concerned: an operator who already opened "Royal Gujrat Sweets" by hand
+ * must not end up with a second one, since inspections filed against that
+ * name would silently split across the two.
+ *
+ * Runs at most once per version, so a seeded branch the operator closes
+ * stays closed rather than reopening on the next read. Writes without
+ * announcing itself — this is called from `getBranches`, which screens call
+ * while rendering, and firing the change event there would set state during
+ * a render.
+ */
+function reconcileSeeds(stored: Branch[]): Branch[] {
+  if (storedSeedVersion() >= SEED_VERSION) return stored;
+
+  const ids = new Set(stored.map((b) => b.id));
+  const names = new Set(stored.map((b) => b.name.trim().toLowerCase()));
+  const missing = BRANCHES.filter(
+    (seed) => !ids.has(seed.id) && !names.has(seed.name.trim().toLowerCase())
+  );
+
+  if (missing.length === 0) {
+    markSeeded();
+    return stored;
+  }
+
+  const next = [...stored, ...missing];
+  try {
+    localStorage.setItem(KEY, JSON.stringify(next));
+  } catch (err) {
+    console.error('Failed to add new seed branches:', err);
+    // Marker deliberately left alone, so this is tried again next time
+    return stored;
+  }
+  markSeeded();
+  return next;
+}
+
 /** Every branch, closed ones included. Filter on `archived` to offer choices. */
 export function getBranches(): Branch[] {
   if (typeof window === 'undefined') return BRANCHES;
@@ -50,10 +125,12 @@ export function getBranches(): Branch[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) {
       localStorage.setItem(KEY, JSON.stringify(BRANCHES));
+      // A store seeded from scratch is already current by construction
+      markSeeded();
       return BRANCHES;
     }
     const parsed = JSON.parse(raw) as Branch[];
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : BRANCHES;
+    return Array.isArray(parsed) && parsed.length > 0 ? reconcileSeeds(parsed) : BRANCHES;
   } catch (err) {
     console.error('Failed to read branches:', err);
     return BRANCHES;

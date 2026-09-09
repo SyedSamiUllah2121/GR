@@ -30,15 +30,17 @@ const EVENT = 'inspection_log_users_change';
  *
  *   1  the original set: one admin, four branch managers, three inspectors
  *   2  adds the job manager over the maintenance board
+ *   3  adds a manager for each of the three branches opened alongside it,
+ *      since a branch nobody manages cannot run its own Monday round
  */
-const SEED_VERSION = 2;
+const SEED_VERSION = 3;
 const SEED_VERSION_KEY = 'inspection_log_users_seed_version';
 
 /**
  * The demo accounts.
  *
- * One admin, a manager for each seeded branch, one job manager over the
- * maintenance board, and three inspectors. The passwords are deliberately
+ * One admin, a manager for each of the seven seeded branches, one job
+ * manager over the maintenance board, and three inspectors. The passwords are deliberately
  * memorable — this is a demo, and whoever is being shown the system has to
  * be able to sign in as each role in turn.
  *
@@ -105,10 +107,43 @@ export const SEED_USERS: User[] = [
     createdAt: '2026-01-05',
   },
   {
+    id: 'usr-bm-sweets',
+    name: 'Usman Zafar',
+    email: 'sweets@royalgujrat.com',
+    password: 'branch123',
+    role: 'branch-manager',
+    branchName: BRANCHES[4].name,
+    initials: 'UZ',
+    active: true,
+    createdAt: '2026-09-09',
+  },
+  {
+    id: 'usr-bm-grill',
+    name: 'Hamza Sattar',
+    email: 'grill@royalgujrat.com',
+    password: 'branch123',
+    role: 'branch-manager',
+    branchName: BRANCHES[5].name,
+    initials: 'HS',
+    active: true,
+    createdAt: '2026-09-09',
+  },
+  {
+    id: 'usr-bm-bazaar',
+    name: 'Rizwan Shah',
+    email: 'bazaar@royalgujrat.com',
+    password: 'branch123',
+    role: 'branch-manager',
+    branchName: BRANCHES[6].name,
+    initials: 'RS',
+    active: true,
+    createdAt: '2026-09-09',
+  },
+  {
     /*
-     * One job manager, holding the maintenance board for all four branches.
-     * Not one per branch: a repair is not a branch's private business, and
-     * the same contractor covers the estate.
+     * One job manager, holding the maintenance board for every branch. Not
+     * one per branch: a repair is not a branch's private business, and the
+     * same contractor covers the estate.
      */
     id: 'usr-jm-shahid',
     name: 'Shahid Anwar',

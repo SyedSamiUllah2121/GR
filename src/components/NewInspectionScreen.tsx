@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CalendarCheck,
+  CalendarClock,
   Check,
   ChevronDown,
   Lock,
@@ -31,6 +32,9 @@ import { useChecklist } from '../hooks/useChecklist';
 import { useBranches } from '../hooks/useBranches';
 import { useUsers } from '../hooks/useUsers';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useSettings } from '../hooks/useSettings';
+import { isRandomAssignmentOn, saveSetting } from '../services/settings';
+import { fromLocalInputValue, toLocalInputValue } from '../services/localDateTime';
 import { activeBranches, addBranch, branchUsage, removeBranch } from '../services/branchStore';
 import { inspectors as inspectorAccounts } from '../services/userStore';
 import { can, fixedBranchFor } from '../services/permissions';
@@ -42,7 +46,7 @@ import {
   saveActiveDraft,
 } from '../services/storage';
 import { useRouter } from 'next/navigation';
-import { formatDate } from '../services/reportModel';
+import { formatDate, formatDateTime } from '../services/reportModel';
 
 /** Sentinel for the "not on the list" option. */
 const OTHER_INSPECTOR = '__other__';
@@ -91,10 +95,36 @@ export const NewInspectionScreen: React.FC = () => {
    */
   const branchName = fixedBranch ?? selectedBranch;
 
+  /**
+   * Whether the system is allowed to place a surprise visit itself. The
+   * admin's switch, below — everyone raising a visit is bound by it.
+   */
+  const settings = useSettings();
+  const randomOn = settings.randomAssignment;
+
   /** Who a surprise visit goes to; RANDOM lets the system draw one. */
   const [assignTo, setAssignTo] = useState<string>(RANDOM);
-  /** Where it goes; RANDOM draws the branch that has gone longest unvisited. */
+  /** Where it goes; RANDOM draws from the branches left in the current round. */
   const [surpriseBranch, setSurpriseBranch] = useState<string>(RANDOM);
+
+  /*
+   * Both fields default to letting the system choose, which is no longer an
+   * answer once the switch is off — a select holding a value its own list
+   * does not offer renders blank. Cleared rather than pinned to the first
+   * branch, so turning the switch off asks the question rather than quietly
+   * answering it.
+   */
+  useEffect(() => {
+    if (randomOn) return;
+    setSurpriseBranch((v) => (v === RANDOM ? '' : v));
+    setAssignTo((v) => (v === RANDOM ? '' : v));
+  }, [randomOn]);
+  /**
+   * When the visit is due, as a `datetime-local` value. Empty means as soon
+   * as the inspector can get there — which is what every assignment was
+   * before a time could be named, so it stays the default.
+   */
+  const [scheduledAt, setScheduledAt] = useState<string>('');
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assignDone, setAssignDone] = useState<string | null>(null);
 
@@ -200,13 +230,33 @@ export const NewInspectionScreen: React.FC = () => {
   const handleAssignSurprise = () => {
     if (!user) return;
 
+    /*
+     * Read again here rather than trusted from the render above: this form
+     * can sit open while the switch is thrown in another tab, and a draw
+     * carried out after it was turned off would be exactly what the switch
+     * exists to prevent.
+     */
+    const mayDraw = isRandomAssignmentOn();
+    if (!mayDraw && (surpriseBranch === RANDOM || assignTo === RANDOM)) {
+      setAssignError(
+        'Automatic assignment has been turned off — choose the branch and the inspector'
+      );
+      return;
+    }
+
     const branch =
       surpriseBranch === RANDOM ? randomBranch(branches)?.name ?? '' : surpriseBranch;
     const inspector =
       assignTo === RANDOM ? randomInspector(availableInspectors)?.id ?? '' : assignTo;
 
     if (!inspector) {
-      setAssignError('There are no inspector accounts to assign this to');
+      // Two different problems, and telling them apart is the difference
+      // between "pick someone" and "there is nobody to pick"
+      setAssignError(
+        availableInspectors.length === 0
+          ? 'There are no inspector accounts to assign this to'
+          : 'Choose the inspector to send'
+      );
       return;
     }
 
@@ -214,6 +264,9 @@ export const NewInspectionScreen: React.FC = () => {
       branchName: branch,
       inspectorId: inspector,
       raisedBy: user,
+      // The browser gives this back in the admin's own timezone; the service
+      // is handed a real instant and does the checking
+      scheduledFor: fromLocalInputValue(scheduledAt),
     });
 
     if (!result.ok || !result.inspection) {
@@ -222,9 +275,18 @@ export const NewInspectionScreen: React.FC = () => {
     }
 
     setAssignError(null);
+    // Reads back the booked time so the admin can see the draw landed where
+    // they meant it to, rather than trusting the form they just cleared
     setAssignDone(
-      `${result.inspection.inspectorName} has been assigned a surprise visit to ${result.inspection.branchName}`
+      `${result.inspection.inspectorName} has been assigned a surprise visit to ${
+        result.inspection.branchName
+      }${
+        result.inspection.scheduledFor
+          ? `, due ${formatDateTime(result.inspection.scheduledFor)}`
+          : ''
+      }`
     );
+    setScheduledAt('');
     // Reset the draw so a second visit is not silently the same one again
     setAssignTo(RANDOM);
     setSurpriseBranch(RANDOM);
@@ -631,6 +693,60 @@ export const NewInspectionScreen: React.FC = () => {
           */}
           {kind === 'surprise' && (
             <>
+              {/*
+                The admin's switch over the whole scheme. Shown to them only:
+                everyone raising a visit is bound by it, and one person
+                decides it. Placed here rather than on a settings screen of
+                its own because this is the only form its effect is visible
+                in — the two fields below change the moment it is thrown.
+              */}
+              {can(user, 'settings.manage') && (
+                <div className="rounded-md border border-[#E6E7EB] bg-[#FAFAFA] p-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[#17181D] flex items-center gap-1.5">
+                        <Shuffle className="w-3.5 h-3.5 text-[#C8202D] shrink-0" />
+                        Automatic assignment
+                      </p>
+                      <p className="text-[11px] text-[#6B6F76] mt-1">
+                        {randomOn
+                          ? 'On — a visit can be left to the system, which rotates through every branch before repeating one.'
+                          : 'Off — you name the branch and the inspector on every surprise visit.'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      id="random-assignment-toggle"
+                      role="switch"
+                      aria-checked={randomOn}
+                      aria-label="Let the system place surprise visits"
+                      onClick={() => {
+                        saveSetting('randomAssignment', !randomOn);
+                        setAssignError(null);
+                        setAssignDone(null);
+                      }}
+                      className={`shrink-0 relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                        randomOn ? 'bg-[#157F4B]' : 'bg-[#C9CCD2]'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-xs transition-all ${
+                          randomOn ? 'left-[1.375rem]' : 'left-0.5'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {!randomOn && (
+                    <p className="text-[11px] text-[#B4740A] font-semibold mt-2">
+                      Choosing by hand tends to favour the branches you already worry about,
+                      which is what the rotation is for.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div>
                 <label
                   htmlFor="surprise-branch-select"
@@ -648,7 +764,11 @@ export const NewInspectionScreen: React.FC = () => {
                   }}
                   className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
                 >
-                  <option value={RANDOM}>Let the system choose</option>
+                  {randomOn ? (
+                    <option value={RANDOM}>Let the system choose</option>
+                  ) : (
+                    <option value="">Choose a branch</option>
+                  )}
                   {branches.map((b) => (
                     <option key={b.id} value={b.name}>
                       {b.name}
@@ -659,7 +779,8 @@ export const NewInspectionScreen: React.FC = () => {
                 {surpriseBranch === RANDOM && (
                   <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
                     <Shuffle className="w-3 h-3 mt-0.5 shrink-0" />
-                    Drawn from the branches that have gone longest without a visit.
+                    Drawn at random from the branches not yet visited this round, so
+                    every branch comes up once before any comes up twice.
                   </p>
                 )}
               </div>
@@ -681,7 +802,11 @@ export const NewInspectionScreen: React.FC = () => {
                   }}
                   className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
                 >
-                  <option value={RANDOM}>Let the system choose</option>
+                  {randomOn ? (
+                    <option value={RANDOM}>Let the system choose</option>
+                  ) : (
+                    <option value="">Choose an inspector</option>
+                  )}
                   {availableInspectors.map((account) => (
                     <option key={account.id} value={account.id}>
                       {account.name}
@@ -703,6 +828,60 @@ export const NewInspectionScreen: React.FC = () => {
                     No inspector accounts yet — add one under Users first.
                   </p>
                 )}
+              </div>
+
+              {/*
+                When it is due. Optional, and empty by default, because an
+                unannounced visit usually means "go when you can" — naming a
+                time is for the ones that have to land on a particular moment,
+                and the inspector's list then reads as a diary rather than a
+                pile.
+              */}
+              <div>
+                <label
+                  htmlFor="surprise-when-input"
+                  className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
+                >
+                  When <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    id="surprise-when-input"
+                    type="datetime-local"
+                    value={scheduledAt}
+                    /*
+                      Stops the picker offering a time that has already gone.
+                      The service checks again, because a `min` on an input is
+                      a courtesy rather than a rule.
+                    */
+                    min={toLocalInputValue(new Date().toISOString())}
+                    onChange={(e) => {
+                      setScheduledAt(e.target.value);
+                      setAssignError(null);
+                      setAssignDone(null);
+                    }}
+                    className="flex-1 min-w-[13rem] px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                  />
+                  {scheduledAt && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScheduledAt('');
+                        setAssignError(null);
+                        setAssignDone(null);
+                      }}
+                      className="px-3 py-2.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] border border-[#E6E7EB] rounded-md hover:bg-[#FAFAFA] transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
+                  <CalendarClock className="w-3 h-3 mt-0.5 shrink-0" />
+                  {scheduledAt
+                    ? 'The inspector sees it booked for this time, and it is flagged late if the time passes unstarted.'
+                    : 'Left empty, the visit is due as soon as the inspector can get there.'}
+                </p>
               </div>
 
               {assignError && (
