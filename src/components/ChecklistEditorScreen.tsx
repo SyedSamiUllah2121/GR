@@ -49,8 +49,12 @@ import {
   removeItem,
   removeList,
   removeSection,
+  UNTITLED_ITEM,
+  UNTITLED_LIST,
+  UNTITLED_SECTION,
   renameList,
   renameSection,
+  tidyName,
   resetChecklist,
   restoreItem,
   restoreList,
@@ -292,6 +296,10 @@ const ListGroup: React.FC<ListGroupProps> = ({
           value={list.label}
           disabled={list.archived}
           onChange={(e) => commit(renameList(doc, list.key, e.target.value))}
+          onBlur={(e) => {
+            const tidied = tidyName(e.target.value, UNTITLED_LIST);
+            if (tidied !== list.label) commit(renameList(doc, list.key, tidied));
+          }}
           className={`${quietField} flex-1 min-w-[10rem] px-2 py-1 -ml-2 text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B6F76] disabled:line-through`}
         />
         <span className="text-[11px] text-[#9CA1A9] tabular-nums shrink-0">
@@ -403,6 +411,17 @@ const SectionCard: React.FC<SectionCardProps> = ({
             value={section.title}
             disabled={section.archived}
             onChange={(e) => commit(renameSection(doc, list.key, section.key, e.target.value))}
+            /*
+              Tidied on the way out rather than as you type: this field writes
+              into the document on every keystroke, so trimming here would eat
+              the space the moment you pressed it.
+            */
+            onBlur={(e) => {
+              const tidied = tidyName(e.target.value, UNTITLED_SECTION);
+              if (tidied !== section.title) {
+                commit(renameSection(doc, list.key, section.key, tidied));
+              }
+            }}
             className={`${quietField} w-full px-2 py-1 -ml-2 text-[15px] font-bold text-[#17181D] disabled:line-through`}
           />
           <p className="px-2 -ml-2 text-xs text-[#6B6F76]">
@@ -574,6 +593,10 @@ const QuestionRow: React.FC<QuestionRowProps> = ({
         value={item.text}
         disabled={item.archived}
         onChange={(e) => onChange({ text: e.target.value })}
+        onBlur={(e) => {
+          const tidied = tidyName(e.target.value, UNTITLED_ITEM);
+          if (tidied !== item.text) onChange({ text: tidied });
+        }}
         className={`${quietField} w-full px-2 py-1 -ml-2 text-sm text-[#17181D] disabled:line-through disabled:text-[#6B6F76]`}
       />
       {item.archived && (

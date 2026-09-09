@@ -187,11 +187,32 @@ function mapSection(
   }));
 }
 
+/*
+ * What an unnamed thing is called.
+ *
+ * The editor's name fields write into the document as you type — which is
+ * what lets a space be typed at all, since trimming mid-keystroke would eat
+ * it — so a name can legitimately be empty for as long as someone is holding
+ * the backspace key. These are what it settles on if they walk away, because
+ * a category or question with no name at all is one nobody can point at, and
+ * an inspector still has to answer it.
+ */
+export const UNTITLED_LIST = 'Untitled list';
+export const UNTITLED_SECTION = 'Untitled category';
+export const UNTITLED_ITEM = 'Untitled question';
+
+/** Trims a typed name, falling back when nothing is left of it. */
+export function tidyName(value: string, fallback: string): string {
+  return value.trim() || fallback;
+}
+
 export function addList(doc: ChecklistDoc, label: string): ChecklistDoc {
   const key = `list-${doc.nextIdBase}`;
   const list: ChecklistList = {
     key,
-    label,
+    // Tidied here as well as at the field, because this is the contract: a
+    // list added by anything else should not be able to carry padding either
+    label: label.trim() || UNTITLED_LIST,
     idBase: doc.nextIdBase,
     nextItemId: 1,
     nextSectionKey: 1,
@@ -210,7 +231,7 @@ export function addSection(doc: ChecklistDoc, listKey: string, title: string): C
     nextSectionKey: list.nextSectionKey + 1,
     sections: [
       ...list.sections,
-      { key: `${list.key}-s${list.nextSectionKey}`, title, items: [] },
+      { key: `${list.key}-s${list.nextSectionKey}`, title: title.trim() || UNTITLED_SECTION, items: [] },
     ],
   }));
 }
