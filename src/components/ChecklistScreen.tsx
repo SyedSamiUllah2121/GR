@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   FileCheck,
   Image as ImageIcon,
-  Upload,
   Wrench,
 } from 'lucide-react';
 import {

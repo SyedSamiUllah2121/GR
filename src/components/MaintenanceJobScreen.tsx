@@ -20,7 +20,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { MAINTENANCE_CATEGORY_LABEL, MaintenanceJob } from '../types';
-import { SEVERITY_LABEL } from '../services/priority';
+
 import {
   daysOpen,
   deleteJob,

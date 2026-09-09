@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Printer,
-  Timer,
   Wrench,
 } from 'lucide-react';
 import {
@@ -15,7 +14,7 @@ import {
   MaintenanceJob,
   Severity,
 } from '../types';
-import { SEVERITY_LABEL } from '../services/priority';
+
 import { getJobs, subscribeToMaintenance, workMinutes } from '../services/maintenanceStore';
 import {
   availableMonths,

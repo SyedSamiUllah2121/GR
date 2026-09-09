@@ -7,11 +7,10 @@ import {
   AlertTriangle,
   FileCheck,
   Eraser,
-  Image as ImageIcon,
   PenTool,
   Wrench,
 } from 'lucide-react';
-import { Answer, Inspection, Item, MAINTENANCE_CATEGORY_LABEL } from '../types';
+import { Inspection, Item, MAINTENANCE_CATEGORY_LABEL } from '../types';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
 import { numberingFor } from '../services/checklistStore';
 import { useChecklist } from '../hooks/useChecklist';
@@ -26,7 +25,7 @@ import {
 import {
   EMPTY_HISTORY,
   RankedIssue,
-  SEVERITY_LABEL,
+
   buildFailureHistory,
   computePriority,
   countBySeverity,
