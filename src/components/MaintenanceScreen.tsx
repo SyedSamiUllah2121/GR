@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
@@ -9,9 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
-  FileText,
   Play,
-  LayoutDashboard,
   Repeat,
   Plus,
   Search,
@@ -154,20 +152,6 @@ export const MaintenanceScreen: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <Link
-            href="/maintenance"
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors shadow-xs"
-          >
-            <LayoutDashboard className="w-3.5 h-3.5 text-[#C8202D]" />
-            <span>Overview</span>
-          </Link>
-          <Link
-            href="/maintenance/report"
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors shadow-xs"
-          >
-            <FileText className="w-3.5 h-3.5 text-[#C8202D]" />
-            <span>Month-end report</span>
-          </Link>
           <button
             id="log-problem-btn"
             type="button"

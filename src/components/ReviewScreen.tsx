@@ -9,8 +9,9 @@ import {
   Eraser,
   Image as ImageIcon,
   PenTool,
+  Wrench,
 } from 'lucide-react';
-import { Answer, Inspection, Item } from '../types';
+import { Answer, Inspection, Item, MAINTENANCE_CATEGORY_LABEL } from '../types';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
 import { numberingFor } from '../services/checklistStore';
 import { useChecklist } from '../hooks/useChecklist';
@@ -34,7 +35,11 @@ import {
 } from '../services/priority';
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastProvider';
-import { raiseMaintenanceJobs } from '../services/maintenanceIntake';
+import {
+  maintenanceIssues,
+  raiseMaintenanceJobs,
+  suggestCategory,
+} from '../services/maintenanceIntake';
 import { currentUser } from '../services/session';
 import { canEditInspection, canViewInspection } from '../services/permissions';
 import { AccessNotice, NOT_YOURS } from './AccessNotice';
@@ -293,6 +298,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
   const flaggedItems = sortByPriority(unrankedIssues);
   const severityCounts = countBySeverity(flaggedItems);
   const needEvidence = missingPhotoEvidence(flaggedItems);
+  // What submitting will put on the maintenance board, so the inspector can
+  // see it here rather than find out from the toast afterwards
+  const repairItems = maintenanceIssues(flaggedItems);
+  // Read off the same list the banner counts, so a chip and the count above it
+  // can never disagree
+  const repairIds = new Set(repairItems.map(({ item }) => item.id));
 
   const calculatedScore =
     totalItemsCount > 0 ? Math.round((yesCount / totalItemsCount) * 100) : 0;
@@ -404,19 +415,27 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     clearActiveDraft();
 
     /*
-     * Failures in the maintenance group describe something that needs
-     * repairing, so they go on the maintenance board as unstarted jobs. Done
-     * here rather than when "No" was tapped, because a draft answer can be
-     * changed any number of times and each flip would raise another job.
+     * Failures marked as repair work go on the maintenance board as unstarted
+     * jobs. Done here rather than when "No" was tapped, because a draft answer
+     * can be changed any number of times and each flip would raise another job.
      */
-    const { raised } = raiseMaintenanceJobs(submittedInspection, flaggedItems, checklist);
+    const { raised, withdrawn } = raiseMaintenanceJobs(
+      submittedInspection,
+      flaggedItems,
+      checklist
+    );
+
+    // Amending a record can take work off the board as well as put it on, and
+    // either way the person submitting should be told which happened
+    const boardNotes = [
+      raised.length > 0
+        ? `${raised.length} maintenance job${raised.length === 1 ? '' : 's'} raised`
+        : null,
+      withdrawn > 0 ? `${withdrawn} withdrawn` : null,
+    ].filter(Boolean);
 
     showToast(
-      raised.length > 0
-        ? `Inspection saved — ${raised.length} maintenance job${
-            raised.length === 1 ? '' : 's'
-          } raised`
-        : 'Inspection saved'
+      boardNotes.length > 0 ? `Inspection saved — ${boardNotes.join(', ')}` : 'Inspection saved'
     );
     router.push(`/inspections/${inspection.id}/summary`);
   };
@@ -489,6 +508,32 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                 <span className="tabular-nums">{severityCounts[severity]}</span>
               </span>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* What goes to maintenance, said before signing rather than after */}
+      {repairItems.length > 0 && (
+        <div
+          id="review-maintenance-summary"
+          className="mb-6 p-4 rounded-md bg-white border border-[#E6E7EB] shadow-xs flex items-start gap-3"
+        >
+          <Wrench className="w-5 h-5 text-[#B4740A] shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-[#17181D]">
+              {repairItems.length} repair job{repairItems.length === 1 ? '' : 's'} raised on submit
+            </p>
+            <p className="text-xs text-[#6B6F76] mt-0.5">
+              Each opens on the maintenance board as Reported, waiting to be picked up. The
+              findings below are marked with the trade they go to.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
+              className="mt-2 text-xs font-bold text-[#C8202D] hover:underline cursor-pointer"
+            >
+              Change on the checklist
+            </button>
           </div>
         </div>
       )}
@@ -577,6 +622,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                 answer.reason === 'Other'
                   ? `Other: ${answer.otherReason || 'Unspecified'}`
                   : answer.reason || 'No reason provided';
+              const toMaintenance = repairIds.has(item.id);
 
               return (
                 <div
@@ -606,6 +652,15 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                           <span className="font-semibold text-[#C8202D]">Reason: </span>
                           <span className="text-[#17181D]">{displayReason}</span>
                         </div>
+                        {/* The trade this one lands on, when it is repair work */}
+                        {toMaintenance && (
+                          <div className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-[#B4740A]">
+                            <Wrench className="w-3.5 h-3.5 shrink-0" />
+                            <span>
+                              Repair job — {MAINTENANCE_CATEGORY_LABEL[suggestCategory(item, answer)]}
+                            </span>
+                          </div>
+                        )}
                         {answer.note && (
                           <div className="mt-1 text-xs text-[#6B6F76]">
                             <span className="font-semibold">Note: </span>

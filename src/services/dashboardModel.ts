@@ -1,4 +1,11 @@
-import { Branch, Inspection, Item, ReasonGroup, Severity } from '../types';
+import {
+  Branch,
+  Inspection,
+  Item,
+  ReasonGroup,
+  Severity,
+  effectiveReasonGroup,
+} from '../types';
 import { ChecklistView } from './checklistStore';
 import { RankedIssue, SeverityCounts } from './priority';
 import { ReportModel, buildReportModel } from './reportModel';
@@ -186,7 +193,7 @@ export function buildDashboardModel(
   const categoryFailures = new Map<ReasonGroup, { failures: number; branches: Set<string> }>();
   latestModels.forEach((m) =>
     m.issues.forEach((issue: RankedIssue) => {
-      const group = issue.item.reasonGroup;
+      const group = effectiveReasonGroup(issue.item, issue.answer);
       const entry = categoryFailures.get(group) ?? { failures: 0, branches: new Set<string>() };
       entry.failures += 1;
       entry.branches.add(m.inspection.branchName);

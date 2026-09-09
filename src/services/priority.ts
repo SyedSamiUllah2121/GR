@@ -1,4 +1,4 @@
-import { Answer, Inspection, Item, ReasonGroup, Severity } from '../types';
+import { Answer, Inspection, Item, ReasonGroup, Severity, effectiveReasonGroup } from '../types';
 
 /**
  * Priority of a flagged (No) issue is worked out from three things:
@@ -170,7 +170,11 @@ export function computePriority(
   const factors: string[] = [`Item risk: ${SEVERITY_LABEL[base]}`];
 
   const reason = answer?.reason;
-  const reasonDelta = (reason && REASON_DELTAS[item.reasonGroup]?.[reason]) || 0;
+  // Read against the group the reason was actually chosen from, so re-filing
+  // a failure moves it onto that group's rules rather than leaving it scored
+  // by a list it no longer belongs to
+  const reasonDelta =
+    (reason && REASON_DELTAS[effectiveReasonGroup(item, answer)]?.[reason]) || 0;
   if (reasonDelta > 0) {
     factors.push(`"${reason}" makes it worse`);
   } else if (reasonDelta < 0) {

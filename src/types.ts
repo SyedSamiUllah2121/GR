@@ -128,6 +128,77 @@ export interface Answer {
   photo: string | null; // data URL or null
   /** Priority set by hand on this issue, overriding the computed one. */
   priorityOverride?: Severity | null;
+  /**
+   * The group the inspector filed this failure under, when it is not the one
+   * the question was authored with.
+   *
+   * A question carries the group its failures usually belong to, but anything
+   * can break: a cleaning check can fail because the surface is damaged, and
+   * that is repair work whatever the question is about. So the inspector may
+   * re-file a failure as it is recorded, which decides the reasons they are
+   * offered, how the priority is worked out, and — for MAINTENANCE — whether
+   * a job is raised on the maintenance board.
+   *
+   * Absent means the question's own group stands, which is every answer given
+   * before this could be changed. Read it through `effectiveReasonGroup`
+   * below, never directly.
+   */
+  reasonGroup?: ReasonGroup | null;
+  /**
+   * The kit this answer is actually about — the serial number, the unit, where
+   * in the branch it is — as recorded by whoever marked it.
+   *
+   * A question can be authored with the kit it concerns, but only for kit that
+   * is the same at every branch. "The freezer" is a different machine in each
+   * one, and the person standing in front of it is the only one who can say
+   * which. So this is recorded per inspection and never written back to the
+   * question: it describes this branch's unit on this visit, not the check.
+   *
+   * It is what names the equipment on any maintenance job the finding raises,
+   * which is the difference between sending a technician to "Storage
+   * temperatures" and to "Freezer 2 — dry store".
+   *
+   * Absent means nothing was recorded and the question's own kit stands. An
+   * empty array is not the same thing: it means the kit was cleared by hand.
+   * Read it through `effectiveDetails` below.
+   */
+  details?: ItemDetail[] | null;
+}
+
+/**
+ * The group in force for one answer: the inspector's own filing when they
+ * changed it, else the group the question was authored with.
+ *
+ * Everything that reads a failure's group goes through here — the reasons
+ * offered, the priority rules, the maintenance board, the dashboard's
+ * breakdown and the report — so a re-filed failure reads the same way
+ * everywhere it appears.
+ */
+export function effectiveReasonGroup(
+  item: Pick<Item, 'reasonGroup'>,
+  answer: Pick<Answer, 'reasonGroup'> | undefined
+): ReasonGroup {
+  return answer?.reasonGroup ?? item.reasonGroup;
+}
+
+/**
+ * The kit one answer concerns: what the person marking recorded, else the kit
+ * the question was authored with.
+ *
+ * Answered rather than merged, so what the marking screen shows in its fields
+ * is exactly what the record keeps — a list half inherited from the question
+ * and half typed in could not be edited predictably.
+ */
+export function effectiveDetails(
+  item: Pick<Item, 'details'>,
+  answer: Pick<Answer, 'details'> | undefined
+): ItemDetail[] {
+  return answer?.details ?? item.details ?? [];
+}
+
+/** The rows worth keeping, i.e. the ones somebody actually filled in. */
+export function usableDetails(details: ItemDetail[]): ItemDetail[] {
+  return details.filter((d) => d.value.trim());
 }
 
 /**

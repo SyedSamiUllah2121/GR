@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
@@ -37,7 +38,10 @@ import {
   INSPECTION_KIND_SHORT,
   INSPECTION_TYPE_LABEL,
   Inspection,
+  MAINTENANCE_CATEGORY_LABEL,
+  MaintenanceJob,
   Severity,
+  effectiveReasonGroup,
   inspectionKindOf,
 } from '../types';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
@@ -55,7 +59,10 @@ import {
   formatDuration,
   reasonText,
 } from '../services/reportModel';
+import { jobIdFor, needsMaintenance, suggestCategory } from '../services/maintenanceIntake';
+import { getJobById, statusOf } from '../services/maintenanceStore';
 import { PriorityBadge } from './PriorityBadge';
+import { StatusPill } from './MaintenanceStatusPill';
 import { ScorePill } from './ScorePill';
 import { DonutChart } from './DonutChart';
 import { canEditInspection, canViewInspection } from '../services/permissions';
@@ -648,7 +655,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                         {reasonText(answer)}
                       </p>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mt-1">
-                        {item.reasonGroup}
+                        {effectiveReasonGroup(item, answer)}
                       </p>
                     </div>
                   </li>
@@ -830,7 +837,7 @@ const ChecklistRow: React.FC<{
           <p className="text-sm text-[#17181D] leading-snug">{item.text}</p>
           <div className="flex flex-wrap items-center gap-1.5 mt-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] bg-[#F6F6F8] border border-[#E6E7EB] px-1.5 py-0.5 rounded">
-              {item.reasonGroup}
+              {effectiveReasonGroup(item, answer)}
             </span>
             {priority && (
               <PriorityBadge
@@ -1039,7 +1046,7 @@ const FindingsPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
                         <h3 className="text-sm font-semibold text-[#17181D]">{item.text}</h3>
                       </div>
                       <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mt-1">
-                        {row?.item.reasonGroup} • {model.sections.find((s) =>
+                        {effectiveReasonGroup(item, answer)} • {model.sections.find((s) =>
                           s.rows.some((r) => r.item.id === item.id)
                         )?.title}
                       </p>
@@ -1087,6 +1094,23 @@ const FindingsPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
 };
 
 const MaintenancePanel: React.FC<{ model: ReportModel }> = ({ model }) => {
+  const inspectionId = model.inspection.id;
+
+  /*
+   * The job each finding actually raised, when it raised one. Looked up rather
+   * than assumed: jobs are only put on the board when a record is submitted,
+   * so a draft has none yet, and a job someone has since deleted should not be
+   * linked to as though it were still open.
+   */
+  const jobs = useMemo(() => {
+    const found = new Map<number, MaintenanceJob>();
+    model.maintenance.forEach(({ item }) => {
+      const job = getJobById(jobIdFor(inspectionId, item.id));
+      if (job) found.set(item.id, job);
+    });
+    return found;
+  }, [model.maintenance, inspectionId]);
+
   if (model.maintenance.length === 0) {
     return (
       <EmptyState icon={Wrench} title="No maintenance work raised">
@@ -1101,15 +1125,22 @@ const MaintenancePanel: React.FC<{ model: ReportModel }> = ({ model }) => {
         <h2 className="text-sm font-bold text-[#17181D]">Repair &amp; service actions</h2>
         <p className="text-xs text-[#6B6F76] mt-0.5">
           Findings whose cause is a broken, damaged or unserviced item — the work the
-          branch has to raise with maintenance.
+          branch has to raise with maintenance. The ones marked as needing repair carry
+          the job they opened on the board.
         </p>
       </div>
       <div className="divide-y divide-[#E6E7EB]">
         {model.maintenance.map(({ item, answer, priority }) => {
           const row = model.rows.find((r) => r.item.id === item.id);
+          const marked = needsMaintenance(item, answer);
+          const job = jobs.get(item.id);
           return (
             <div key={item.id} className="p-4 flex items-start gap-3">
-              <Wrench className="w-4 h-4 text-[#6B6F76] shrink-0 mt-0.5" />
+              <Wrench
+                className={`w-4 h-4 shrink-0 mt-0.5 ${
+                  marked ? 'text-[#B4740A]' : 'text-[#6B6F76]'
+                }`}
+              />
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-semibold text-[#6B6F76] tabular-nums">
@@ -1125,9 +1156,33 @@ const MaintenancePanel: React.FC<{ model: ReportModel }> = ({ model }) => {
                     {answer.note}
                   </p>
                 )}
+
+                {/* Where the work went, and how far it has got */}
+                {marked && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-[#B4740A]">
+                      Maintenance · {MAINTENANCE_CATEGORY_LABEL[suggestCategory(item, answer)]}
+                    </span>
+                    {job ? (
+                      <>
+                        <StatusPill status={statusOf(job)} />
+                        <Link
+                          href={`/maintenance/${job.id}`}
+                          className="text-xs font-bold text-[#C8202D] hover:underline print:hidden"
+                        >
+                          Open job
+                        </Link>
+                      </>
+                    ) : (
+                      <span className="text-xs text-[#6B6F76]">
+                        Job opens on the board when this inspection is submitted
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] bg-[#F6F6F8] border border-[#E6E7EB] px-1.5 py-0.5 rounded shrink-0">
-                {item.reasonGroup}
+                {effectiveReasonGroup(item, answer)}
               </span>
             </div>
           );
@@ -1419,7 +1474,7 @@ function downloadCsv(model: ReportModel): void {
           section.listLabel,
           section.title,
           row.item.text,
-          row.item.reasonGroup,
+          effectiveReasonGroup(row.item, row.answer),
           row.outcome === 'passed' ? 'Yes' : row.outcome === 'failed' ? 'No' : 'Not answered',
           row.priority ? SEVERITY_LABEL[row.priority.severity] : '',
           SEVERITY_LABEL[row.item.severity as Severity],

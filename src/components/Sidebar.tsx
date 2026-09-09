@@ -174,20 +174,26 @@ export const Sidebar: React.FC = () => {
     >
       <div
         /*
-         * Collapsed, the column reverses so the toggle sits above the mark and
-         * hugs the right edge — roughly where it was before the rail narrowed.
-         * Left in DOM order it slid underneath the emblem, which read as an
-         * afterthought bolted to the bottom of the brand.
+         * Two rows on desktop, reversed so the toggle takes the top one: laid
+         * out side by side, the toggle ate into the width the logo centred
+         * itself in, leaving the mark sitting visibly left of the rail's
+         * centre line. Given its own row it stops competing for that width,
+         * and the logo can centre on the rail itself.
+         *
+         * Where the toggle lands on that row is the one thing the two states
+         * differ on — the corner when there is a corner to speak of, the
+         * centre line once the rail is too narrow for a corner to read as
+         * placement rather than an accident.
          */
-        className={`px-4 py-4 flex items-center gap-2 ${
+        className={`px-4 py-4 flex items-center gap-2 md:flex-col-reverse ${
           collapsed
-            ? 'md:px-2 md:pt-3 md:pb-5 md:flex-col-reverse md:gap-3'
-            : 'md:px-5 md:py-6'
+            ? 'md:px-2 md:pt-3 md:pb-5 md:gap-3'
+            : 'md:px-5 md:pt-3 md:pb-6 md:gap-2'
         }`}
       >
         <Link
           href="/dashboard"
-          className="block min-w-0 flex-1 cursor-pointer"
+          className="block min-w-0 flex-1 cursor-pointer md:w-full md:flex-none"
           id="brand-logo-btn"
           title="Royal Gujrat — Dashboard"
         >
@@ -215,7 +221,7 @@ export const Sidebar: React.FC = () => {
           title={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
           aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
           className={`hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-white/70 hover:text-white hover:bg-white/12 transition-colors cursor-pointer shrink-0 ${
-            collapsed ? 'md:self-end' : ''
+            collapsed ? '' : 'md:self-end'
           }`}
         >
           {collapsed ? (

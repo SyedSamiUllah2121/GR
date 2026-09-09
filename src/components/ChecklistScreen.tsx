@@ -12,8 +12,23 @@ import {
   FileCheck,
   Image as ImageIcon,
   Upload,
+  Wrench,
 } from 'lucide-react';
-import { Answer, Inspection, Item, REASON_GROUPS, SEVERITY_KEYS, Severity } from '../types';
+import {
+  Answer,
+  Inspection,
+  Item,
+  ItemDetail,
+  MAINTENANCE_CATEGORY_LABEL,
+  REASON_GROUPS,
+  REASON_GROUP_KEYS,
+  ReasonGroup,
+  SEVERITY_KEYS,
+  Severity,
+  effectiveDetails,
+  effectiveReasonGroup,
+  usableDetails,
+} from '../types';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
 import { buildSections, numberingFor } from '../services/checklistStore';
 import { useChecklist } from '../hooks/useChecklist';
@@ -37,7 +52,9 @@ import {
   canViewInspection,
 } from '../services/permissions';
 import { AccessNotice, LOCKED, NOT_YOURS } from './AccessNotice';
+import { DetailFields } from './DetailFields';
 import { startAssignment } from '../services/assignments';
+import { needsMaintenance, suggestCategory } from '../services/maintenanceIntake';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useRouter } from 'next/navigation';
 
@@ -288,6 +305,11 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
         otherReason: existing?.otherReason || null,
         note: existing?.note || null,
         photo: existing?.photo || null,
+        // Carried over like the reason and the photo, so an inspector who
+        // taps Yes by mistake does not have to re-file the failure or type
+        // the serial number out again
+        reasonGroup: existing?.reasonGroup ?? null,
+        details: existing?.details ?? null,
       },
     };
 
@@ -367,6 +389,59 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
     updateAnswers(updatedAnswers);
   };
 
+  /*
+   * Re-file this failure under another category.
+   *
+   * The category decides which reasons are offered, which rules score the
+   * priority, and — for MAINTENANCE — whether a job is raised on the
+   * maintenance board when the inspection is submitted.
+   */
+  const handleReasonGroupChange = (itemId: number, group: ReasonGroup) => {
+    const current = inspection.answers[itemId];
+    const item = checklist.getItem(itemId);
+    if (!current || !item) return;
+
+    /*
+     * A reason belongs to the category it was chosen from, so one the new
+     * category does not offer is dropped rather than left standing as a value
+     * its own dropdown cannot show. "Other" survives every move, because
+     * every category offers it — along with whatever was typed against it.
+     */
+    const keepReason = !!current.reason && REASON_GROUPS[group].includes(current.reason);
+
+    const updatedAnswers: Record<number, Answer> = {
+      ...inspection.answers,
+      [itemId]: {
+        ...current,
+        // Stored only while it differs from the question's own category, so an
+        // answer left where it started carries no override at all
+        reasonGroup: group === item.reasonGroup ? null : group,
+        reason: keepReason ? current.reason : null,
+        otherReason: keepReason ? current.otherReason : null,
+      },
+    };
+    clearInvalidIfResolved(itemId, updatedAnswers[itemId]);
+    updateAnswers(updatedAnswers);
+  };
+
+  /*
+   * Record the unit this finding is about.
+   *
+   * Written onto the answer, never back onto the question: the same check
+   * covers a different machine at every branch, so what is recorded here
+   * belongs to this visit. The question's own kit is what the fields start
+   * from, and the first edit takes a copy of it.
+   */
+  const handleDetailsChange = (itemId: number, next: ItemDetail[]) => {
+    const current = inspection.answers[itemId];
+    if (!current) return;
+    const updatedAnswers: Record<number, Answer> = {
+      ...inspection.answers,
+      [itemId]: { ...current, details: next },
+    };
+    updateAnswers(updatedAnswers);
+  };
+
   // Update additional note
   const handleNoteChange = (itemId: number, noteText: string) => {
     const current = inspection.answers[itemId] || { status: 'no', reason: null, otherReason: null, note: null, photo: null };
@@ -414,55 +489,85 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
     updateAnswers(updatedAnswers);
   };
 
-  // Validation function for current section
+  /*
+   * Everything standing between this record and the review screen.
+   *
+   * The message names the items rather than restating the rule, because the
+   * button that triggers this sits at the foot of sixty-odd rows: "attach a
+   * photo to every critical issue" leaves the inspector to find which one,
+   * while "Item 50 needs photo evidence" can be acted on from where they are
+   * standing.
+   */
   const validateAll = (): {
     isValid: boolean;
     offendingIds: number[];
     message: string;
   } => {
     const offendingIds: number[] = [];
-    let needsAnswerOrReason = false;
-    let needsCriticalPhoto = false;
+    const needAnswerOrReason: number[] = [];
+    const needCriticalPhoto: number[] = [];
 
     allItems.forEach((item) => {
       const answer = inspection.answers[item.id];
       // Untouched / unanswered item
       if (!answer || (answer.status !== 'yes' && answer.status !== 'no')) {
         offendingIds.push(item.id);
-        needsAnswerOrReason = true;
+        needAnswerOrReason.push(item.id);
         return;
       }
       // Marked No but missing required reason
       if (answer.status === 'no') {
         if (!answer.reason || answer.reason.trim() === '') {
           offendingIds.push(item.id);
-          needsAnswerOrReason = true;
+          needAnswerOrReason.push(item.id);
           return;
         }
         // Selected Other but empty specify field
         if (answer.reason === 'Other' && (!answer.otherReason || answer.otherReason.trim() === '')) {
           offendingIds.push(item.id);
-          needsAnswerOrReason = true;
+          needAnswerOrReason.push(item.id);
           return;
         }
         // Critical issues have to carry photo evidence
         const { severity } = computePriority(item, answer, failureHistory);
         if (requiresPhoto(severity) && !answer.photo) {
           offendingIds.push(item.id);
-          needsCriticalPhoto = true;
+          needCriticalPhoto.push(item.id);
           return;
         }
       }
     });
 
+    // "Item 50", or "Items 12, 50 and 3 more" once naming them all stops
+    // helping and starts filling the bar
+    const name = (ids: number[]): string => {
+      const numbers = ids.map((id) => numberOf(id)).sort((a, b) => a - b);
+      const shown = numbers.slice(0, 4).join(', ');
+      const rest = numbers.length - 4;
+      const list = rest > 0 ? `${shown} and ${rest} more` : shown;
+      return `${numbers.length === 1 ? 'Item' : 'Items'} ${list}`;
+    };
+
     const parts: string[] = [];
-    if (needsAnswerOrReason) parts.push('Answer every item, and give a reason for anything marked No');
-    if (needsCriticalPhoto) parts.push('attach a photo to every critical issue');
+    if (needAnswerOrReason.length > 0) {
+      parts.push(
+        `${name(needAnswerOrReason)} ${
+          needAnswerOrReason.length === 1 ? 'needs' : 'need'
+        } an answer, and a reason if marked No`
+      );
+    }
+    if (needCriticalPhoto.length > 0) {
+      parts.push(
+        `${name(needCriticalPhoto)} ${
+          needCriticalPhoto.length === 1 ? 'is critical and needs' : 'are critical and need'
+        } photo evidence`
+      );
+    }
 
     return {
       isValid: offendingIds.length === 0,
       offendingIds,
-      message: parts.join(' — '),
+      message: parts.join(' · '),
     };
   };
 
@@ -516,17 +621,6 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
         </div>
       </div>
 
-      {/* Validation Error Banner */}
-      {validationError && (
-        <div
-          id="checklist-validation-banner"
-          className="mb-4 p-4 rounded-md bg-[#FDECEE] border border-[#C8202D]/40 text-[#C8202D] flex items-center gap-3 shadow-xs"
-          role="alert"
-        >
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <span className="text-sm font-semibold">{validationError}</span>
-        </div>
-      )}
 
       {/* Quick guide hint */}
       <div className="mb-5 px-3.5 py-2 bg-[#FAFAFA] border border-[#E6E7EB] rounded-md text-xs text-[#6B6F76]">
@@ -572,10 +666,13 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
           const isInvalid = invalidItemIds.has(item.id);
           const isYes = status === 'yes';
           const isNo = status === 'no';
-          const reasonGroup = item.reasonGroup;
+          // The category in force, which is what the reasons below come from
+          const reasonGroup = effectiveReasonGroup(item, answer);
           const reasonsList = REASON_GROUPS[reasonGroup] || [];
           const priority = isNo ? computePriority(item, answer, failureHistory) : null;
           const needsPhoto = !!priority && requiresPhoto(priority.severity) && !answer?.photo;
+          // Whether this failure is on its way to the maintenance board
+          const toMaintenance = isNo && needsMaintenance(item, answer);
 
           return (
             <div
@@ -613,10 +710,9 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                       with four identical chillers has to guess which one the
                       question means.
                     */}
-                    {(item.details ?? []).filter((d) => d.value.trim()).length > 0 && (
+                    {usableDetails(effectiveDetails(item, answer)).length > 0 && (
                       <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                        {(item.details ?? [])
-                          .filter((d) => d.value.trim())
+                        {usableDetails(effectiveDetails(item, answer))
                           .map((d, i) => (
                             <span key={i} className="inline-flex items-center gap-1 text-[11px]">
                               {d.label.trim() && (
@@ -725,7 +821,53 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                     </div>
                   )}
 
-                  {/* 1. Required Reason dropdown */}
+                  {/*
+                    1. Category. Sits above the reason because it decides which
+                    reasons are offered — and picking MAINTENANCE hands the
+                    finding to the maintenance board, since a failure needing a
+                    technician has to reach the people who send one and only
+                    the inspector in front of it knows that.
+                  */}
+                  <div>
+                    <label
+                      htmlFor={`item-${item.id}-group-select`}
+                      className="block text-[10px] font-bold uppercase tracking-wider text-[#17181D] mb-1.5"
+                    >
+                      Category
+                    </label>
+                    <select
+                      id={`item-${item.id}-group-select`}
+                      value={reasonGroup}
+                      onChange={(e) =>
+                        handleReasonGroupChange(item.id, e.target.value as ReasonGroup)
+                      }
+                      className="w-full px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] cursor-pointer"
+                    >
+                      {REASON_GROUP_KEYS.map((key) => (
+                        <option key={key} value={key}>
+                          {key}
+                        </option>
+                      ))}
+                    </select>
+
+                    {toMaintenance ? (
+                      <p className="text-xs font-semibold text-[#B4740A] mt-1.5 flex items-start gap-1.5">
+                        <Wrench className="w-3.5 h-3.5 shrink-0 mt-px" />
+                        <span>
+                          Goes to the maintenance board as{' '}
+                          {MAINTENANCE_CATEGORY_LABEL[suggestCategory(item, answer)]} work when this
+                          inspection is submitted.
+                        </span>
+                      </p>
+                    ) : (
+                      <p className="text-xs text-[#6B6F76] mt-1.5">
+                        Sets the reasons offered below. Choose MAINTENANCE when something has to
+                        be repaired or serviced rather than put right on the spot.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 2. Required Reason dropdown */}
                   <div>
                     <label
                       htmlFor={`item-${item.id}-reason-select`}
@@ -753,7 +895,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                     </select>
                   </div>
 
-                  {/* 2. Required free-text field when reason is 'Other' */}
+                  {/* 3. Required free-text field when reason is 'Other' */}
                   {answer?.reason === 'Other' && (
                     <div>
                       <label
@@ -778,7 +920,38 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                     </div>
                   )}
 
-                  {/* 3. Optional textarea labeled "Additional notes" */}
+                  {/*
+                    4. Which unit this is about. Optional, and compact until
+                    used — a label and one dashed button, so sixty untouched
+                    rows cost nothing, and it grows as facts are added.
+
+                    Called out when the finding is headed for the maintenance
+                    board, because there it stops being a nicety: it is what
+                    the job names as the thing to go and find.
+                  */}
+                  <div>
+                    <label
+                      className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${
+                        toMaintenance ? 'text-[#B4740A]' : 'text-[#6B6F76]'
+                      }`}
+                    >
+                      Kit this is about{' '}
+                      {toMaintenance ? (
+                        <span className="text-[#B4740A]">
+                          — names the unit on the maintenance job
+                        </span>
+                      ) : (
+                        <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+                      )}
+                    </label>
+                    <DetailFields
+                      details={effectiveDetails(item, answer)}
+                      onChange={(next) => handleDetailsChange(item.id, next)}
+                      addLabel="Add the unit"
+                    />
+                  </div>
+
+                  {/* 5. Optional textarea labeled "Additional notes" */}
                   <div>
                     <label
                       htmlFor={`item-${item.id}-notes-input`}
@@ -796,7 +969,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                     />
                   </div>
 
-                  {/* 4. Optional "Add photo" button with thumbnail */}
+                  {/* 6. Optional "Add photo" button with thumbnail */}
                   <div>
                     <label
                       className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${
@@ -881,6 +1054,26 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
         id="checklist-action-bar"
         className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-[#F6F6F8]/95 backdrop-blur border-t border-[#E6E7EB]"
       >
+        {/*
+          Why the record will not go through, in the one place that is always
+          on screen. It used to sit at the top of the page, sixty rows above
+          the button that raises it, so pressing Review and being refused
+          looked like pressing Review and nothing happening.
+        */}
+        {validationError && (
+          <div
+            id="checklist-validation-banner"
+            className="mb-2.5 px-3 py-2 rounded-md bg-[#FDECEE] border border-[#C8202D]/40 text-[#C8202D] flex items-start gap-2"
+            role="alert"
+            aria-live="polite"
+          >
+            <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+            <span className="text-xs font-semibold">
+              Cannot submit yet — {validationError}
+            </span>
+          </div>
+        )}
+
         <div className="flex items-center gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex justify-between items-baseline text-xs mb-1.5">

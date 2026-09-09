@@ -5,6 +5,7 @@ import {
   Inspection,
   Item,
   Severity,
+  effectiveReasonGroup,
 } from '../types';
 import { ChecklistView, buildSections } from './checklistStore';
 import {
@@ -117,9 +118,14 @@ const MAINTENANCE_REASONS = new Set([
   'Entry point or gap found in the area',
 ]);
 
+/**
+ * Read against the group the inspector filed the failure under, so re-filing
+ * one as MAINTENANCE brings it onto this list — and re-filing it away from a
+ * repair group takes it off.
+ */
 function isMaintenance(issue: RankedIssue): boolean {
   if (issue.answer.reason && MAINTENANCE_REASONS.has(issue.answer.reason)) return true;
-  return MAINTENANCE_GROUPS.has(issue.item.reasonGroup);
+  return MAINTENANCE_GROUPS.has(effectiveReasonGroup(issue.item, issue.answer));
 }
 
 /** Human text for a reason, folding the free-text "Other" case back in. */
