@@ -13,6 +13,7 @@ import {
   Store,
   UserRound,
   UserX,
+  Wrench,
   X,
 } from 'lucide-react';
 import {
@@ -58,6 +59,9 @@ const ROLE_ORDER = USER_ROLE_KEYS;
 const ROLE_ICON: Record<UserRole, React.ComponentType<{ className?: string }>> = {
   admin: ShieldCheck,
   'branch-manager': Store,
+  // The same wrench the maintenance module is marked with, because that
+  // module is the whole of what this role opens
+  'job-manager': Wrench,
   inspector: UserRound,
 };
 

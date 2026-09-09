@@ -39,6 +39,9 @@ import { StatusPill } from './MaintenanceStatusPill';
 import { EndMaintenanceDialog } from './EndMaintenanceDialog';
 import { JobTimesDialog } from './JobTimesDialog';
 import { useToast } from './ToastProvider';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { canViewInspection } from '../services/permissions';
+import { getInspectionById } from '../services/storage';
 
 interface MaintenanceJobScreenProps {
   jobId: string;
@@ -47,7 +50,17 @@ interface MaintenanceJobScreenProps {
 export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobId }) => {
   const router = useRouter();
   const showToast = useToast();
+  const user = useCurrentUser();
   const [job, setJob] = useState<MaintenanceJob | null>(() => getJobById(jobId));
+  /*
+   * The record this job came from, when it came from one. Loaded so the link
+   * to it can be offered on what the reader may actually open, and withheld
+   * when the record has since been deleted — a link to nothing is worse than
+   * no link.
+   */
+  const sourceInspection = job?.sourceInspectionId
+    ? getInspectionById(job.sourceInspectionId)
+    : null;
   const [ending, setEnding] = useState(false);
   const [editingTimes, setEditingTimes] = useState(false);
 
@@ -295,9 +308,16 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
             </Field>
           </dl>
 
-          {job.sourceInspectionId && (
+          {/*
+            Offered only to someone who may open the record at the other end,
+            asked of the record itself rather than of the role — a link that
+            bounces the reader to a refusal reads as the app being broken
+            rather than as a boundary. A job manager passes for the record
+            that raised this job, which is the whole point of the link.
+          */}
+          {sourceInspection && canViewInspection(user, sourceInspection) && (
             <Link
-              href={`/inspections/${job.sourceInspectionId}`}
+              href={`/inspections/${sourceInspection.id}`}
               className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C8202D] hover:underline"
             >
               <ClipboardList className="w-3.5 h-3.5" />

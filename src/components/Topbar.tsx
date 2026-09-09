@@ -112,8 +112,9 @@ export const Topbar: React.FC = () => {
     return [];
   }, [user, allBranches]);
 
-  // The maintenance module is the admin's. Nobody else is shown its jobs,
-  // and nobody else can open the screens these hits and alerts link to.
+  // Jobs go to whoever holds the maintenance module — the admin and the job
+  // manager. Nobody else is shown them, because nobody else can open the
+  // screens these hits and alerts link to.
   const jobs = useMemo(
     () => (can(user, 'maintenance.view') ? allJobs : []),
     [user, allJobs]

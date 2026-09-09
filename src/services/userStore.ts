@@ -1,4 +1,4 @@
-import { BRANCHES, User, UserRole, initialsOf } from '../types';
+import { BRANCHES, USER_ROLE_LABEL, User, UserRole, initialsOf } from '../types';
 import { getInspections } from './storage';
 
 /**
@@ -20,11 +20,31 @@ const KEY = 'inspection_log_users_v1';
 const EVENT = 'inspection_log_users_change';
 
 /**
+ * How far the seed accounts below have been applied to this store.
+ *
+ * Bumped whenever a seed account is added, which happens when the system
+ * gains a role. Without it a new role is invisible to every installation
+ * already in use: the seeds are only ever written to an *empty* store, so an
+ * operator would be told a Job Manager exists and find no account to sign in
+ * as, no matter how many times they reloaded.
+ *
+ *   1  the original set: one admin, four branch managers, three inspectors
+ *   2  adds the job manager over the maintenance board
+ */
+const SEED_VERSION = 2;
+const SEED_VERSION_KEY = 'inspection_log_users_seed_version';
+
+/**
  * The demo accounts.
  *
- * One admin, a manager for each seeded branch, and three inspectors. The
- * passwords are deliberately memorable — this is a demo, and whoever is
- * being shown the system has to be able to sign in as each role in turn.
+ * One admin, a manager for each seeded branch, one job manager over the
+ * maintenance board, and three inspectors. The passwords are deliberately
+ * memorable — this is a demo, and whoever is being shown the system has to
+ * be able to sign in as each role in turn.
+ *
+ * Only ever written to a store that is empty, so an installation already in
+ * use does not gain an account behind its operator's back. There, a new role
+ * arrives the way any account does: the admin creates one.
  *
  * `admin@royalgujrat.com` is the account the shorthand `123` / `123` sign-in
  * resolves to, so the original demo credentials still work.
@@ -85,6 +105,21 @@ export const SEED_USERS: User[] = [
     createdAt: '2026-01-05',
   },
   {
+    /*
+     * One job manager, holding the maintenance board for all four branches.
+     * Not one per branch: a repair is not a branch's private business, and
+     * the same contractor covers the estate.
+     */
+    id: 'usr-jm-shahid',
+    name: 'Shahid Anwar',
+    email: 'jobs@royalgujrat.com',
+    password: 'jobs123',
+    role: 'job-manager',
+    initials: 'SA',
+    active: true,
+    createdAt: '2026-01-05',
+  },
+  {
     id: 'usr-insp-rahman',
     name: 'A. Rahman',
     email: 'rahman@royalgujrat.com',
@@ -134,6 +169,69 @@ function write(users: User[]): boolean {
   }
 }
 
+/** Which seed version this store has had applied. */
+function storedSeedVersion(): number {
+  try {
+    const raw = localStorage.getItem(SEED_VERSION_KEY);
+    // No marker means a store written before the marker existed, which is
+    // version 1 by definition — not a fresh store, which is handled below.
+    const version = raw === null ? 1 : Number(raw);
+    return Number.isFinite(version) ? version : 1;
+  } catch {
+    // Storage unreadable: claim to be current, so nothing is written either
+    return SEED_VERSION;
+  }
+}
+
+function markSeeded(): void {
+  try {
+    localStorage.setItem(SEED_VERSION_KEY, String(SEED_VERSION));
+  } catch {
+    // Nothing to do — reconciliation is retried on the next read
+  }
+}
+
+/**
+ * Brings a store created under an earlier seed version up to date, once.
+ *
+ * Adds only what is genuinely absent, matched on id *and* on email: an
+ * account the operator created themselves at the same address must not be
+ * shadowed by a seed, because two accounts sharing an address would make
+ * which one signs in a matter of list order.
+ *
+ * Runs at most once per version, so a seed account the operator later
+ * withdraws stays withdrawn rather than reappearing on the next reload.
+ * Writes without announcing itself: this is called from `getUsers`, which
+ * screens call while rendering, and firing the change event there would set
+ * state during a render. The reconciled list is returned instead, so the
+ * caller sees the addition immediately and later reads find it in storage.
+ */
+function reconcileSeeds(stored: User[]): User[] {
+  if (storedSeedVersion() >= SEED_VERSION) return stored;
+
+  const ids = new Set(stored.map((u) => u.id));
+  const emails = new Set(stored.map((u) => u.email.trim().toLowerCase()));
+  const missing = SEED_USERS.filter(
+    (seed) => !ids.has(seed.id) && !emails.has(seed.email.trim().toLowerCase())
+  );
+
+  if (missing.length === 0) {
+    markSeeded();
+    return stored;
+  }
+
+  const next = [...stored, ...missing];
+  try {
+    localStorage.setItem(KEY, JSON.stringify(next));
+  } catch (err) {
+    console.error('Failed to add new seed accounts:', err);
+    // Marker deliberately left alone, so this is tried again next time
+    return stored;
+  }
+  markSeeded();
+  return next;
+}
+
 /** Every account, withdrawn ones included. */
 export function getUsers(): User[] {
   if (typeof window === 'undefined') return SEED_USERS;
@@ -141,10 +239,12 @@ export function getUsers(): User[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) {
       localStorage.setItem(KEY, JSON.stringify(SEED_USERS));
+      // A store seeded from scratch is already current by construction
+      markSeeded();
       return SEED_USERS;
     }
     const parsed = JSON.parse(raw) as User[];
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : SEED_USERS;
+    return Array.isArray(parsed) && parsed.length > 0 ? reconcileSeeds(parsed) : SEED_USERS;
   } catch (err) {
     console.error('Failed to read users:', err);
     return SEED_USERS;
@@ -230,17 +330,26 @@ function validate(draft: UserDraft, users: User[], ignoreId?: string): string | 
 /**
  * The roles the admin creates accounts in.
  *
- * "Admin can manage Branch Manager and Inspector accounts" — so a second
- * main admin is not something this screen mints. The seeded admin account
+ * Every role except their own: a second main admin is not something this
+ * screen mints, because an account that can then withdraw the account that
+ * made it is not a thing to hand out from a form. The seeded admin account
  * can still be edited, which is how its own name and password are changed.
  */
-export const MANAGED_ROLES: UserRole[] = ['branch-manager', 'inspector'];
+export const MANAGED_ROLES: UserRole[] = ['branch-manager', 'job-manager', 'inspector'];
+
+/** "a Branch Manager, a Job Manager or an Inspector" — for a refusal to name. */
+function managedRoleList(): string {
+  const labels = MANAGED_ROLES.map((role) => USER_ROLE_LABEL[role]);
+  const last = labels[labels.length - 1];
+  return `${labels.slice(0, -1).join(', ')} or ${last}`;
+}
 
 export function addUser(draft: UserDraft): SaveUserResult {
   const all = getUsers();
 
   if (!MANAGED_ROLES.includes(draft.role)) {
-    return { ok: false, error: 'New accounts can be Branch Managers or Inspectors' };
+    // Named from the list itself, so adding a role cannot leave this lying
+    return { ok: false, error: `New accounts can be a ${managedRoleList()}` };
   }
 
   const problem = validate(draft, all);

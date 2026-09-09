@@ -346,28 +346,38 @@ export interface InspectionEdit {
  * Who is using the system.
  *
  *   admin           full control: every branch, every record, user accounts,
- *                   the checklist, and surprise visits
+ *                   the checklist, and surprise visits - and the maintenance
+ *                   board, so anything a job manager may do, they may do
  *   branch-manager  one branch: its records, and its own Monday inspection
+ *   job-manager     the maintenance board across every branch: the repairs
+ *                   inspections raise, and the ones reported directly. No
+ *                   inspections, no accounts, no checklist
  *   inspector       the surprise visits handed to them, and nothing else
  *
- * The three are a hierarchy of reach, not of trust — a branch manager is not
- * a lesser admin, they simply cannot see past their own branch. Permissions
- * are spelled out one at a time in services/permissions.ts rather than
- * inferred from an ordering, because these three do not nest cleanly: an
- * inspector may submit a visit at any branch, which a branch manager may not.
+ * These are degrees of reach, not of trust - a branch manager is not a lesser
+ * admin, they simply cannot see past their own branch. Permissions are
+ * spelled out one at a time in services/permissions.ts rather than inferred
+ * from an ordering, because they do not nest cleanly: an inspector may submit
+ * a visit at any branch, which a branch manager may not, and a job manager
+ * works across every branch while seeing none of their inspections.
  */
-export type UserRole = 'admin' | 'branch-manager' | 'inspector';
+export type UserRole = 'admin' | 'branch-manager' | 'job-manager' | 'inspector';
 
 /**
- * The roles in order of reach, which is the order they are listed in. Screens
- * read this rather than keeping their own copy, so a fourth role would appear
- * everywhere at once.
+ * The roles in the order they are listed. Screens read this rather than
+ * keeping their own copy, so a fifth role would appear everywhere at once.
  */
-export const USER_ROLE_KEYS: UserRole[] = ['admin', 'branch-manager', 'inspector'];
+export const USER_ROLE_KEYS: UserRole[] = [
+  'admin',
+  'branch-manager',
+  'job-manager',
+  'inspector',
+];
 
 export const USER_ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Main Admin',
   'branch-manager': 'Branch Manager',
+  'job-manager': 'Job Manager',
   inspector: 'Inspector',
 };
 
@@ -375,6 +385,7 @@ export const USER_ROLE_LABEL: Record<UserRole, string> = {
 export const USER_ROLE_BLURB: Record<UserRole, string> = {
   admin: 'Full control of the system, every branch and all accounts',
   'branch-manager': 'Their own branch, and its regular Monday inspection',
+  'job-manager': 'The maintenance board at every branch, repairs rather than inspections',
   inspector: 'Surprise visits assigned to them, at any branch',
 };
 

@@ -31,11 +31,7 @@ interface NavEntry {
    * drew no rule at all for anyone who cannot see that row.
    */
   group: 'work' | 'setup';
-  /**
-   * What the signed-in account needs to be shown this row. Absent means
-   * anyone signed in — the inspections list is that, because it guards
-   * itself by scoping what it lists to what you may see.
-   */
+  /** What the signed-in account needs to be shown this row. */
   needs?: Capability;
   /** Pages within this section, revealed under it. */
   children?: { id: string; href: string; label: string; isActive: (p: string) => boolean }[];
@@ -59,6 +55,12 @@ const NAV: NavEntry[] = [
     // Every inspection screen lives under here, including a report being read
     isActive: (p) => p.startsWith('/inspections'),
     group: 'work',
+    /*
+     * The list narrows itself to the records you may see, so for most roles
+     * this row needs no rule of its own. It carries one for the role that
+     * would otherwise be offered a list narrowed to nothing.
+     */
+    needs: 'inspections.browse',
   },
   {
     id: 'sidebar-nav-maintenance',

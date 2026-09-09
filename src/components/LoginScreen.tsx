@@ -14,11 +14,12 @@ import {
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { ORGANISATION } from '../data/user';
-import { USER_ROLE_BLURB, USER_ROLE_LABEL, User, UserRole } from '../types';
+import { USER_ROLE_BLURB, USER_ROLE_KEYS, USER_ROLE_LABEL, User } from '../types';
 import { signIn, signInAs } from '../services/session';
 import { homePathFor } from '../services/permissions';
 import { activeUsers } from '../services/userStore';
 import { useUsers } from '../hooks/useUsers';
+import { useMounted } from '../hooks/useMounted';
 import { useRouter } from 'next/navigation';
 
 /**
@@ -140,6 +141,12 @@ const HIGHLIGHTS = [
 
 export const LoginScreen: React.FC = () => {
   const router = useRouter();
+  /*
+   * This screen sits outside the app shell, so unlike every other screen it
+   * renders on the server as well — which makes the mount flag its own
+   * responsibility rather than the shell's.
+   */
+  const mounted = useMounted();
   const users = activeUsers(useUsers());
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -177,10 +184,15 @@ export const LoginScreen: React.FC = () => {
    * as each in turn is the only way to see what the roles actually do, and
    * making that require a remembered password per role got in the way of the
    * thing being demonstrated.
+   *
+   * Taken from the role list rather than named here, so a role added to the
+   * system turns up in the switcher instead of being the one nobody can try.
+   * Withdrawn accounts are skipped — offering a button that the sign-in it
+   * calls will refuse is worse than offering nothing.
    */
-  const demoAccounts = (['admin', 'branch-manager', 'inspector'] as UserRole[])
-    .map((role) => users.find((u) => u.role === role))
-    .filter((u): u is User => !!u);
+  const demoAccounts = USER_ROLE_KEYS.map((role) =>
+    users.find((u) => u.role === role && u.active)
+  ).filter((u): u is User => !!u);
 
   const enterAs = (userId: string) => {
     const result = signInAs(userId);
@@ -343,8 +355,31 @@ export const LoginScreen: React.FC = () => {
               </button>
             </div>
 
+            {/*
+              The accounts come from localStorage, which the server does not
+              have — there it falls back to the seed list, and any account the
+              operator has since renamed, added or withdrawn makes the two
+              disagree. So nothing account-shaped is rendered until the client
+              has mounted, and the rows below hold the space until it has.
+            */}
             <div className="mt-3 space-y-2">
-              {demoAccounts.map((account) => (
+              {!mounted &&
+                USER_ROLE_KEYS.map((role) => (
+                  <div
+                    key={role}
+                    aria-hidden="true"
+                    className="w-full p-3 rounded-xl border border-[#E6E7EB] bg-white flex items-center gap-3"
+                  >
+                    <span className="w-9 h-9 rounded-full bg-[#F6F6F8] shrink-0" />
+                    <span className="min-w-0 flex-1 space-y-1.5">
+                      <span className="block h-3 w-24 rounded bg-[#F6F6F8]" />
+                      <span className="block h-2.5 w-40 rounded bg-[#F6F6F8]" />
+                    </span>
+                  </div>
+                ))}
+
+              {mounted &&
+                demoAccounts.map((account) => (
                 <button
                   key={account.id}
                   type="button"
