@@ -38,7 +38,12 @@ import { fromLocalInputValue, toLocalInputValue } from '../services/localDateTim
 import { activeBranches, addBranch, branchUsage, removeBranch } from '../services/branchStore';
 import { inspectors as inspectorAccounts } from '../services/userStore';
 import { can, fixedBranchFor } from '../services/permissions';
-import { createSurpriseVisit, randomBranch, randomInspector } from '../services/assignments';
+import {
+  createSurpriseVisit,
+  randomBranch,
+  randomInspector,
+  scheduleLabel,
+} from '../services/assignments';
 import {
   clearActiveDraft,
   deleteInspection,
@@ -46,7 +51,7 @@ import {
   saveActiveDraft,
 } from '../services/storage';
 import { useRouter } from 'next/navigation';
-import { formatDate, formatDateTime } from '../services/reportModel';
+import { formatDate, formatDateTime, formatTimeOnly } from '../services/reportModel';
 
 /** Sentinel for the "not on the list" option. */
 const OTHER_INSPECTOR = '__other__';
@@ -125,6 +130,11 @@ export const NewInspectionScreen: React.FC = () => {
    * before a time could be named, so it stays the default.
    */
   const [scheduledAt, setScheduledAt] = useState<string>('');
+  /**
+   * The far end of the window, when the visit is to happen within one rather
+   * than at a moment. Meaningless without a start, and cleared with it.
+   */
+  const [scheduledUntil, setScheduledUntil] = useState<string>('');
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assignDone, setAssignDone] = useState<string | null>(null);
 
@@ -267,6 +277,7 @@ export const NewInspectionScreen: React.FC = () => {
       // The browser gives this back in the admin's own timezone; the service
       // is handed a real instant and does the checking
       scheduledFor: fromLocalInputValue(scheduledAt),
+      scheduledUntil: fromLocalInputValue(scheduledUntil),
     });
 
     if (!result.ok || !result.inspection) {
@@ -281,12 +292,13 @@ export const NewInspectionScreen: React.FC = () => {
       `${result.inspection.inspectorName} has been assigned a surprise visit to ${
         result.inspection.branchName
       }${
-        result.inspection.scheduledFor
-          ? `, due ${formatDateTime(result.inspection.scheduledFor)}`
+        scheduleLabel(result.inspection, formatDateTime, formatTimeOnly)
+          ? `, due ${scheduleLabel(result.inspection, formatDateTime, formatTimeOnly)}`
           : ''
       }`
     );
     setScheduledAt('');
+    setScheduledUntil('');
     // Reset the draw so a second visit is not silently the same one again
     setAssignTo(RANDOM);
     setSurpriseBranch(RANDOM);
@@ -866,7 +878,10 @@ export const NewInspectionScreen: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
+                        // The end goes with the start: an end on its own is
+                        // a window with no opening, which is refused anyway
                         setScheduledAt('');
+                        setScheduledUntil('');
                         setAssignError(null);
                         setAssignDone(null);
                       }}
@@ -876,11 +891,57 @@ export const NewInspectionScreen: React.FC = () => {
                     </button>
                   )}
                 </div>
+                {/*
+                  The far end of the window, offered only once there is a
+                  start for it to run from — an end on its own is refused, so
+                  showing the field before then only invites the error.
+                */}
+                {scheduledAt && (
+                  <div className="mt-2.5">
+                    <label
+                      htmlFor="surprise-until-input"
+                      className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
+                    >
+                      Until <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        id="surprise-until-input"
+                        type="datetime-local"
+                        value={scheduledUntil}
+                        // Never before the start it runs from
+                        min={scheduledAt}
+                        onChange={(e) => {
+                          setScheduledUntil(e.target.value);
+                          setAssignError(null);
+                          setAssignDone(null);
+                        }}
+                        className="flex-1 min-w-[13rem] px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                      />
+                      {scheduledUntil && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setScheduledUntil('');
+                            setAssignError(null);
+                            setAssignDone(null);
+                          }}
+                          className="px-3 py-2.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] border border-[#E6E7EB] rounded-md hover:bg-[#FAFAFA] transition-colors cursor-pointer whitespace-nowrap"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
                   <CalendarClock className="w-3 h-3 mt-0.5 shrink-0" />
-                  {scheduledAt
-                    ? 'The inspector sees it booked for this time, and it is flagged late if the time passes unstarted.'
-                    : 'Left empty, the visit is due as soon as the inspector can get there.'}
+                  {!scheduledAt
+                    ? 'Left empty, the visit is due as soon as the inspector can get there.'
+                    : scheduledUntil
+                      ? 'The inspector may go any time in this window, and it is flagged late once the window closes unstarted.'
+                      : 'Booked for this exact time. Add an Until to give the inspector a window to arrive in instead.'}
                 </p>
               </div>
 

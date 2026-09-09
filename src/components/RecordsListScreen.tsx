@@ -35,6 +35,7 @@ import {
   cancelAssignment,
   isOverdueAssignment,
   openAssignments,
+  scheduleLabel,
   startAssignment,
 } from '../services/assignments';
 import { mondayStatusFor } from '../services/mondaySchedule';
@@ -49,7 +50,7 @@ import {
 import { PriorityBadge } from './PriorityBadge';
 import { useRouter } from 'next/navigation';
 import { ScorePill } from './ScorePill';
-import { formatDate, formatDateTime } from '../services/reportModel';
+import { formatDate, formatDateTime, formatTimeOnly } from '../services/reportModel';
 
 export const RecordsListScreen: React.FC = () => {
   const router = useRouter();
@@ -388,9 +389,11 @@ export const RecordsListScreen: React.FC = () => {
                       }`}
                     >
                       {user?.role !== 'inspector' && `${visit.inspectorName} • `}
-                      {visit.scheduledFor
-                        ? `${isOverdueAssignment(visit) ? 'Was due' : 'Due'} ${formatDateTime(
-                            visit.scheduledFor
+                      {scheduleLabel(visit, formatDateTime, formatTimeOnly)
+                        ? `${isOverdueAssignment(visit) ? 'Was due' : 'Due'} ${scheduleLabel(
+                            visit,
+                            formatDateTime,
+                            formatTimeOnly
                           )}`
                         : `assigned ${formatDate(visit.date)}`}
                       {user?.role === 'inspector' && ` • ${FULL_CHECKLIST_LABEL}`}

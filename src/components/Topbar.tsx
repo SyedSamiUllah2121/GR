@@ -19,10 +19,10 @@ import {
 import { Inspection, MaintenanceJob, USER_ROLE_LABEL } from '../types';
 import { getInspections, subscribeToStorage } from '../services/storage';
 import { getJobs, subscribeToMaintenance } from '../services/maintenanceStore';
-import { formatDate, formatDateTime } from '../services/reportModel';
+import { formatDate, formatDateTime, formatTimeOnly } from '../services/reportModel';
 import { signOut } from '../services/session';
 import { can, visibleInspections } from '../services/permissions';
-import { assignmentsFor, isOverdueAssignment } from '../services/assignments';
+import { assignmentsFor, isOverdueAssignment, scheduleLabel } from '../services/assignments';
 import { mondayStatusFor } from '../services/mondaySchedule';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useBranches } from '../hooks/useBranches';
@@ -237,17 +237,14 @@ export const Topbar: React.FC = () => {
         // A visit booked for a time that has passed is a different message
         // from one simply waiting, and a worse one
         const late = isOverdueAssignment(visit);
+        const booked = scheduleLabel(visit, formatDateTime, formatTimeOnly);
         out.push({
           key: `assigned-${visit.id}`,
           href: '/inspections',
           icon: CalendarClock,
-          text: late
-            ? `Surprise visit to ${visit.branchName} was due ${formatDateTime(
-                visit.scheduledFor as string
-              )}`
-            : visit.scheduledFor
-              ? `Surprise visit to ${visit.branchName} due ${formatDateTime(visit.scheduledFor)}`
-              : `Surprise visit to ${visit.branchName} waiting to be started`,
+          text: booked
+            ? `Surprise visit to ${visit.branchName} ${late ? 'was due' : 'due'} ${booked}`
+            : `Surprise visit to ${visit.branchName} waiting to be started`,
           tone: late ? 'bad' : 'warn',
         });
       });

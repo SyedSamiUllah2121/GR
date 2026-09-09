@@ -319,6 +319,16 @@ export function formatDateTime(iso: string | null | undefined): string {
     .toLowerCase()}`;
 }
 
+/** "4:10 pm" from an ISO timestamp — the clock time alone. */
+export function formatTimeOnly(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed
+    .toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })
+    .toLowerCase();
+}
+
 /** "1h 25m" from a count of minutes. */
 export function formatDuration(minutes: number | null): string {
   if (minutes === null) return '—';

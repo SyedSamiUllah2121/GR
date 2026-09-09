@@ -159,6 +159,11 @@ export interface CreateSurpriseInput {
    * as soon as the inspector can get there.
    */
   scheduledFor?: string | null;
+  /**
+   * The far end of the window, when it is a window rather than a moment.
+   * Requires `scheduledFor`.
+   */
+  scheduledUntil?: string | null;
   /** Overridden in tests; defaults to now. */
   now?: Date;
 }
@@ -187,7 +192,14 @@ export interface CreateSurpriseResult {
  * inspector cannot tell them apart to know which one they have done.
  */
 export function createSurpriseVisit(input: CreateSurpriseInput): CreateSurpriseResult {
-  const { branchName, inspectorId, raisedBy, scheduledFor = null, now = new Date() } = input;
+  const {
+    branchName,
+    inspectorId,
+    raisedBy,
+    scheduledFor = null,
+    scheduledUntil = null,
+    now = new Date(),
+  } = input;
 
   if (!branchName) return { ok: false, error: 'Choose the branch to be visited' };
 
@@ -207,6 +219,23 @@ export function createSurpriseVisit(input: CreateSurpriseInput): CreateSurpriseR
     }
     if (due.getTime() < now.getTime() - SCHEDULE_GRACE_MS) {
       return { ok: false, error: 'Choose a time that has not already passed' };
+    }
+  }
+
+  /*
+   * The far end of the window, when one is given. Requires a start: an end
+   * on its own would be a deadline with no opening, which the form has no way
+   * to show and the inspector no way to read.
+   */
+  let until: Date | null = null;
+  if (scheduledUntil) {
+    if (!due) return { ok: false, error: 'Set a start time as well as an end time' };
+    until = new Date(scheduledUntil);
+    if (Number.isNaN(until.getTime())) {
+      return { ok: false, error: 'That end time could not be read' };
+    }
+    if (until.getTime() <= due.getTime()) {
+      return { ok: false, error: 'The end of the window has to be after its start' };
     }
   }
 
@@ -257,6 +286,7 @@ export function createSurpriseVisit(input: CreateSurpriseInput): CreateSurpriseR
     // Only carried when a time was actually named, so "no time given" stays
     // distinguishable from "due the moment it was raised"
     ...(due ? { scheduledFor: due.toISOString() } : {}),
+    ...(until ? { scheduledUntil: until.toISOString() } : {}),
   };
 
   saveInspection(inspection);
@@ -273,16 +303,51 @@ export function assignmentsFor(userId: string, all: Inspection[] = getInspection
 /**
  * Whether a booked visit is past the time it was due.
  *
+ * Measured against the close of the window when there is one, not its
+ * opening: a visit carried out at any point inside its window is on time,
+ * however late into it the inspector arrives — that latitude is the reason
+ * for giving a window at all. A single moment is its own deadline.
+ *
  * False for one with no time named: those are due whenever the inspector can
  * get there, so there is no moment for them to be late against.
  */
 export function isOverdueAssignment(
-  inspection: Pick<Inspection, 'status' | 'scheduledFor'>,
+  inspection: Pick<Inspection, 'status' | 'scheduledFor' | 'scheduledUntil'>,
   now: Date = new Date()
 ): boolean {
-  if (inspection.status !== 'assigned' || !inspection.scheduledFor) return false;
-  const due = new Date(inspection.scheduledFor);
-  return !Number.isNaN(due.getTime()) && due.getTime() < now.getTime();
+  if (inspection.status !== 'assigned') return false;
+  const deadline = inspection.scheduledUntil ?? inspection.scheduledFor;
+  if (!deadline) return false;
+  const at = new Date(deadline);
+  return !Number.isNaN(at.getTime()) && at.getTime() < now.getTime();
+}
+
+/**
+ * The booked time as one readable phrase, or null when nothing was booked.
+ *
+ * Lives here rather than in each screen because the inspector's list, the
+ * notification and the admin's confirmation all have to describe the same
+ * booking, and three phrasings of one window is how they start disagreeing.
+ */
+export function scheduleLabel(
+  inspection: Pick<Inspection, 'scheduledFor' | 'scheduledUntil'>,
+  formatDateTime: (iso: string) => string,
+  formatTimeOnly: (iso: string) => string
+): string | null {
+  if (!inspection.scheduledFor) return null;
+  const from = formatDateTime(inspection.scheduledFor);
+  if (!inspection.scheduledUntil) return from;
+
+  /*
+   * A window inside one day names that day once: "11 Sept, 10:30 - 14:00"
+   * rather than repeating the date on both ends. Across days it has to say
+   * both, or "10:30 - 09:00" reads as going backwards.
+   */
+  const sameDay =
+    inspection.scheduledFor.slice(0, 10) === inspection.scheduledUntil.slice(0, 10);
+  return sameDay
+    ? `${from} – ${formatTimeOnly(inspection.scheduledUntil)}`
+    : `${from} – ${formatDateTime(inspection.scheduledUntil)}`;
 }
 
 /** Every unstarted surprise visit, for the admin's view of what is outstanding. */

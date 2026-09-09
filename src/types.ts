@@ -312,6 +312,19 @@ export interface Inspection {
    * say when it happened while this still says when it was due.
    */
   scheduledFor?: string;
+  /**
+   * The far end of the window it should happen in, as an ISO timestamp.
+   *
+   * Absent means `scheduledFor` is a single moment rather than the opening of
+   * a window. Present, the visit is expected any time between the two — which
+   * is what an unannounced visit usually wants: the branch knows the day, not
+   * the hour, and the inspector still has room to arrive unpredictably.
+   *
+   * Never set without `scheduledFor`. It is also what "late" is measured
+   * against once a window is given, since a visit inside its window is not
+   * late however far into it the inspector arrives.
+   */
+  scheduledUntil?: string;
   /** ISO timestamp the visit was started, which the duration is measured from. */
   startedAt?: string;
   /** ISO timestamp the report was signed and submitted. */
