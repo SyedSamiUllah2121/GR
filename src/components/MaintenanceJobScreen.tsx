@@ -8,8 +8,10 @@ import {
   Building2,
   CheckCircle2,
   ChevronRight,
+  CalendarClock,
   ClipboardList,
   Clock,
+  Lock,
   Play,
   RotateCcw,
   Square,
@@ -19,7 +21,9 @@ import {
   User,
   Wrench,
 } from 'lucide-react';
-import { MAINTENANCE_CATEGORY_LABEL, MaintenanceJob } from '../types';
+import { MAINTENANCE_CATEGORY_LABEL, MaintenanceJob, jobKindOf } from '../types';
+import { getEquipmentById } from '../services/equipmentStore';
+import { getPlanById } from '../services/maintenancePlanStore';
 
 import {
   daysOpen,
@@ -40,7 +44,13 @@ import { EndMaintenanceDialog } from './EndMaintenanceDialog';
 import { JobTimesDialog } from './JobTimesDialog';
 import { useToast } from './ToastProvider';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { canViewInspection } from '../services/permissions';
+import {
+  canManageJobs,
+  canOpenJobBoard,
+  canViewInspection,
+  canViewJob,
+  homePathFor,
+} from '../services/permissions';
 import { getInspectionById } from '../services/storage';
 
 interface MaintenanceJobScreenProps {
@@ -61,6 +71,15 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
   const sourceInspection = job?.sourceInspectionId
     ? getInspectionById(job.sourceInspectionId)
     : null;
+  /*
+   * The asset and the plan behind a scheduled job, when there are any. Looked
+   * up rather than copied onto the job so a corrected serial number shows here
+   * too — the job carries the unit's name as it was, which is the right record
+   * of what was sent out, but the register is the truth about the asset.
+   */
+  const asset = job?.equipmentId ? getEquipmentById(job.equipmentId) : null;
+  const plan = job?.planId ? getPlanById(job.planId) : null;
+
   const [ending, setEnding] = useState(false);
   const [editingTimes, setEditingTimes] = useState(false);
 
@@ -70,6 +89,16 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
     return subscribeToMaintenance(refresh);
   }, [jobId]);
 
+  /*
+   * Where "back" leads when there is nothing to show. The board for anyone who
+   * has one, and their own home for anyone who does not — handing someone who
+   * followed a stale link a second link they cannot open either reads as the
+   * app being broken rather than as a boundary.
+   */
+  const mayOpenBoard = canOpenJobBoard(user);
+  const backHref = mayOpenBoard ? '/maintenance/jobs' : homePathFor(user);
+  const backLabel = mayOpenBoard ? 'Back to maintenance' : 'Back to your home screen';
+
   if (!job) {
     return (
       <div className="p-8 max-w-xl mx-auto text-center">
@@ -78,10 +107,41 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
           This maintenance job does not exist or has been removed.
         </p>
         <Link
-          href="/maintenance/jobs"
+          href={backHref}
           className="inline-block mt-4 px-4 py-2 bg-[#C8202D] text-white text-sm font-medium rounded-md"
         >
-          Back to maintenance
+          {backLabel}
+        </Link>
+      </div>
+    );
+  }
+
+  /*
+   * Asked of the job rather than of the role, because the answer depends on
+   * the job: a branch manager may open the repairs at their own branch and no
+   * others. A job's URL carries nothing but its id, so the route table cannot
+   * put this question — the screen puts it, exactly as the inspection screens
+   * do for a record.
+   */
+  if (!canViewJob(user, job)) {
+    return (
+      <div className="p-8 max-w-md mx-auto text-center">
+        <span className="w-12 h-12 rounded-xl bg-[#FDECEE] text-[#C8202D] flex items-center justify-center mx-auto">
+          <Lock className="w-6 h-6" />
+        </span>
+        <h2 className="mt-4 text-xl font-bold text-[#17181D]">
+          This job is not yours to open
+        </h2>
+        <p className="text-sm text-[#6B6F76] mt-2 leading-relaxed">
+          {mayOpenBoard
+            ? 'It was raised at another branch. You can see the repairs raised at your own, and report anything new you find there.'
+            : 'Maintenance jobs are not part of what this account covers.'}
+        </p>
+        <Link
+          href={backHref}
+          className="inline-block mt-5 px-4 py-2 bg-[#C8202D] text-white text-xs font-bold rounded-md"
+        >
+          {backLabel}
         </Link>
       </div>
     );
@@ -89,6 +149,14 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
 
   const status = statusOf(job);
   const waiting = daysOpen(job);
+
+  /*
+   * Moving the job along is maintenance's work, not the reporting branch's.
+   * A branch manager reads the timeline and sees where the repair has got to;
+   * the buttons that would start, end, re-time, reopen or delete it are not
+   * shown to them at all.
+   */
+  const mayManage = canManageJobs(user);
 
   const handleReopen = () => {
     if (!window.confirm('Clear the start and completion times and put this back to reported?')) {
@@ -124,6 +192,12 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
             </h1>
             <PriorityBadge severity={job.priority} />
             <StatusPill status={status} />
+            {jobKindOf(job) === 'scheduled' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#EEF2FB] text-[#33499B]">
+                <CalendarClock className="w-3 h-3" />
+                Scheduled
+              </span>
+            )}
           </div>
           <p className="text-xs text-[#6B6F76] mt-1.5">
             {job.branchName} • {MAINTENANCE_CATEGORY_LABEL[job.category]}
@@ -151,15 +225,17 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
                 {waiting > 0 && ` — waiting ${waiting} day${waiting === 1 ? '' : 's'}`}
               </p>
             </div>
-            <button
-              id="start-maintenance-btn"
-              type="button"
-              onClick={() => setEditingTimes(true)}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer shrink-0"
-            >
-              <Play className="w-4 h-4" />
-              <span>Start maintenance</span>
-            </button>
+            {mayManage && (
+              <button
+                id="start-maintenance-btn"
+                type="button"
+                onClick={() => setEditingTimes(true)}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer shrink-0"
+              >
+                <Play className="w-4 h-4" />
+                <span>Start maintenance</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -171,36 +247,40 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
                 Started {formatDateTime(job.startedAt)} • running{' '}
                 {formatMinutes(elapsedMinutes(job))}
               </p>
-              <button
-                id="adjust-times-btn"
-                type="button"
-                onClick={() => setEditingTimes(true)}
-                className="no-print mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
-              >
-                <Clock className="w-3 h-3" />
-                Adjust start time
-              </button>
+              {mayManage && (
+                <button
+                  id="adjust-times-btn"
+                  type="button"
+                  onClick={() => setEditingTimes(true)}
+                  className="no-print mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
+                >
+                  <Clock className="w-3 h-3" />
+                  Adjust start time
+                </button>
+              )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={handleReopen}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#6B6F76] rounded-md transition-colors cursor-pointer"
-                title="Undo the start time"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Undo start</span>
-              </button>
-              <button
-                id="end-maintenance-btn"
-                type="button"
-                onClick={() => setEnding(true)}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer"
-              >
-                <Square className="w-4 h-4" />
-                <span>End maintenance</span>
-              </button>
-            </div>
+            {mayManage && (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleReopen}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#6B6F76] rounded-md transition-colors cursor-pointer"
+                  title="Undo the start time"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Undo start</span>
+                </button>
+                <button
+                  id="end-maintenance-btn"
+                  type="button"
+                  onClick={() => setEnding(true)}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer"
+                >
+                  <Square className="w-4 h-4" />
+                  <span>End maintenance</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -214,25 +294,29 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
                   Started {formatDateTime(job.startedAt)} • finished{' '}
                   {formatDateTime(job.completedAt)}
                 </p>
-                <button
-                  id="adjust-times-btn"
-                  type="button"
-                  onClick={() => setEditingTimes(true)}
-                  className="no-print mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
-                >
-                  <Clock className="w-3 h-3" />
-                  Adjust times
-                </button>
+                {mayManage && (
+                  <button
+                    id="adjust-times-btn"
+                    type="button"
+                    onClick={() => setEditingTimes(true)}
+                    className="no-print mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
+                  >
+                    <Clock className="w-3 h-3" />
+                    Adjust times
+                  </button>
+                )}
               </div>
             </div>
-            <button
-              type="button"
-              onClick={handleReopen}
-              className="no-print inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#6B6F76] rounded-md transition-colors cursor-pointer shrink-0"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reopen</span>
-            </button>
+            {mayManage && (
+              <button
+                type="button"
+                onClick={handleReopen}
+                className="no-print inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#6B6F76] rounded-md transition-colors cursor-pointer shrink-0"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reopen</span>
+              </button>
+            )}
           </div>
         )}
       </section>
@@ -309,12 +393,53 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
           </dl>
 
           {/*
+            What this is an occurrence of. Worth saying on the job itself: a
+            technician looking at "Printer service — Counter printer" should
+            not have to go to another screen to learn that it comes round every
+            three months and is not something that has gone wrong.
+          */}
+          {jobKindOf(job) === 'scheduled' && plan && (
+            <div className="bg-[#F7F9FD] border border-[#33499B]/20 rounded-md px-4 py-3">
+              <p className="text-xs font-bold text-[#33499B] flex items-center gap-1.5">
+                <CalendarClock className="w-3.5 h-3.5" />
+                Planned work, not a breakdown
+              </p>
+              <p className="text-xs text-[#6B6F76] mt-1 leading-relaxed">
+                {plan.task} falls due every {plan.everyMonths} month
+                {plan.everyMonths === 1 ? '' : 's'}
+                {job.dueOn ? `, and this one was due on ${job.dueOn}` : ''}.
+                {asset ? ' The next is counted from the day this one is finished.' : ''}
+              </p>
+            </div>
+          )}
+
+          {asset && (
+            <Link
+              href="/maintenance/equipment"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C8202D] hover:underline"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              {asset.name}
+              {asset.serialNumber ? ` · serial ${asset.serialNumber}` : ''}
+              {asset.location ? ` · ${asset.location}` : ''}
+            </Link>
+          )}
+
+          {/*
             Offered only to someone who may open the record at the other end,
             asked of the record itself rather than of the role — a link that
             bounces the reader to a refusal reads as the app being broken
-            rather than as a boundary. A job manager passes for the record
+            rather than as a boundary. A maintenance manager passes for the record
             that raised this job, which is the whole point of the link.
           */}
+          {/*
+            The fault itself. Carried onto the job when an inspection raised it
+            and, until now, stored and shown nowhere — which left whoever was
+            being sent out with the inspector's words and none of the picture
+            the inspector thought worth taking.
+          */}
+          {job.photo && <PhotoStrip photos={[job.photo]} alt="The reported fault" />}
+
           {sourceInspection && canViewInspection(user, sourceInspection) && (
             <Link
               href={`/inspections/${sourceInspection.id}`}
@@ -341,6 +466,18 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
             ) : (
               <p className="text-sm text-[#6B6F76] italic">No note was recorded.</p>
             )}
+            {/*
+              The receipt and the finished work. What turns a typed-in cost
+              into a figure that can be checked, so it sits with the cost
+              rather than in a gallery of its own.
+            */}
+            {(job.completionPhotos?.length ?? 0) > 0 && (
+              <PhotoStrip
+                photos={job.completionPhotos ?? []}
+                alt="Photo of the completed work or its receipt"
+              />
+            )}
+
             <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 pt-4 border-t border-[#EFEFF2]">
               <Field icon={User} label="Attended by">
                 {job.attendedBy || '—'}
@@ -356,16 +493,18 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
         </section>
       )}
 
-      <div className="no-print flex justify-end">
-        <button
-          type="button"
-          onClick={handleDelete}
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#C8202D] border border-[#C8202D]/30 rounded-md hover:bg-[#FDECEE] transition-colors cursor-pointer"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          <span>Delete job</span>
-        </button>
-      </div>
+      {mayManage && (
+        <div className="no-print flex justify-end">
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#C8202D] border border-[#C8202D]/30 rounded-md hover:bg-[#FDECEE] transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete job</span>
+          </button>
+        </div>
+      )}
 
       {editingTimes && (
         <JobTimesDialog
@@ -397,6 +536,38 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
 // ---------------------------------------------------------------------------
 // Pieces
 // ---------------------------------------------------------------------------
+
+/**
+ * A row of photographs, each opening full size in its own tab.
+ *
+ * A thumbnail is enough to see that a receipt is there; it is nowhere near
+ * enough to read the total on it, and there is no lightbox in this app to
+ * build one out of. A plain link to the image itself is the whole of what is
+ * needed, and it prints — `no-print` is deliberately not set here, because a
+ * month-end report someone has printed is exactly where the receipt belongs.
+ */
+const PhotoStrip: React.FC<{ photos: string[]; alt: string }> = ({ photos, alt }) => (
+  <ul className="flex flex-wrap gap-2.5">
+    {photos.map((photo, index) => (
+      <li key={index}>
+        <a
+          href={photo}
+          target="_blank"
+          rel="noreferrer"
+          title="Open this photo full size"
+          className="block rounded-md border border-[#E6E7EB] overflow-hidden hover:border-[#C8202D] transition-colors"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photo}
+            alt={photos.length > 1 ? `${alt} (${index + 1} of ${photos.length})` : alt}
+            className="w-24 h-24 object-cover"
+          />
+        </a>
+      </li>
+    ))}
+  </ul>
+);
 
 const TimelineStep: React.FC<{
   icon: React.ComponentType<{ className?: string }>;

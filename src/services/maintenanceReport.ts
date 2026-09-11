@@ -4,6 +4,7 @@ import {
   MaintenanceJob,
   MaintenanceStatus,
   Severity,
+  jobKindOf,
 } from '../types';
 import { daysOpen, statusOf, turnaroundHours, workMinutes } from './maintenanceStore';
 
@@ -19,8 +20,10 @@ import { daysOpen, statusOf, turnaroundHours, workMinutes } from './maintenanceS
 export interface BranchMaintenanceSummary {
   branchName: string;
   completed: number;
-  /** Reported during the month, whether or not it was finished. */
+  /** Problems reported during the month, whether or not they were finished. */
   raised: number;
+  /** Planned services that fell due during the month. Never counted as raised. */
+  scheduled: number;
   /** Still unfinished as at the end of the month. */
   openAtMonthEnd: number;
   /** Mean hours from report to completion, for jobs completed in the month. */
@@ -39,7 +42,9 @@ export interface MonthlyMaintenanceReport {
   month: string;
   monthLabel: string;
   completed: number;
+  /** Problems reported in the month. Planned servicing is `scheduled`. */
   raised: number;
+  scheduled: number;
   openAtMonthEnd: number;
   averageTurnaroundHours: number | null;
   totalWorkMinutes: number;
@@ -137,7 +142,16 @@ export function buildMonthlyReport(
   const monthEnd = endOfMonth(month);
 
   const completedInMonth = jobs.filter((job) => completedMonth(job) === month);
-  const raisedInMonth = jobs.filter((job) => monthKeyOf(job.reportedAt) === month);
+  /*
+   * "Raised" means something went wrong. A service falling due is the plan
+   * working, and counting it here would make a branch that looks after its
+   * equipment look like a branch that keeps breaking it — the figure would
+   * climb fastest exactly where maintenance is most diligent. Planned work is
+   * counted separately, as `scheduled`.
+   */
+  const reportedInMonth = jobs.filter((job) => monthKeyOf(job.reportedAt) === month);
+  const raisedInMonth = reportedInMonth.filter((job) => jobKindOf(job) === 'problem');
+  const scheduledInMonth = reportedInMonth.filter((job) => jobKindOf(job) === 'scheduled');
 
   // Open "as at month end": reported by then, and not finished by then
   const openAtEnd = jobs.filter((job) => {
@@ -148,13 +162,14 @@ export function buildMonthlyReport(
   });
 
   const branchNames = Array.from(
-    new Set([...completedInMonth, ...raisedInMonth, ...openAtEnd].map((j) => j.branchName))
+    new Set([...completedInMonth, ...reportedInMonth, ...openAtEnd].map((j) => j.branchName))
   ).sort();
 
   const branches: BranchMaintenanceSummary[] = branchNames
     .map((branchName) => {
       const done = completedInMonth.filter((j) => j.branchName === branchName);
       const raised = raisedInMonth.filter((j) => j.branchName === branchName);
+      const scheduled = scheduledInMonth.filter((j) => j.branchName === branchName);
       const open = openAtEnd.filter((j) => j.branchName === branchName);
       const { byCategory, bySeverity } = tally(done);
 
@@ -162,6 +177,7 @@ export function buildMonthlyReport(
         branchName,
         completed: done.length,
         raised: raised.length,
+        scheduled: scheduled.length,
         openAtMonthEnd: open.length,
         averageTurnaroundHours: averageTurnaround(done),
         totalWorkMinutes: totalWork(done),
@@ -183,6 +199,7 @@ export function buildMonthlyReport(
     monthLabel: monthLabel(month),
     completed: completedInMonth.length,
     raised: raisedInMonth.length,
+    scheduled: scheduledInMonth.length,
     openAtMonthEnd: openAtEnd.length,
     averageTurnaroundHours: averageTurnaround(completedInMonth),
     totalWorkMinutes: totalWork(completedInMonth),
@@ -302,7 +319,14 @@ function daysBetweenIso(from: string, to: string): number {
 export function buildRepeats(jobs: MaintenanceJob[]): RepeatGroup[] {
   const groups = new Map<string, MaintenanceJob[]>();
 
-  jobs.forEach((job) => {
+  /*
+   * Breakdowns only. A unit on a quarterly plan is serviced four times a year
+   * by design, and counting those would put every printer in the estate at the
+   * top of this list as a repeat offender — which is precisely backwards, since
+   * a unit being serviced on time is the one thing this list should not be
+   * worried about. What it exists to surface is a unit that keeps failing.
+   */
+  jobs.filter((job) => jobKindOf(job) === 'problem').forEach((job) => {
     const key = `${job.branchName.toLowerCase()}::${unitKey(job)}`;
     const found = groups.get(key);
     if (found) found.push(job);
@@ -496,7 +520,10 @@ export function buildMaintenanceOverview(
   const trend: TrendPoint[] = months.map((month) => ({
     month,
     label: monthLabel(month).replace(/ \d{4}$/, ''),
-    raised: jobs.filter((j) => monthKeyOf(j.reportedAt) === month).length,
+    // Breakdowns only, so the trend line answers "is this estate deteriorating"
+    raised: jobs.filter(
+      (j) => monthKeyOf(j.reportedAt) === month && jobKindOf(j) === 'problem'
+    ).length,
     completed: jobs.filter((j) => j.completedAt && monthKeyOf(j.completedAt) === month).length,
   }));
 

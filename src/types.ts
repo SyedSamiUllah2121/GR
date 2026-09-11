@@ -374,7 +374,7 @@ export interface InspectionEdit {
  *
  *   admin           full control: every branch, every record, user accounts,
  *                   the checklist, and surprise visits - and the maintenance
- *                   board, so anything a job manager may do, they may do
+ *                   board, so anything a maintenance manager may do, they may do
  *   branch-manager  one branch: its records, and its own Monday inspection
  *   job-manager     the maintenance board across every branch: the repairs
  *                   inspections raise, and the ones reported directly. No
@@ -385,8 +385,15 @@ export interface InspectionEdit {
  * admin, they simply cannot see past their own branch. Permissions are
  * spelled out one at a time in services/permissions.ts rather than inferred
  * from an ordering, because they do not nest cleanly: an inspector may submit
- * a visit at any branch, which a branch manager may not, and a job manager
+ * a visit at any branch, which a branch manager may not, and a maintenance manager
  * works across every branch while seeing none of their inspections.
+ */
+/*
+ * `job-manager` is the Maintenance Manager. The key is the older name and is
+ * deliberately left alone: it is what every account already in a browser's
+ * storage is stored under, and renaming it would strand those accounts on the
+ * next sign-in for no gain a reader would ever see. What people are shown
+ * comes from USER_ROLE_LABEL, which is the only place the name is written.
  */
 export type UserRole = 'admin' | 'branch-manager' | 'job-manager' | 'inspector';
 
@@ -404,7 +411,7 @@ export const USER_ROLE_KEYS: UserRole[] = [
 export const USER_ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Main Admin',
   'branch-manager': 'Branch Manager',
-  'job-manager': 'Job Manager',
+  'job-manager': 'Maintenance Manager',
   inspector: 'Inspector',
 };
 
@@ -472,6 +479,13 @@ export type MaintenanceCategory =
   | 'FIRE_SAFETY'
   | 'STRUCTURAL'
   | 'PEST_CONTROL'
+  /*
+   * Printers, tills and the network behind them. Added with the equipment
+   * register: a printer is the example the operator gave of something that
+   * needs servicing on a clock, and it had nowhere to sit — ELECTRICAL is
+   * about the wiring in the walls, not the machine plugged into it.
+   */
+  | 'IT_EQUIPMENT'
   | 'OTHER';
 
 export const MAINTENANCE_CATEGORY_KEYS: MaintenanceCategory[] = [
@@ -484,6 +498,7 @@ export const MAINTENANCE_CATEGORY_KEYS: MaintenanceCategory[] = [
   'FIRE_SAFETY',
   'STRUCTURAL',
   'PEST_CONTROL',
+  'IT_EQUIPMENT',
   'OTHER',
 ];
 
@@ -497,8 +512,36 @@ export const MAINTENANCE_CATEGORY_LABEL: Record<MaintenanceCategory, string> = {
   FIRE_SAFETY: 'Fire safety',
   STRUCTURAL: 'Building & fabric',
   PEST_CONTROL: 'Pest control',
+  IT_EQUIPMENT: 'IT & printers',
   OTHER: 'Other',
 };
+
+/**
+ * Why a job exists: something broke, or something fell due.
+ *
+ * The distinction is not cosmetic. A breakdown is a failure to be counted
+ * against a branch; a quarterly service falling due is the system working as
+ * intended. Reports that mix them tell you a branch is deteriorating when it
+ * is merely being looked after — which is why `buildRepeats` and the
+ * month-end report both ask this before counting anything.
+ */
+export type MaintenanceJobKind = 'problem' | 'scheduled';
+
+export const MAINTENANCE_KIND_LABEL: Record<MaintenanceJobKind, string> = {
+  problem: 'Problem report',
+  scheduled: 'Scheduled service',
+};
+
+/**
+ * A job's kind, defaulting for records that predate the field.
+ *
+ * Every job already in a browser was raised because something was wrong, so
+ * absent means `problem` — read through this rather than off the field, the
+ * same way `inspectionKindOf` stands in front of an inspection's kind.
+ */
+export function jobKindOf(job: { kind?: MaintenanceJobKind }): MaintenanceJobKind {
+  return job.kind === 'scheduled' ? 'scheduled' : 'problem';
+}
 
 /**
  * Where a job has got to. Never stored — it is read off the timestamps by
@@ -541,12 +584,128 @@ export interface MaintenanceJob {
   resolutionNote: string | null;
   /** What it cost, when that is known. Left out of totals when null. */
   cost: number | null;
-  /** Photo of the fault or the repair. */
+  /**
+   * The fault, in a picture. Carried across from the inspection finding that
+   * raised the job, so whoever picks it up can see what they are going to.
+   */
   photo: string | null;
+  /**
+   * What was found on closing it: the repair itself, and the receipt for what
+   * it cost. Data URIs, the same as the photo above.
+   *
+   * Optional rather than an always-present empty array, because every job in a
+   * browser's storage today predates it — a missing list and an empty one say
+   * the same thing, so nothing has to be rewritten to read them.
+   */
+  completionPhotos?: string[];
 
   /** The inspection finding that raised this, when it came from one. */
   sourceInspectionId?: string;
   sourceItemId?: number;
+
+  /**
+   * Why this job exists. Absent on every job raised before the register
+   * existed, which `jobKindOf` reads as `problem` — they were all breakdowns.
+   */
+  kind?: MaintenanceJobKind;
+  /**
+   * The asset in the register this concerns, when it is one of them.
+   *
+   * `equipment` above stays the job's own words for the unit and is never
+   * replaced by this: jobs raised from an inspection finding fill it from
+   * whatever the inspector typed, and a branch reporting a fault may not know
+   * which asset record it belongs to. This is the link when there is one.
+   */
+  equipmentId?: string;
+  /** The plan that raised this, for a scheduled service. */
+  planId?: string;
+  /** The date this service was due, ISO `YYYY-MM-DD`. Scheduled jobs only. */
+  dueOn?: string;
+}
+
+// ---------------------------------------------------------------------------
+// The equipment register
+// ---------------------------------------------------------------------------
+
+/**
+ * One asset at one branch: a chiller, a split AC, a printer.
+ *
+ * Kept as records rather than as the free text on a job because the same
+ * printer breaking four times is a fact about the printer, and a plan that
+ * services it every three months has to have something to hang off.
+ *
+ * Everything but the name, branch and category is optional, and deliberately
+ * so: the register has to accept a real appliance list as it arrives, with
+ * whatever the operator happens to know about each item. A serial number that
+ * nobody has recorded yet must not stop the asset being tracked.
+ */
+export interface Equipment {
+  id: string;
+  /** Text, like a job's — branches are referred to by name throughout. */
+  branchName: string;
+  /** What it is called on the floor, e.g. "Split AC 2 — dining area". */
+  name: string;
+  /** Which trade looks after it, on the same list a job uses. */
+  category: MaintenanceCategory;
+
+  /** Serial or asset tag, as printed on the unit. */
+  serialNumber: string | null;
+  make: string | null;
+  model: string | null;
+  /** Where in the branch it stands. */
+  location: string | null;
+  /**
+   * When it went in, ISO `YYYY-MM-DD`.
+   *
+   * Also the clock a plan counts from until the first service is recorded, so
+   * an asset installed in January comes due in April on a quarterly plan
+   * rather than three months after somebody happened to type it in.
+   */
+  installedOn: string | null;
+  notes: string | null;
+
+  /**
+   * Intervals this asset keeps instead of its category's, in months, by plan
+   * id. `null` exempts it from that plan entirely — the display fridge that
+   * is on a contract, the printer that is leased and serviced by the lessor.
+   */
+  planOverrides?: Record<string, number | null>;
+
+  /**
+   * Withdrawn assets are archived, never deleted: jobs record the asset they
+   * concerned, and a deleted id would leave that history pointing at nothing.
+   */
+  active: boolean;
+  createdAt: string;
+}
+
+/**
+ * A recurring service, written once per category and applied to every asset
+ * in it — "printers: service every 3 months, toner every 6".
+ *
+ * Per category rather than per asset because that is how the work is actually
+ * decided: nobody sets an interval for each of forty air conditioners, they
+ * decide what air conditioning needs. An asset that genuinely differs carries
+ * an override in `Equipment.planOverrides`, which is the exception the rule
+ * is worth having.
+ */
+export interface MaintenancePlan {
+  id: string;
+  category: MaintenanceCategory;
+  /** What recurs, e.g. "Service" or "Toner refill". */
+  task: string;
+  /** How often, in whole months. */
+  everyMonths: number;
+  /** How urgent the job it raises should be. */
+  priority: Severity;
+  /** What the raised job should tell whoever picks it up. */
+  instructions: string | null;
+  /**
+   * Off without being deleted, so the jobs it has already raised still name
+   * a plan that can be read.
+   */
+  active: boolean;
+  createdAt: string;
 }
 
 export const REASON_GROUPS: Record<ReasonGroup, string[]> = {

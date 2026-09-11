@@ -21,7 +21,7 @@ import { getInspections, subscribeToStorage } from '../services/storage';
 import { getJobs, subscribeToMaintenance } from '../services/maintenanceStore';
 import { formatDate, formatDateTime, formatTimeOnly } from '../services/reportModel';
 import { signOut } from '../services/session';
-import { can, visibleInspections } from '../services/permissions';
+import { can, visibleInspections, visibleJobs } from '../services/permissions';
 import { assignmentsFor, isOverdueAssignment, scheduleLabel } from '../services/assignments';
 import { mondayStatusFor } from '../services/mondaySchedule';
 import { useCurrentUser } from '../hooks/useCurrentUser';
@@ -112,13 +112,14 @@ export const Topbar: React.FC = () => {
     return [];
   }, [user, allBranches]);
 
-  // Jobs go to whoever holds the maintenance module — the admin and the job
-  // manager. Nobody else is shown them, because nobody else can open the
-  // screens these hits and alerts link to.
-  const jobs = useMemo(
-    () => (can(user, 'maintenance.view') ? allJobs : []),
-    [user, allJobs]
-  );
+  /*
+   * Narrowed exactly as the board is, so the alerts and the search agree with
+   * what the screens behind them will show. The admin and the maintenance manager get
+   * every job; a branch manager gets their own branch's repairs, both links
+   * landing somewhere now open to them; an inspector gets none, having no
+   * standing at a branch beyond the visit itself.
+   */
+  const jobs = useMemo(() => visibleJobs(user, allJobs), [user, allJobs]);
 
   // Which panel, if any, is showing. Only one may be open at a time.
   const [open, setOpen] = useState<'search' | 'alerts' | 'user' | null>(null);

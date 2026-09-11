@@ -14,8 +14,30 @@ import {
   Wrench,
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
+import { User } from '../types';
 import { Capability, can } from '../services/permissions';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+
+/**
+ * What a row asks of the signed-in account. A list means any one of them is
+ * enough — the same rule the route table applies, so a row is shown exactly
+ * when the path behind it opens.
+ */
+type Needs = Capability | Capability[];
+
+function holds(user: User | null, needs?: Needs): boolean {
+  if (!needs) return true;
+  return Array.isArray(needs) ? needs.some((c) => can(user, c)) : can(user, needs);
+}
+
+/** One page within a section. */
+interface NavChild {
+  id: string;
+  href: string;
+  label: string;
+  isActive: (p: string) => boolean;
+  needs?: Needs;
+}
 
 interface NavEntry {
   id: string;
@@ -32,10 +54,13 @@ interface NavEntry {
    */
   group: 'work' | 'setup';
   /** What the signed-in account needs to be shown this row. */
-  needs?: Capability;
-  /** Pages within this section, revealed under it. */
-  children?: { id: string; href: string; label: string; isActive: (p: string) => boolean }[];
+  needs?: Needs;
+  /** Pages within this section, revealed under it. Filtered the same way. */
+  children?: NavChild[];
 }
+
+/** A row with its pages narrowed to the account, and led to the first left. */
+type ResolvedEntry = Omit<NavEntry, 'children'> & { children: NavChild[] };
 
 const NAV: NavEntry[] = [
   {
@@ -69,27 +94,54 @@ const NAV: NavEntry[] = [
     icon: Wrench,
     isActive: (p) => p.startsWith('/maintenance'),
     group: 'work',
-    needs: 'maintenance.view',
+    /*
+     * Two standings reach this section, and they are not the same size. The
+     * admin and the maintenance manager hold all of it. A branch manager holds the
+     * job board alone, to raise their branch's repairs on the day they find
+     * them and to follow what becomes of them — so for them the section is a
+     * single page, and the row leads straight to it.
+     */
+    needs: ['maintenance.view', 'maintenance.reportOwnBranch', 'equipment.manage'],
     children: [
       {
         id: 'sidebar-nav-maintenance-overview',
         href: '/maintenance',
         label: 'Overview',
         isActive: (p) => p === '/maintenance',
+        needs: 'maintenance.view',
       },
       {
         id: 'sidebar-nav-maintenance-jobs',
         href: '/maintenance/jobs',
         label: 'Job board',
-        // A job opened from the board still counts as being on it
+        // A job opened from the board still counts as being on it, but the
+        // section's other pages are their own rows and must not light this one
         isActive: (p) =>
-          p === '/maintenance/jobs' || /^\/maintenance\/(?!report$)[^/]+$/.test(p),
+          p === '/maintenance/jobs' ||
+          /^\/maintenance\/(?!report$|equipment$|schedule$)[^/]+$/.test(p),
+        needs: ['maintenance.view', 'maintenance.reportOwnBranch'],
+      },
+      {
+        id: 'sidebar-nav-maintenance-equipment',
+        href: '/maintenance/equipment',
+        label: 'Equipment',
+        isActive: (p) => p === '/maintenance/equipment',
+        // A branch sees its own register; changing it is a separate right
+        needs: ['maintenance.view', 'maintenance.reportOwnBranch'],
+      },
+      {
+        id: 'sidebar-nav-maintenance-schedule',
+        href: '/maintenance/schedule',
+        label: 'Schedule',
+        isActive: (p) => p === '/maintenance/schedule',
+        needs: 'equipment.manage',
       },
       {
         id: 'sidebar-nav-maintenance-report',
         href: '/maintenance/report',
         label: 'Month-end report',
         isActive: (p) => p === '/maintenance/report',
+        needs: 'maintenance.view',
       },
     ],
   },
@@ -138,8 +190,20 @@ export const Sidebar: React.FC = () => {
    * Rows the signed-in account cannot use are not shown at all, rather than
    * shown and refused. An inspector's rail is one row — their visits — which
    * is the whole of what the system asks of them.
+   *
+   * A section's pages are narrowed by the same rule, and the row is then
+   * pointed at the first one left rather than at a fixed page: a section
+   * whose usual landing page is out of reach still has to lead somewhere the
+   * account can go. Maintenance is where that earns its keep — the admin
+   * lands on the overview, a branch manager on the job board, which is the
+   * only page of it that is theirs.
    */
-  const entries = NAV.filter((entry) => !entry.needs || can(user, entry.needs));
+  const entries: ResolvedEntry[] = NAV.filter((entry) => holds(user, entry.needs)).map(
+    (entry) => {
+      const children = entry.children?.filter((child) => holds(user, child.needs)) ?? [];
+      return { ...entry, children, href: children[0]?.href ?? entry.href };
+    }
+  );
 
   /*
    * Read straight in the initialiser rather than in an effect. Safe here
@@ -267,12 +331,19 @@ export const Sidebar: React.FC = () => {
  * place whichever screen you are on.
  */
 const NavItem: React.FC<{
-  entry: NavEntry;
+  entry: ResolvedEntry;
   active: boolean;
   pathname: string;
   collapsed: boolean;
 }> = ({ entry, active, pathname, collapsed }) => {
   const { href, id, label, icon: Icon, children } = entry;
+
+  /*
+   * A submenu of one is furniture — the row already leads to that page, and
+   * the chevron would promise a choice there is none of. So a section only
+   * opens where its pages outnumber the row.
+   */
+  const hasSubmenu = children.length > 1;
 
   /*
    * A section opens itself when you are inside it, and can be opened from
@@ -294,7 +365,7 @@ const NavItem: React.FC<{
           id={id}
           href={href}
           aria-current={active ? 'page' : undefined}
-          onClick={() => children && setExpanded(true)}
+          onClick={() => hasSubmenu && setExpanded(true)}
           // Collapsed, the label is gone, so the title carries it on hover
           title={collapsed ? label : undefined}
           className={`flex-1 min-w-0 flex items-center gap-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors cursor-pointer ${
@@ -317,7 +388,7 @@ const NavItem: React.FC<{
           The submenu chevron goes when the rail narrows: there is no room for
           it, and no room for the pages it would reveal either.
         */}
-        {children && !collapsed && (
+        {hasSubmenu && !collapsed && (
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
@@ -332,7 +403,7 @@ const NavItem: React.FC<{
         )}
       </div>
 
-      {children && expanded && !collapsed && (
+      {hasSubmenu && expanded && !collapsed && (
         <ul className="hidden md:block mt-1 ml-[1.35rem] pl-3.5 border-l border-white/15 space-y-0.5">
           {children.map((child) => {
             const childActive = child.isActive(pathname);

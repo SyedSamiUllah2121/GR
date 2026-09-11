@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { Camera, CheckCircle2, Loader2, Receipt, Trash2 } from 'lucide-react';
 import { MaintenanceJob } from '../types';
 import { completeJob, getLastPerson, rememberPerson } from '../services/maintenanceStore';
+import { approximateBytes, formatBytes, readImageFile } from '../services/photoFile';
 
 const inputClass =
   'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
@@ -12,11 +13,25 @@ const labelClass =
   'block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5';
 
 /**
+ * How many photographs one job may carry.
+ *
+ * A cap rather than no cap because these all sit in localStorage next to the
+ * inspection records — a handful is enough to show the repair and the receipt,
+ * and past that the store is being used as a photo album.
+ */
+const MAX_PHOTOS = 6;
+
+/**
  * Closes a job off.
  *
  * Only "what was done" is required — that is the line the month-end report
  * actually reads back. Who attended is remembered from last time so it is
  * usually already filled in, and cost is left blank whenever it is not known.
+ *
+ * Photographs are optional but are the reason the rest can be trusted: a
+ * receipt is what turns a typed-in cost into a figure someone can check, and
+ * a picture of the finished work is what turns "replaced the joint" into
+ * something a branch can see without going to look.
  */
 export const EndMaintenanceDialog: React.FC<{
   job: MaintenanceJob;
@@ -26,7 +41,44 @@ export const EndMaintenanceDialog: React.FC<{
   const [attendedBy, setAttendedBy] = useState(() => getLastPerson());
   const [resolutionNote, setResolutionNote] = useState('');
   const [cost, setCost] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [reading, setReading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const photoBytes = photos.reduce((sum, p) => sum + approximateBytes(p), 0);
+
+  /*
+   * Files are taken one at a time and shrunk before they are held, so what is
+   * in state is already what would be stored — the size shown under the
+   * thumbnails is the real cost, not the size of the originals.
+   */
+  const addPhotos = async (files: FileList) => {
+    setReading(true);
+    const room = MAX_PHOTOS - photos.length;
+    const picked = Array.from(files).slice(0, room);
+    const skipped = files.length - picked.length;
+
+    const added: string[] = [];
+    const failures: string[] = [];
+    for (const file of picked) {
+      const { dataUrl, error } = await readImageFile(file);
+      if (dataUrl) added.push(dataUrl);
+      else if (error) failures.push(error);
+    }
+
+    if (added.length > 0) setPhotos((current) => [...current, ...added]);
+    setErrors((current) => {
+      const next = { ...current };
+      delete next.photos;
+      if (failures.length > 0) next.photos = failures[0];
+      else if (skipped > 0) next.photos = `Only ${MAX_PHOTOS} photos can go on one job`;
+      return next;
+    });
+    setReading(false);
+  };
+
+  const removePhoto = (index: number) =>
+    setPhotos((current) => current.filter((_, i) => i !== index));
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,8 +102,23 @@ export const EndMaintenanceDialog: React.FC<{
 
     if (attendedBy.trim()) rememberPerson(attendedBy);
 
-    const saved = completeJob(job, { attendedBy, resolutionNote, cost: costValue });
-    if (saved) onDone(saved);
+    const { job: saved, error } = completeJob(job, {
+      attendedBy,
+      resolutionNote,
+      cost: costValue,
+      photos,
+    });
+
+    /*
+     * A refusal is shown rather than swallowed. The one that will actually
+     * happen is the store being full, and telling someone their repair was
+     * recorded when nothing was written is the worst outcome available here.
+     */
+    if (!saved) {
+      setErrors({ form: error ?? 'Could not close this job' });
+      return;
+    }
+    onDone(saved);
   };
 
   return (
@@ -116,6 +183,92 @@ export const EndMaintenanceDialog: React.FC<{
             </div>
           </div>
 
+          {/* Receipts and the finished work */}
+          <div className="border-t border-[#EFEFF2] pt-4">
+            <span className={labelClass}>
+              Photos <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+            </span>
+            <p className="-mt-1 mb-2.5 text-[11px] text-[#6B6F76]">
+              The receipt, and the work once it is finished. Up to {MAX_PHOTOS}.
+            </p>
+
+            {photos.length > 0 && (
+              <ul className="flex flex-wrap gap-2.5 mb-3">
+                {photos.map((photo, index) => (
+                  <li key={index} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo}
+                      alt={`Attached photo ${index + 1}`}
+                      className="w-20 h-20 object-cover rounded-md border border-[#E6E7EB]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(index)}
+                      aria-label={`Remove photo ${index + 1}`}
+                      title="Remove this photo"
+                      className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white border border-[#E6E7EB] shadow-xs flex items-center justify-center text-[#C8202D] hover:bg-[#FDECEE] transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <label
+                htmlFor="mnt-photo-upload"
+                aria-disabled={photos.length >= MAX_PHOTOS || reading}
+                className={`inline-flex items-center gap-2 px-3.5 py-2 border text-xs font-semibold rounded-md transition-colors ${
+                  photos.length >= MAX_PHOTOS || reading
+                    ? 'bg-[#F6F6F8] border-[#E6E7EB] text-[#9CA1A9] cursor-not-allowed'
+                    : 'bg-white hover:bg-[#F6F6F8] border-[#E6E7EB] text-[#17181D] cursor-pointer'
+                }`}
+              >
+                {reading ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-[#6B6F76]" />
+                ) : (
+                  <Camera className="w-4 h-4 text-[#6B6F76]" />
+                )}
+                <span>{reading ? 'Adding…' : 'Add photos'}</span>
+                <input
+                  id="mnt-photo-upload"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  disabled={photos.length >= MAX_PHOTOS || reading}
+                  className="hidden"
+                  // Cleared on open so the same file can be picked twice
+                  onClick={(e) => {
+                    (e.target as HTMLInputElement).value = '';
+                  }}
+                  onChange={(e) => {
+                    const { files } = e.target;
+                    if (files && files.length > 0) void addPhotos(files);
+                  }}
+                />
+              </label>
+
+              {photos.length > 0 && (
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-[#6B6F76]">
+                  <Receipt className="w-3.5 h-3.5" />
+                  {photos.length} of {MAX_PHOTOS} • {formatBytes(photoBytes)}
+                </span>
+              )}
+            </div>
+
+            {errors.photos && (
+              <p className="text-xs font-semibold text-[#C8202D] mt-2">{errors.photos}</p>
+            )}
+          </div>
+
+          {errors.form && (
+            <p className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
+              {errors.form}
+            </p>
+          )}
+
           <div className="pt-3 border-t border-[#E6E7EB] flex items-center justify-end gap-3">
             <button
               type="button"
@@ -127,7 +280,8 @@ export const EndMaintenanceDialog: React.FC<{
             <button
               id="mnt-complete-btn"
               type="submit"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer"
+              disabled={reading}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] disabled:bg-[#E0A0A6] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Mark done</span>

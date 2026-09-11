@@ -6,6 +6,7 @@ import {Sidebar} from './Sidebar';
 import {Topbar} from './Topbar';
 import {ToastProvider} from './ToastProvider';
 import {getInspections} from '../services/storage';
+import {sweepSchedule} from '../services/maintenanceSchedule';
 import {canAccessPath, homePathFor} from '../services/permissions';
 import {useCurrentUser} from '../hooks/useCurrentUser';
 import {useMounted} from '../hooks/useMounted';
@@ -33,6 +34,32 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
   useEffect(() => {
     getInspections();
   }, []);
+
+  /*
+   * Bring the board up to date with the servicing schedule.
+   *
+   * There is no server and nothing runs on a timer, so "every three months"
+   * has to be worked out by somebody, and the only somebody available is the
+   * app being opened. Once per mount is enough: a service that came due while
+   * nobody was looking is raised the next time anyone signs in, dated the day
+   * it actually fell due rather than the day it was noticed.
+   *
+   * Safe to run on every mount and in every open tab — each job it writes
+   * carries an id derived from its plan, its asset and its due date, so a
+   * second run finds the work already there and writes nothing new.
+   */
+  useEffect(() => {
+    if (!user) return;
+    const { raised, failed } = sweepSchedule();
+    if (raised.length > 0) {
+      console.info(`Maintenance schedule: raised ${raised.length} job(s) now due`);
+    }
+    if (failed > 0) {
+      console.error(
+        `Maintenance schedule: ${failed} due job(s) could not be stored — the browser store is full`
+      );
+    }
+  }, [user]);
 
   const allowed = user !== null && canAccessPath(user, pathname);
 

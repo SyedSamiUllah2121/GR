@@ -156,38 +156,59 @@ export const DashboardScreen: React.FC = () => {
           </p>
         </div>
 
-        {/*
-          The one thing a branch manager has to do this week, on the screen
-          they land on. A link rather than the full card the inspections page
-          carries — this page reports, and the doing belongs over there.
-        */}
-        {monday && (
-          <Link
-            id="dashboard-monday-link"
-            href="/inspections"
-            className={`shrink-0 inline-flex items-center gap-2.5 px-4 py-2.5 rounded-lg border text-xs font-bold transition-colors ${
-              monday.done
-                ? 'bg-[#EAF6EF] border-[#157F4B]/25 text-[#12643C] hover:bg-[#DFF1E7]'
-                : monday.overdue
-                  ? 'bg-[#C8202D] border-[#C8202D] text-white hover:bg-[#A81823]'
-                  : 'bg-[#FDF3E2] border-[#B4740A]/30 text-[#8A5A08] hover:bg-[#FBEBD2]'
-            }`}
-          >
-            <CalendarClock className="w-4 h-4 shrink-0" />
-            <span>
-              {monday.done
-                ? 'Monday inspection done this week'
-                : monday.inProgress
-                  ? 'Monday inspection unfinished'
+        <div className="shrink-0 flex flex-wrap items-center gap-2">
+          {/*
+            The one thing a branch manager has to do this week, on the screen
+            they land on. A link rather than the full card the inspections page
+            carries — this page reports, and the doing belongs over there.
+          */}
+          {monday && (
+            <Link
+              id="dashboard-monday-link"
+              href="/inspections"
+              className={`shrink-0 inline-flex items-center gap-2.5 px-4 py-2.5 rounded-lg border text-xs font-bold transition-colors ${
+                monday.done
+                  ? 'bg-[#EAF6EF] border-[#157F4B]/25 text-[#12643C] hover:bg-[#DFF1E7]'
                   : monday.overdue
-                    ? `Monday inspection ${monday.daysLate} day${
-                        monday.daysLate === 1 ? '' : 's'
-                      } late`
-                    : 'Monday inspection due today'}
-            </span>
-            <ArrowRight className="w-3.5 h-3.5 shrink-0" />
-          </Link>
-        )}
+                    ? 'bg-[#C8202D] border-[#C8202D] text-white hover:bg-[#A81823]'
+                    : 'bg-[#FDF3E2] border-[#B4740A]/30 text-[#8A5A08] hover:bg-[#FBEBD2]'
+              }`}
+            >
+              <CalendarClock className="w-4 h-4 shrink-0" />
+              <span>
+                {monday.done
+                  ? 'Monday inspection done this week'
+                  : monday.inProgress
+                    ? 'Monday inspection unfinished'
+                    : monday.overdue
+                      ? `Monday inspection ${monday.daysLate} day${
+                          monday.daysLate === 1 ? '' : 's'
+                        } late`
+                      : 'Monday inspection due today'}
+              </span>
+              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+            </Link>
+          )}
+
+          {/*
+            Equipment does not wait for Monday. A manager who finds a fault on
+            the Tuesday gets to the board from the screen they land on, rather
+            than carrying it in their head until the round comes round again.
+            Offered to the role that reports into maintenance without running
+            it — the admin and the maintenance manager live on that board already.
+          */}
+          {can(user, 'maintenance.reportOwnBranch') && (
+            <Link
+              id="dashboard-report-repair-link"
+              href="/maintenance/jobs"
+              className="shrink-0 inline-flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-[#E6E7EB] bg-white text-xs font-bold text-[#17181D] hover:bg-[#F6F6F8] transition-colors"
+            >
+              <Wrench className="w-4 h-4 shrink-0" />
+              <span>Report a repair</span>
+              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+            </Link>
+          )}
+        </div>
       </div>
 
       {model.empty ? (

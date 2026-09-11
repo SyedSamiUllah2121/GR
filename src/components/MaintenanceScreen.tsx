@@ -5,15 +5,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
+  CalendarClock,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock,
+  Lock,
   Play,
   Repeat,
   Plus,
   Search,
   Square,
+  Store,
   X,
 } from 'lucide-react';
 import {
@@ -21,9 +24,11 @@ import {
   MAINTENANCE_CATEGORY_LABEL,
   MaintenanceCategory,
   MaintenanceJob,
+  MaintenanceJobKind,
   MaintenanceStatus,
   SEVERITY_KEYS,
   Severity,
+  jobKindOf,
 } from '../types';
 import { SEVERITY_LABEL } from '../services/priority';
 import {
@@ -44,7 +49,9 @@ import { EndMaintenanceDialog } from './EndMaintenanceDialog';
 import { JobTimesDialog } from './JobTimesDialog';
 import { useToast } from './ToastProvider';
 import { useBranches } from '../hooks/useBranches';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { activeBranches } from '../services/branchStore';
+import { can, canManageJobs, fixedBranchFor, visibleJobs } from '../services/permissions';
 
 /** 'repeats' is a different shape of list, not another status slice. */
 type Filter = 'open' | MaintenanceStatus | 'all' | 'repeats';
@@ -52,19 +59,50 @@ type Filter = 'open' | MaintenanceStatus | 'all' | 'repeats';
 export const MaintenanceScreen: React.FC = () => {
   const router = useRouter();
   const showToast = useToast();
-  const [jobs, setJobs] = useState<MaintenanceJob[]>(() => getJobs());
+  const user = useCurrentUser();
+  const [allJobs, setAllJobs] = useState<MaintenanceJob[]>(() => getJobs());
   const [filter, setFilter] = useState<Filter>('open');
   const [branchFilter, setBranchFilter] = useState<string>('all');
+  /*
+   * Breakdowns and planned servicing share a board because they share a
+   * queue — the same person does both, out of the same day. They are split
+   * by a filter rather than into two screens for the same reason.
+   */
+  const [kindFilter, setKindFilter] = useState<'all' | MaintenanceJobKind>('all');
   const [query, setQuery] = useState('');
   const [logging, setLogging] = useState(false);
   const [ending, setEnding] = useState<MaintenanceJob | null>(null);
   const [starting, setStarting] = useState<MaintenanceJob | null>(null);
 
   useEffect(() => {
-    const refresh = () => setJobs(getJobs());
+    const refresh = () => setAllJobs(getJobs());
     refresh();
     return subscribeToMaintenance(refresh);
   }, []);
+
+  /*
+   * Narrowed to the account before anything else looks at it. The tabs, the
+   * counts, the search and the repeat list all read `jobs`, so scoping once
+   * here is what holds a branch manager's board to their own branch — rather
+   * than asking each of those to remember, which is how a branch leaks.
+   */
+  const jobs = useMemo(() => visibleJobs(user, allJobs), [user, allJobs]);
+
+  /*
+   * Starting, ending and re-timing work belong to the people who run the
+   * board. A branch manager raises a repair and watches it; recording that it
+   * was carried out is not theirs to do, so the buttons that would are not
+   * shown rather than shown and refused.
+   */
+  const mayManage = canManageJobs(user);
+
+  /*
+   * The one branch this board covers, when it covers one. Asked of the same
+   * capability the report form asks, rather than of `mayManage`, so the
+   * heading and the branch field can never disagree about whose board this
+   * is — they are one fact, not two that happen to line up.
+   */
+  const scopedTo = can(user, 'maintenance.view') ? null : fixedBranchFor(user);
 
   const board = useMemo(() => buildBoard(jobs), [jobs]);
 
@@ -115,7 +153,12 @@ export const MaintenanceScreen: React.FC = () => {
         ? byStatus
         : byStatus.filter((job) => job.branchName === branchFilter);
 
-    return byBranch.filter(matchesQuery).sort((a, b) => {
+    const byKind =
+      kindFilter === 'all'
+        ? byBranch
+        : byBranch.filter((job) => jobKindOf(job) === kindFilter);
+
+    return byKind.filter(matchesQuery).sort((a, b) => {
       const aDone = !!a.completedAt;
       const bDone = !!b.completedAt;
       if (aDone !== bDone) return aDone ? 1 : -1;
@@ -124,7 +167,7 @@ export const MaintenanceScreen: React.FC = () => {
       if (rank[a.priority] !== rank[b.priority]) return rank[a.priority] - rank[b.priority];
       return a.reportedAt.localeCompare(b.reportedAt);
     });
-  }, [jobs, filter, branchFilter, matchesQuery]);
+  }, [jobs, filter, branchFilter, kindFilter, matchesQuery]);
 
 
 
@@ -143,6 +186,8 @@ export const MaintenanceScreen: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-[#17181D]">Maintenance</h2>
           <p className="text-[#6B6F76] text-xs mt-0.5">
+            {/* Named, so a board covering one branch never reads as the estate */}
+            {scopedTo && <span className="font-semibold text-[#17181D]">{scopedTo} • </span>}
             {board.openCount === 0
               ? 'Nothing outstanding'
               : `${board.openCount} job${board.openCount === 1 ? '' : 's'} outstanding${
@@ -216,6 +261,16 @@ export const MaintenanceScreen: React.FC = () => {
                 </button>
               )}
             </div>
+            <select
+              value={kindFilter}
+              onChange={(e) => setKindFilter(e.target.value as 'all' | MaintenanceJobKind)}
+              aria-label="Filter by kind"
+              className="px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+            >
+              <option value="all">Problems &amp; services</option>
+              <option value="problem">Problems only</option>
+              <option value="scheduled">Scheduled only</option>
+            </select>
           {board.branches.length > 1 && (
             <select
               value={branchFilter}
@@ -277,6 +332,7 @@ export const MaintenanceScreen: React.FC = () => {
                 onOpen={() => router.push(`/maintenance/${job.id}`)}
                 onStart={() => setStarting(job)}
                 onEnd={() => setEnding(job)}
+                mayManage={mayManage}
               />
             ))}
           </div>
@@ -434,7 +490,9 @@ const JobRow: React.FC<{
   onOpen: () => void;
   onStart: () => void;
   onEnd: () => void;
-}> = ({ job, onOpen, onStart, onEnd }) => {
+  /** Whether this account may move the job along from the row. */
+  mayManage: boolean;
+}> = ({ job, onOpen, onStart, onEnd, mayManage }) => {
   const status = statusOf(job);
   const waiting = daysOpen(job);
 
@@ -449,6 +507,13 @@ const JobRow: React.FC<{
           <span className="text-sm font-bold text-[#17181D]">{job.title}</span>
           <PriorityBadge severity={job.priority} size="sm" />
           <StatusPill status={status} />
+          {/* Only the planned ones are marked: a breakdown is the ordinary case */}
+          {jobKindOf(job) === 'scheduled' && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#EEF2FB] text-[#33499B]">
+              <CalendarClock className="w-3 h-3" />
+              Scheduled
+            </span>
+          )}
         </div>
         <p className="text-xs text-[#6B6F76] mt-1">
           {job.branchName}
@@ -477,9 +542,9 @@ const JobRow: React.FC<{
         )}
       </button>
 
-      {/* The next step, right here on the row */}
+      {/* The next step, right here on the row — for whoever takes it */}
       <div className="flex items-center gap-2 shrink-0">
-        {status === 'reported' && (
+        {mayManage && status === 'reported' && (
           <button
             type="button"
             onClick={onStart}
@@ -490,7 +555,7 @@ const JobRow: React.FC<{
             <span>Start</span>
           </button>
         )}
-        {status === 'in-progress' && (
+        {mayManage && status === 'in-progress' && (
           <button
             type="button"
             onClick={onEnd}
@@ -529,17 +594,50 @@ const labelClass =
  * useful but not worth blocking on, so it sits behind "Add more detail".
  *
  * "Start now" saves and stamps the start time in one action, for the common
- * case where the problem is being written up as the work begins.
+ * case where the problem is being written up as the work begins. Offered only
+ * to the people who run the board — a branch manager reports the fault and
+ * stops there, because they are not the ones who will be doing the work.
  */
 const ReportProblemDialog: React.FC<{
   onClose: () => void;
   onSaved: (job: MaintenanceJob, started: boolean) => void;
 }> = ({ onClose, onSaved }) => {
+  const user = useCurrentUser();
   const branches = activeBranches(useBranches());
-  const [branchName, setBranchName] = useState(() => branches[0]?.name ?? '');
+  const mayManage = canManageJobs(user);
+
+  /*
+   * Who may file against a branch other than their own. Asked for by name
+   * rather than read off `fixedBranchFor` returning nothing — that function
+   * also returns nothing for a maintenance manager, who may choose, and for an
+   * inspector, who may not, so the two questions only look alike. The
+   * inspection form asks its version of this the same way, and for the same
+   * reason: a rule enforced by coincidence is one that quietly stops being
+   * enforced.
+   */
+  const mayPickBranch = can(user, 'maintenance.view');
+
+  /*
+   * A branch manager reports against their own branch and no other. Read from
+   * the account rather than held in state, so it stays right even if their
+   * branch is changed while the form is open.
+   */
+  const ownBranch = fixedBranchFor(user);
+  const [selectedBranch, setSelectedBranch] = useState(() => branches[0]?.name ?? '');
+  const branchName = mayPickBranch ? selectedBranch : ownBranch ?? '';
+
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<Severity>('medium');
-  const [reportedBy, setReportedBy] = useState(() => getLastPerson());
+  /*
+   * Who is reporting. Someone filing against their own branch is the person
+   * the job belongs to, so their account name is the truthful attribution —
+   * the name remembered from last time could be whoever used this browser
+   * before them. Where the account is a shared desk rather than a person, the
+   * remembered name is the better guess. Editable either way.
+   */
+  const [reportedBy, setReportedBy] = useState(
+    () => (mayPickBranch ? getLastPerson() || user?.name : user?.name || getLastPerson()) ?? ''
+  );
 
   const [showMore, setShowMore] = useState(false);
   const [equipment, setEquipment] = useState('');
@@ -552,6 +650,15 @@ const ReportProblemDialog: React.FC<{
     const next: Record<string, string> = {};
     if (!title.trim()) next.title = 'Say what the problem is';
     if (!reportedBy.trim()) next.reportedBy = 'Your name';
+    /*
+     * A job with no branch belongs to nobody and would show on no board.
+     * Accounts are not meant to reach this — a branch manager without a
+     * branch is refused at the point of creation — but a job filed into
+     * nowhere is worse than a message saying so.
+     */
+    if (!branchName) {
+      next.branch = 'No branch is set on your account — ask the admin to set one';
+    }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
@@ -617,21 +724,48 @@ const ReportProblemDialog: React.FC<{
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="mnt-branch" className={labelClass}>
-                Branch
-              </label>
-              <select
-                id="mnt-branch"
-                value={branchName}
-                onChange={(e) => setBranchName(e.target.value)}
-                className={inputClass}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.name}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+              {/*
+                A branch manager has no choice to make here, so they get the
+                name and a padlock rather than a dropdown holding one option —
+                which would imply there was an alternative.
+              */}
+              {mayPickBranch ? (
+                <>
+                  <label htmlFor="mnt-branch" className={labelClass}>
+                    Branch
+                  </label>
+                  <select
+                    id="mnt-branch"
+                    value={branchName}
+                    onChange={(e) => setSelectedBranch(e.target.value)}
+                    className={inputClass}
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.name}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <>
+                  <span className={labelClass}>Branch</span>
+                  <p
+                    id="mnt-fixed-branch"
+                    className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D]"
+                  >
+                    <Store className="w-4 h-4 text-[#6B6F76] shrink-0" />
+                    <span className="truncate">{ownBranch ?? 'No branch set'}</span>
+                    <Lock className="w-3.5 h-3.5 text-[#9CA1A9] ml-auto shrink-0" />
+                  </p>
+                  <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+                    You report for your own branch — this cannot be changed.
+                  </p>
+                  {errors.branch && (
+                    <p className="text-xs font-semibold text-[#C8202D] mt-1">{errors.branch}</p>
+                  )}
+                </>
+              )}
             </div>
             <div>
               <label htmlFor="mnt-reporter" className={labelClass}>
@@ -746,19 +880,25 @@ const ReportProblemDialog: React.FC<{
             <button
               id="mnt-save-btn"
               type="submit"
-              className="px-4 py-2.5 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer"
+              className={
+                mayManage
+                  ? 'px-4 py-2.5 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer'
+                  : 'inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs'
+              }
             >
               Report it
             </button>
-            <button
-              id="mnt-save-start-btn"
-              type="button"
-              onClick={() => save(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
-            >
-              <Play className="w-4 h-4" />
-              <span>Report &amp; start now</span>
-            </button>
+            {mayManage && (
+              <button
+                id="mnt-save-start-btn"
+                type="button"
+                onClick={() => save(true)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
+              >
+                <Play className="w-4 h-4" />
+                <span>Report &amp; start now</span>
+              </button>
+            )}
           </div>
         </form>
       </div>

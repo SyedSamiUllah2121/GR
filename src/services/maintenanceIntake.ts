@@ -66,6 +66,7 @@ const CATEGORY_HINTS: [MaintenanceCategory, RegExp][] = [
   ['PLUMBING', /plumb|drain|tap\b|sink|water|leak|plug|toilet|wash basin|geyser/i],
   ['ELECTRICAL', /electric|wiring|socket|switch|light|bulb|power|voltage/i],
   ['PEST_CONTROL', /pest|rodent|insect|cockroach|fly killer|bait/i],
+  ['IT_EQUIPMENT', /printer|toner|cartridge|\bpos\b|\btill\b|terminal|router|wi.?fi|network|cctv|monitor|scanner/i],
   ['STRUCTURAL', /wall|floor|ceiling|tile|door|window|shelf|shelving|paint|grout|fabric/i],
 ];
 

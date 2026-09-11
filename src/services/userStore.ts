@@ -25,11 +25,11 @@ const EVENT = 'inspection_log_users_change';
  * Bumped whenever a seed account is added, which happens when the system
  * gains a role. Without it a new role is invisible to every installation
  * already in use: the seeds are only ever written to an *empty* store, so an
- * operator would be told a Job Manager exists and find no account to sign in
- * as, no matter how many times they reloaded.
+ * operator would be told a Maintenance Manager exists and find no account to
+ * sign in as, no matter how many times they reloaded.
  *
  *   1  the original set: one admin, four branch managers, three inspectors
- *   2  adds the job manager over the maintenance board
+ *   2  adds the maintenance manager over the maintenance board
  *   3  adds a manager for each of the three branches opened alongside it,
  *      since a branch nobody manages cannot run its own Monday round
  */
@@ -141,7 +141,7 @@ export const SEED_USERS: User[] = [
   },
   {
     /*
-     * One job manager, holding the maintenance board for every branch. Not
+     * One maintenance manager, holding the maintenance board for every branch. Not
      * one per branch: a repair is not a branch's private business, and the
      * same contractor covers the estate.
      */
@@ -372,7 +372,8 @@ function validate(draft: UserDraft, users: User[], ignoreId?: string): string | 
  */
 export const MANAGED_ROLES: UserRole[] = ['branch-manager', 'job-manager', 'inspector'];
 
-/** "a Branch Manager, a Job Manager or an Inspector" — for a refusal to name. */
+/** "a Branch Manager, a Maintenance Manager or an Inspector" — for a refusal
+ *  to name. Built from USER_ROLE_LABEL, so renaming a role renames it here. */
 function managedRoleList(): string {
   const labels = MANAGED_ROLES.map((role) => USER_ROLE_LABEL[role]);
   const last = labels[labels.length - 1];

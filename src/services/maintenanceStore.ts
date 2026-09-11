@@ -39,15 +39,25 @@ export function getJobById(id: string): MaintenanceJob | null {
   return getJobs().find((job) => job.id === id) ?? null;
 }
 
-export function saveJob(job: MaintenanceJob): void {
+/**
+ * Writes the job back. Returns whether it actually landed.
+ *
+ * The return value earns its keep now that jobs carry photographs: a write
+ * that overruns the storage quota throws, and a caller that assumed success
+ * would tell someone their repair was recorded when nothing had been
+ * written. Callers storing only text can go on ignoring it.
+ */
+export function saveJob(job: MaintenanceJob): boolean {
   try {
     const all = getJobs();
     const idx = all.findIndex((j) => j.id === job.id);
     const next = idx >= 0 ? all.map((j) => (j.id === job.id ? job : j)) : [job, ...all];
     localStorage.setItem(KEY, JSON.stringify(next));
     notify();
+    return true;
   } catch (err) {
     console.error('Failed to save maintenance job:', err);
+    return false;
   }
 }
 
@@ -154,26 +164,43 @@ export interface CompletionDetails {
   attendedBy: string;
   resolutionNote: string;
   cost: number | null;
+  /** The repair and the receipt, in pictures. Empty when none were taken. */
+  photos: string[];
 }
 
 /**
  * Marks work as finished. Refused unless it has been started, so a job can
  * never carry an end time without a start time.
+ *
+ * Returns the reason rather than a bare null, the same shape `setJobTimes`
+ * uses, because there are now two ways to fail and they need different words:
+ * work that was never started cannot be finished, and a write carrying
+ * photographs can overrun what the browser will store. Neither is something
+ * to report as done.
  */
 export function completeJob(
   job: MaintenanceJob,
   details: CompletionDetails
-): MaintenanceJob | null {
-  if (!job.startedAt || job.completedAt) return null;
+): { job?: MaintenanceJob; error?: string } {
+  if (!job.startedAt) return { error: 'This job has not been started yet' };
+  if (job.completedAt) return { error: 'This job is already finished' };
+
   const next: MaintenanceJob = {
     ...job,
     completedAt: new Date().toISOString(),
     attendedBy: details.attendedBy.trim() || null,
     resolutionNote: details.resolutionNote.trim() || null,
     cost: details.cost,
+    completionPhotos: details.photos.length > 0 ? details.photos : undefined,
   };
-  saveJob(next);
-  return next;
+
+  if (!saveJob(next)) {
+    return {
+      error:
+        'There is no room left in this browser to store that. Remove a photo and try again.',
+    };
+  }
+  return { job: next };
 }
 
 /** How long a running job has been going, in minutes. */
@@ -249,7 +276,14 @@ export function setJobTimes(
   return { job: next };
 }
 
-/** Undoes a start, for when it was pressed by mistake. */
+/**
+ * Undoes a start, for when it was pressed by mistake.
+ *
+ * Everything recorded on closing goes with it, the photographs included: they
+ * are evidence of a repair this job is no longer claiming to have had, and
+ * leaving them behind would attach a finished job's receipt to an unstarted
+ * one.
+ */
 export function reopenJob(job: MaintenanceJob): MaintenanceJob {
   const next: MaintenanceJob = {
     ...job,
@@ -258,6 +292,7 @@ export function reopenJob(job: MaintenanceJob): MaintenanceJob {
     attendedBy: null,
     resolutionNote: null,
     cost: null,
+    completionPhotos: undefined,
   };
   saveJob(next);
   return next;

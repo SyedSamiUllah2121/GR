@@ -115,9 +115,15 @@ export const MaintenanceReportScreen: React.FC = () => {
 
       <div className="print-container space-y-5">
         {/* Headline figures for the month */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <Stat label="Jobs completed" value={String(report.completed)} tone="good" />
+          {/*
+            Breakdowns and planned work stand side by side rather than added
+            together. A month with twelve services and one breakdown is a good
+            month, and a single "13 raised" would read as a bad one.
+          */}
           <Stat label="Problems raised" value={String(report.raised)} />
+          <Stat label="Services due" value={String(report.scheduled)} />
           <Stat
             label="Average report to fix"
             value={formatTurnaround(report.averageTurnaroundHours)}
@@ -133,7 +139,7 @@ export const MaintenanceReportScreen: React.FC = () => {
           />
         </div>
 
-        {report.completed === 0 && report.raised === 0 ? (
+        {report.completed === 0 && report.raised === 0 && report.scheduled === 0 ? (
           <div className="bg-white border border-[#E6E7EB] rounded-lg p-10 text-center shadow-xs">
             <p className="text-sm font-bold text-[#17181D]">
               No maintenance activity in {report.monthLabel}
@@ -159,7 +165,8 @@ export const MaintenanceReportScreen: React.FC = () => {
                     <tr>
                       <Th>Branch</Th>
                       <Th align="right">Completed</Th>
-                      <Th align="right">Raised</Th>
+                      <Th align="right">Problems</Th>
+                      <Th align="right">Services</Th>
                       <Th align="right">Open at month end</Th>
                       <Th align="right">Avg report to fix</Th>
                       <Th align="right">Time on jobs</Th>
@@ -176,6 +183,7 @@ export const MaintenanceReportScreen: React.FC = () => {
                           {branch.completed}
                         </Td>
                         <Td align="right">{branch.raised}</Td>
+                        <Td align="right">{branch.scheduled}</Td>
                         <Td
                           align="right"
                           className={branch.openAtMonthEnd > 0 ? 'text-[#B4740A]' : undefined}
@@ -204,6 +212,9 @@ export const MaintenanceReportScreen: React.FC = () => {
                       </Td>
                       <Td align="right" strong>
                         {report.raised}
+                      </Td>
+                      <Td align="right" strong>
+                        {report.scheduled}
                       </Td>
                       <Td align="right" strong>
                         {report.openAtMonthEnd}
