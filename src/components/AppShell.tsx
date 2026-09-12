@@ -7,6 +7,8 @@ import {Topbar} from './Topbar';
 import {ToastProvider} from './ToastProvider';
 import {getInspections} from '../services/storage';
 import {sweepSchedule} from '../services/maintenanceSchedule';
+import {ensureGeneralPlans} from '../services/maintenancePlanStore';
+import {getCategories} from '../services/categoryStore';
 import {canAccessPath, homePathFor} from '../services/permissions';
 import {useCurrentUser} from '../hooks/useCurrentUser';
 import {useMounted} from '../hooks/useMounted';
@@ -50,6 +52,15 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
    */
   useEffect(() => {
     if (!user) return;
+    /*
+     * Every category has a general-maintenance plan, and this is what makes
+     * that true — a category added yesterday starts raising work today without
+     * anybody being sent to write its plan by hand. Idempotent and matched on
+     * a derived id, so it runs before the sweep rather than beside it: the
+     * sweep can only raise what a plan exists for.
+     */
+    ensureGeneralPlans(getCategories(), new Date().toISOString());
+
     const { raised, failed } = sweepSchedule();
     if (raised.length > 0) {
       console.info(`Maintenance schedule: raised ${raised.length} job(s) now due`);

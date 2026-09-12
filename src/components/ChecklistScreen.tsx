@@ -6,6 +6,8 @@ import {
   ArrowLeft,
   Camera,
   Check,
+  ChevronRight,
+  Lock,
   X,
   Trash2,
   CheckCircle2,
@@ -18,7 +20,7 @@ import {
   Inspection,
   Item,
   ItemDetail,
-  MAINTENANCE_CATEGORY_LABEL,
+  MAINTENANCE_STATUS_LABEL,
   REASON_GROUPS,
   REASON_GROUP_KEYS,
   ReasonGroup,
@@ -28,6 +30,7 @@ import {
   effectiveReasonGroup,
   usableDetails,
 } from '../types';
+import { categoryLabel } from '../services/categoryStore';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
 import { buildSections, numberingFor } from '../services/checklistStore';
 import { useChecklist } from '../hooks/useChecklist';
@@ -51,9 +54,17 @@ import {
   canViewInspection,
 } from '../services/permissions';
 import { AccessNotice, LOCKED, NOT_YOURS } from './AccessNotice';
-import { DetailFields } from './DetailFields';
 import { startAssignment } from '../services/assignments';
-import { needsMaintenance, suggestCategory } from '../services/maintenanceIntake';
+import {
+  assetForCheck,
+  heldChecks,
+  needsMaintenance,
+  suggestCategory,
+} from '../services/maintenanceIntake';
+import { UnitPicker } from './UnitPicker';
+import { getJobs, statusOf, subscribeToMaintenance } from '../services/maintenanceStore';
+import { activeEquipment, subscribeToEquipment } from '../services/equipmentStore';
+import { formatDate } from '../services/reportModel';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useRouter } from 'next/navigation';
 
@@ -70,6 +81,30 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
   );
   const [validationError, setValidationError] = useState<string | null>(null);
   const [invalidItemIds, setInvalidItemIds] = useState<Set<number>>(new Set());
+  /*
+   * The board, live. Subscribed rather than read once, so a job closed while
+   * the round is being walked releases its check without the inspector having
+   * to reload — and so a job raised from another phone locks one.
+   */
+  const [jobs, setJobs] = useState(() => getJobs());
+  /*
+   * Held here rather than read where it is needed, because that read parses
+   * the whole register out of storage and this screen re-renders on every
+   * keystroke in a note field.
+   */
+  const [equipment, setEquipment] = useState(() => activeEquipment());
+
+  useEffect(() => {
+    const refresh = () => setJobs(getJobs());
+    refresh();
+    return subscribeToMaintenance(refresh);
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => setEquipment(activeEquipment());
+    refresh();
+    return subscribeToEquipment(refresh);
+  }, []);
 
   // Ref map for scrolling to the first invalid row
   const itemRowRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -182,7 +217,34 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
   const numberOf = numberingFor(allItems.map((i) => i.id));
   const totalItems = allItems.length;
 
+  /** This branch's appliances, which is the list the unit is chosen from. */
+  const branchAssets = equipment
+    .filter((e) => e.branchName === inspection.branchName)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  /**
+   * The checks the board has already got in hand, which the inspector is not
+   * asked about.
+   *
+   * Recomputed from the jobs on every render rather than stamped onto the
+   * draft, so a job closed while the round is half done releases its check
+   * there and then. A held state written into the record would be a claim
+   * about the board made at the moment the inspection was opened.
+   *
+   * Worked out plainly rather than memoised: the items it would key on are
+   * only in hand after the guards above have returned, and a hook below a
+   * return is a hook that does not run on every render. Both lists it reads
+   * are already in state, so this costs a pass over them and nothing else.
+   */
+  const held = heldChecks(inspection.branchName, allItems, inspection.answers, jobs, equipment);
+
+  /*
+   * A held check counts as done. It has no answer and never will — the
+   * buttons are locked — so without this the round could never be handed in
+   * and the progress line would sit one short for ever.
+   */
   const isAnswered = (id: number) => {
+    if (held.has(id)) return true;
     const status = inspection.answers[id]?.status;
     return status === 'yes' || status === 'no';
   };
@@ -507,6 +569,8 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
     const needCriticalPhoto: number[] = [];
 
     allItems.forEach((item) => {
+      // Nothing to answer, so nothing to insist on
+      if (held.has(item.id)) return;
       const answer = inspection.answers[item.id];
       // Untouched / unanswered item
       if (!answer || (answer.status !== 'yes' && answer.status !== 'no')) {
@@ -663,6 +727,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
           const answer = inspection.answers[item.id];
           const status = answer?.status;
           const isInvalid = invalidItemIds.has(item.id);
+          const heldBy = held.get(item.id);
           const isYes = status === 'yes';
           const isNo = status === 'no';
           // The category in force, which is what the reasons below come from
@@ -683,16 +748,45 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
               onClick={(e) => {
                 const target = e.target as HTMLElement;
                 if (target.closest('button, input, select, textarea, label, a')) return;
-                if (!status) {
+                if (!status && !heldBy) {
                   handleSelectYes(item.id);
                 }
               }}
               className={`p-4 md:p-5 transition-colors ${
-                !status ? 'cursor-pointer hover:bg-[#FAFAFA]' : ''
+                !status && !heldBy ? 'cursor-pointer hover:bg-[#FAFAFA]' : ''
               } ${
-                isInvalid ? 'border-l-4 border-l-[#C8202D] bg-[#FDECEE]/15' : ''
+                heldBy
+                  ? 'border-l-4 border-l-[#C8202D] bg-[#FDECEE]/40'
+                  : isInvalid
+                    ? 'border-l-4 border-l-[#C8202D] bg-[#FDECEE]/15'
+                    : ''
               }`}
             >
+              {heldBy && (
+                <div className="mb-4 rounded-md border border-[#C8202D]/30 bg-[#FDECEE] px-3.5 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <Lock className="w-3.5 h-3.5 text-[#C8202D] shrink-0" />
+                  <span className="text-[11px] font-bold text-[#C8202D]">
+                    Already with maintenance
+                  </span>
+                  <span className="text-[11px] text-[#6B6F76]">
+                    {heldBy.because === 'same-unit' && heldBy.unitName
+                      ? `${heldBy.unitName} has work outstanding`
+                      : 'This check already raised a job'}
+                    {' — '}
+                    {MAINTENANCE_STATUS_LABEL[statusOf(heldBy.job)].toLowerCase()}
+                    {', reported '}
+                    {formatDate(heldBy.job.reportedAt)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/maintenance/${heldBy.job.id}`)}
+                    className="ml-auto inline-flex items-center gap-1 text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
+                  >
+                    <span>Open the job</span>
+                    <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
               {/* Row: Item number, text, and toggle buttons */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-start gap-3 flex-1">
@@ -744,15 +838,30 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                     type="button"
                     id={`item-${item.id}-yes-btn`}
                     onClick={() => handleSelectYes(item.id)}
-                    title={isYes ? 'Click again to convert to No with reason and photo options' : 'Mark compliant (Yes)'}
-                    className={`min-w-[80px] h-10 px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none active:scale-95 ${
-                      isYes
-                        ? 'bg-[#157F4B] text-white shadow-xs'
-                        : 'bg-white text-[#17181D] border border-[#E6E7EB] hover:bg-[#F6F6F8]'
+                    disabled={!!heldBy}
+                    title={
+                      heldBy
+                        ? 'Maintenance already has this one in hand'
+                        : isYes
+                          ? 'Click again to convert to No with reason and photo options'
+                          : 'Mark compliant (Yes)'
+                    }
+                    className={`min-w-[80px] h-10 px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 select-none ${
+                      heldBy
+                        ? 'bg-[#F1F1F4] text-[#9CA1A9] border border-[#E6E7EB] cursor-not-allowed'
+                        : `cursor-pointer active:scale-95 ${
+                            isYes
+                              ? 'bg-[#157F4B] text-white shadow-xs'
+                              : 'bg-white text-[#17181D] border border-[#E6E7EB] hover:bg-[#F6F6F8]'
+                          }`
                     }`}
                     aria-pressed={isYes}
                   >
-                    <Check className={`w-3.5 h-3.5 ${isYes ? 'text-white' : 'text-[#157F4B]'}`} />
+                    <Check
+                      className={`w-3.5 h-3.5 ${
+                        heldBy ? 'text-[#9CA1A9]' : isYes ? 'text-white' : 'text-[#157F4B]'
+                      }`}
+                    />
                     <span>Yes</span>
                   </button>
 
@@ -761,15 +870,30 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                     type="button"
                     id={`item-${item.id}-no-btn`}
                     onClick={() => handleSelectNo(item.id)}
-                    title={isNo ? 'Click to toggle back to Yes' : 'Mark non-compliant (No)'}
-                    className={`min-w-[80px] h-10 px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none active:scale-95 ${
-                      isNo
-                        ? 'bg-[#C8202D] text-white shadow-xs'
-                        : 'bg-white text-[#17181D] border border-[#E6E7EB] hover:bg-[#F6F6F8]'
+                    disabled={!!heldBy}
+                    title={
+                      heldBy
+                        ? 'Maintenance already has this one in hand'
+                        : isNo
+                          ? 'Click to toggle back to Yes'
+                          : 'Mark non-compliant (No)'
+                    }
+                    className={`min-w-[80px] h-10 px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 select-none ${
+                      heldBy
+                        ? 'bg-[#F1F1F4] text-[#9CA1A9] border border-[#E6E7EB] cursor-not-allowed'
+                        : `cursor-pointer active:scale-95 ${
+                            isNo
+                              ? 'bg-[#C8202D] text-white shadow-xs'
+                              : 'bg-white text-[#17181D] border border-[#E6E7EB] hover:bg-[#F6F6F8]'
+                          }`
                     }`}
                     aria-pressed={isNo}
                   >
-                    <X className={`w-3.5 h-3.5 ${isNo ? 'text-white' : 'text-[#C8202D]'}`} />
+                    <X
+                      className={`w-3.5 h-3.5 ${
+                        heldBy ? 'text-[#9CA1A9]' : isNo ? 'text-white' : 'text-[#C8202D]'
+                      }`}
+                    />
                     <span>No</span>
                   </button>
                 </div>
@@ -854,7 +978,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                         <Wrench className="w-3.5 h-3.5 shrink-0 mt-px" />
                         <span>
                           Goes to the maintenance board as{' '}
-                          {MAINTENANCE_CATEGORY_LABEL[suggestCategory(item, answer)]} work when this
+                          {categoryLabel(suggestCategory(item, answer))} work when this
                           inspection is submitted.
                         </span>
                       </p>
@@ -934,7 +1058,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                         toMaintenance ? 'text-[#B4740A]' : 'text-[#6B6F76]'
                       }`}
                     >
-                      Kit this is about{' '}
+                      Which unit{' '}
                       {toMaintenance ? (
                         <span className="text-[#B4740A]">
                           — names the unit on the maintenance job
@@ -943,10 +1067,13 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                         <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
                       )}
                     </label>
-                    <DetailFields
-                      details={effectiveDetails(item, answer)}
+                    <UnitPicker
+                      id={`item-${item.id}-unit`}
+                      assets={branchAssets}
+                      selectedId={
+                        assetForCheck(item, answer, branchAssets)?.id ?? null
+                      }
                       onChange={(next) => handleDetailsChange(item.id, next)}
-                      addLabel="Add the unit"
                     />
                   </div>
 

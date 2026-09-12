@@ -1,5 +1,7 @@
 import {
   Equipment,
+  Interval,
+  IntervalUnit,
   MaintenanceJob,
   MaintenancePlan,
   jobKindOf,
@@ -88,6 +90,28 @@ export function addMonths(day: string, months: number): string | null {
   return toIsoDay(next);
 }
 
+/**
+ * Adds whole days to a date.
+ *
+ * Built from calendar components rather than by adding milliseconds, because
+ * `fromIsoDay` hands back local midnights and two local midnights either side
+ * of a daylight-saving change are not 24 hours apart. Adding seven days to
+ * 2026-10-26 by arithmetic gives 1 November; by the calendar it gives the 2nd,
+ * which is what "next Monday" means to the person booking it.
+ */
+export function addDays(day: string, days: number): string | null {
+  const date = fromIsoDay(day);
+  if (!date) return null;
+  return toIsoDay(new Date(date.getFullYear(), date.getMonth(), date.getDate() + days));
+}
+
+/** Adds one cadence to a date, whichever unit it is counted in. */
+export function addInterval(day: string, interval: Interval): string | null {
+  return interval.unit === 'days'
+    ? addDays(day, interval.every)
+    : addMonths(day, interval.every);
+}
+
 /** Whole days from one ISO day to another. Negative when the first is later. */
 export function daysBetween(from: string, to: string): number {
   const a = fromIsoDay(from);
@@ -96,20 +120,102 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((b.getTime() - a.getTime()) / 86400000);
 }
 
+/**
+ * Whole calendar months from one ISO day to another, rounded down.
+ *
+ * Only ever used to guess how many occurrences have passed before the exact
+ * answer is walked to, so the month-end case it gets wrong — the 31st against
+ * a month with thirty days — costs a single correction step rather than a
+ * wrong date.
+ */
+function monthsBetween(from: string, to: string): number {
+  const a = fromIsoDay(from);
+  const b = fromIsoDay(to);
+  if (!a || !b) return 0;
+  const months = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+  return b.getDate() < a.getDate() ? months - 1 : months;
+}
+
+/** "every 3 months", "every 10 days" — the way somebody would say it. */
+export function intervalText(interval: Interval): string {
+  const { every, unit } = interval;
+  if (unit === 'days') {
+    if (every === 1) return 'every day';
+    if (every === 7) return 'every week';
+    if (every === 14) return 'every fortnight';
+    return `every ${every} days`;
+  }
+  if (every === 1) return 'every month';
+  if (every === 12) return 'every year';
+  if (every === 24) return 'every 2 years';
+  return `every ${every} months`;
+}
+
+/** Whether a cadence is one this arithmetic can actually walk. */
+export function isUsableInterval(interval: Interval | null | undefined): interval is Interval {
+  if (!interval) return false;
+  if (!Number.isInteger(interval.every) || interval.every < 1) return false;
+  return interval.unit === 'days' || interval.unit === 'months';
+}
+
+/**
+ * A plan's cadence, for plans written before one could be counted in days.
+ *
+ * Read through this rather than off the fields, the way `jobKindOf` stands in
+ * front of a job's kind: every plan in a browser today carries `everyMonths`
+ * and nothing rewrites stored records.
+ */
+export function intervalOf(plan: {
+  everyMonths: number;
+  every?: number;
+  unit?: IntervalUnit;
+}): Interval {
+  if (typeof plan.every === 'number' && plan.unit) {
+    return { every: plan.every, unit: plan.unit };
+  }
+  return { every: plan.everyMonths, unit: 'months' };
+}
+
+/**
+ * What this asset says about this plan: nothing, its own cadence, or exempt.
+ *
+ * `undefined` and `null` are different answers and must stay different —
+ * absent means "follow the category", null means "this one is not on it at
+ * all" — so this returns three things rather than falling back on `??`.
+ * A bare number is a record written before days were an option.
+ */
+export function overrideOf(
+  equipment: Equipment,
+  planId: string
+): Interval | null | undefined {
+  const stored = equipment.planOverrides?.[planId];
+  if (stored === undefined) return undefined;
+  if (stored === null) return null;
+  if (typeof stored === 'number') {
+    return Number.isInteger(stored) && stored > 0 ? { every: stored, unit: 'months' } : null;
+  }
+  return isUsableInterval(stored) ? stored : null;
+}
+
 /** The id a scheduled job carries, derived so an occurrence cannot repeat. */
 export function scheduledJobIdFor(planId: string, equipmentId: string, dueOn: string): string {
   return `mnt-plan-${planId}-${equipmentId}-${dueOn}`;
 }
 
 /**
- * The interval this asset keeps for this plan, in months — or null when it is
- * exempt. An override on the asset wins over its category's rule.
+ * The cadence this asset keeps for this plan, or null when it is exempt.
+ *
+ * An override on the asset wins over its category's rule, which is the whole
+ * point of having one: the estate services its fridges every six months and
+ * the one in the window gets looked at every six weeks.
  */
-export function intervalFor(equipment: Equipment, plan: MaintenancePlan): number | null {
-  const override = equipment.planOverrides?.[plan.id];
+export function intervalFor(equipment: Equipment, plan: MaintenancePlan): Interval | null {
+  const override = overrideOf(equipment, plan.id);
   if (override === null) return null;
-  if (typeof override === 'number' && override > 0) return override;
-  return plan.everyMonths;
+  if (override) return override;
+
+  const rule = intervalOf(plan);
+  return isUsableInterval(rule) ? rule : null;
 }
 
 export interface DueOccurrence {
@@ -133,10 +239,11 @@ export interface DueOccurrence {
  * written down, so an asset with no install date still comes due eventually
  * instead of never.
  */
-function anchorFor(
+export function anchorFor(
   plan: MaintenancePlan,
   equipment: Equipment,
-  jobs: MaintenanceJob[]
+  jobs: MaintenanceJob[],
+  today?: string
 ): string | null {
   const completed = jobs
     .filter(
@@ -146,6 +253,13 @@ function anchorFor(
         j.completedAt !== null
     )
     .map((j) => toIsoDay(new Date(j.completedAt as string)))
+    /*
+     * Work dated after today is ignored rather than trusted. The latest
+     * completion is the clock, so a service mistyped as 2027 would otherwise
+     * suppress the asset's schedule for a year — silently, and on an asset
+     * somebody had just been diligent about.
+     */
+    .filter((day) => !today || daysBetween(day, today) >= 0)
     .sort();
 
   if (completed.length > 0) return completed[completed.length - 1];
@@ -156,10 +270,20 @@ function anchorFor(
 /**
  * When this plan next falls due on this asset, and whether that has passed.
  *
- * Walks the series forward from the anchor rather than dividing by the
- * interval, because the interval can be changed and the series has to stay
- * anchored to real dates either way. Capped so a nonsense anchor — a date in
- * 1970 against a one-month plan — cannot spin.
+ * Every occurrence is measured from the anchor — the nth is `anchor + n
+ * intervals`, never "the one before it plus one more". Stepping from the
+ * previous result compounds two separate faults. A monthly plan anchored on
+ * the 31st lands on the 28th in February and, fed back in, keeps the 28th for
+ * ever, so an interval the operator set on the last of the month quietly
+ * becomes the 28th of every month. And walking one step at a time needs a cap,
+ * which a cadence counted in days exhausts inside a year: the old cap of 400
+ * steps returned a date four years stale for a weekly service, and returned it
+ * as a perfectly ordinary ISO day that nothing downstream could tell from a
+ * right answer.
+ *
+ * So the count is calculated and then corrected. The estimate is exact for
+ * days and out by at most one for months — the 31st against a thirty-day month
+ * — which the two correction loops settle in a step.
  */
 export function nextDueFor(
   plan: MaintenancePlan,
@@ -167,30 +291,45 @@ export function nextDueFor(
   jobs: MaintenanceJob[],
   today: string
 ): { dueOn: string; daysOverdue: number } | null {
-  const months = intervalFor(equipment, plan);
-  if (months === null) return null;
+  const interval = intervalFor(equipment, plan);
+  if (!isUsableInterval(interval)) return null;
 
-  const anchor = anchorFor(plan, equipment, jobs);
+  const anchor = anchorFor(plan, equipment, jobs, today);
   if (!anchor) return null;
 
-  let due = addMonths(anchor, months);
-  if (!due) return null;
+  /** The nth occurrence, always measured from the anchor. */
+  const occurrence = (n: number): string | null =>
+    addInterval(anchor, { every: interval.every * n, unit: interval.unit });
+
+  const elapsed =
+    interval.unit === 'days' ? daysBetween(anchor, today) : monthsBetween(anchor, today);
 
   /*
-   * Walk to the most recent occurrence that has fallen due, not the first.
-   * An asset installed two years ago on a quarterly plan has eight occurrences
-   * behind it, and raising all eight would bury the board in services nobody
-   * is going to carry out retrospectively. The honest reading of "it is
-   * overdue" is one job, due on the latest date that has passed.
+   * The most recent occurrence that has fallen due, not the first. An asset
+   * installed two years ago on a quarterly plan has eight occurrences behind
+   * it, and raising all eight would bury the board in services nobody is going
+   * to carry out retrospectively. The honest reading of "it is overdue" is one
+   * job, due on the latest date that has passed.
    */
-  const MAX_STEPS = 400;
-  for (let step = 0; step < MAX_STEPS; step += 1) {
-    const after = addMonths(due, months);
+  let n = Math.max(1, Math.floor(elapsed / interval.every));
+
+  // A handful of steps, because the estimate is never more than one out
+  const CORRECTIONS = 4;
+  for (let step = 0; step < CORRECTIONS; step += 1) {
+    const after = occurrence(n + 1);
     if (!after || daysBetween(after, today) < 0) break;
-    due = after;
+    n += 1;
+  }
+  for (let step = 0; step < CORRECTIONS && n > 1; step += 1) {
+    const at = occurrence(n);
+    if (at && daysBetween(at, today) >= 0) break;
+    n -= 1;
   }
 
-  return { dueOn: due, daysOverdue: daysBetween(due, today) };
+  const dueOn = occurrence(n);
+  if (!dueOn) return null;
+
+  return { dueOn, daysOverdue: daysBetween(dueOn, today) };
 }
 
 /**
@@ -248,6 +387,9 @@ export function jobForOccurrence(occurrence: DueOccurrence, now: string): Mainte
   const where = [equipment.location, equipment.serialNumber && `serial ${equipment.serialNumber}`]
     .filter(Boolean)
     .join(', ');
+  // What this asset actually keeps, which is not the plan's rule when it has
+  // an interval of its own — the job should say the cadence it came round on
+  const cadence = intervalFor(equipment, plan) ?? intervalOf(plan);
 
   return {
     id: jobId,
@@ -255,7 +397,7 @@ export function jobForOccurrence(occurrence: DueOccurrence, now: string): Mainte
     title: `${plan.task} — ${equipment.name}`,
     details: [
       `Scheduled ${plan.task.toLowerCase()}, due ${dueOn}.`,
-      `Falls due every ${plan.everyMonths} month${plan.everyMonths === 1 ? '' : 's'}.`,
+      `Falls due ${intervalText(cadence)}.`,
       where ? `Unit: ${equipment.name} (${where}).` : `Unit: ${equipment.name}.`,
       plan.instructions ?? null,
     ]

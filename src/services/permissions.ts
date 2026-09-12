@@ -407,10 +407,13 @@ const ROUTE_RULES: { prefix: string; anyOf: Capability[]; exact?: boolean }[] = 
    */
   { prefix: '/maintenance/equipment', anyOf: ['maintenance.view', 'maintenance.reportOwnBranch'] },
   /*
-   * The schedule is estate-wide configuration — what every branch's chillers
-   * are serviced on — so unlike the register it is not a branch's to open.
+   * No rule for the servicing schedule, which is no longer a route: it is a
+   * tab on the board, and the board withholds the tab from anyone without
+   * `equipment.manage`. Estate-wide configuration — what every branch's
+   * chillers are serviced on — is not a branch's to set, but that is now a
+   * question about a tab rather than about a URL. `/maintenance/schedule`
+   * itself redirects onto the board, which has its own rule above.
    */
-  { prefix: '/maintenance/schedule', anyOf: ['equipment.manage'] },
   { prefix: '/checklist', anyOf: ['checklist.manage'] },
   { prefix: '/users', anyOf: ['users.manage'] },
   /*

@@ -114,11 +114,15 @@ const NAV: NavEntry[] = [
         id: 'sidebar-nav-maintenance-jobs',
         href: '/maintenance/jobs',
         label: 'Job board',
-        // A job opened from the board still counts as being on it, but the
-        // section's other pages are their own rows and must not light this one
+        /*
+         * A job opened from the board still counts as being on it, and so
+         * does the old /maintenance/schedule, which now redirects here. The
+         * section's other pages are their own rows and must not light this
+         * one, hence the two they are excluded by name.
+         */
         isActive: (p) =>
           p === '/maintenance/jobs' ||
-          /^\/maintenance\/(?!report$|equipment$|schedule$)[^/]+$/.test(p),
+          /^\/maintenance\/(?!report$|equipment$)[^/]+$/.test(p),
         needs: ['maintenance.view', 'maintenance.reportOwnBranch'],
       },
       {
@@ -129,13 +133,11 @@ const NAV: NavEntry[] = [
         // A branch sees its own register; changing it is a separate right
         needs: ['maintenance.view', 'maintenance.reportOwnBranch'],
       },
-      {
-        id: 'sidebar-nav-maintenance-schedule',
-        href: '/maintenance/schedule',
-        label: 'Schedule',
-        isActive: (p) => p === '/maintenance/schedule',
-        needs: 'equipment.manage',
-      },
+      /*
+       * No Schedule row. The servicing schedule is what puts half the board
+       * there, so it is a tab on the board and read against it rather than
+       * being a separate place to go and remember to look at.
+       */
       {
         id: 'sidebar-nav-maintenance-report',
         href: '/maintenance/report',

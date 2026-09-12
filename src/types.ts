@@ -468,53 +468,72 @@ export function initialsOf(name: string): string {
  * What kind of kit or fabric a maintenance job concerns. Deliberately its own
  * taxonomy rather than the checklist's reason groups: those describe why a
  * check failed, these describe what needs a technician.
+ *
+ * A plain string rather than a union, because the operator writes this list:
+ * one chain's "Fridges, ACs, fire extinguishers" is another's "Refrigeration,
+ * HVAC". What a category IS lives in `EquipmentCategory` records in the
+ * category store; this is only the id one of them is referred to by.
+ *
+ * Never render one of these. `categoryLabel` in the category store turns an id
+ * into words and falls back to the id itself, so a job filed under a category
+ * somebody has since withdrawn still prints something a person can read.
  */
-export type MaintenanceCategory =
-  | 'REFRIGERATION'
-  | 'AC_VENTILATION'
-  | 'ELECTRICAL'
-  | 'PLUMBING'
-  | 'GAS'
-  | 'COOKING_EQUIPMENT'
-  | 'FIRE_SAFETY'
-  | 'STRUCTURAL'
-  | 'PEST_CONTROL'
-  /*
-   * Printers, tills and the network behind them. Added with the equipment
-   * register: a printer is the example the operator gave of something that
-   * needs servicing on a clock, and it had nowhere to sit — ELECTRICAL is
-   * about the wiring in the walls, not the machine plugged into it.
-   */
-  | 'IT_EQUIPMENT'
-  | 'OTHER';
+export type MaintenanceCategory = string;
 
-export const MAINTENANCE_CATEGORY_KEYS: MaintenanceCategory[] = [
-  'REFRIGERATION',
-  'AC_VENTILATION',
-  'ELECTRICAL',
-  'PLUMBING',
-  'GAS',
-  'COOKING_EQUIPMENT',
-  'FIRE_SAFETY',
-  'STRUCTURAL',
-  'PEST_CONTROL',
-  'IT_EQUIPMENT',
-  'OTHER',
-];
+/**
+ * One trade on the operator's own list: what a category is called, and the
+ * fact that it exists.
+ *
+ * Split into an immutable `id` and an editable `label` for the reason
+ * `Branch` is: the id is baked into every plan id, and through those into
+ * every scheduled job id ever written into a browser. Renaming "IT & printers"
+ * to "Tills and printers" must change the words on the screen and nothing
+ * else, or the next sweep re-raises the entire history under fresh ids.
+ *
+ * The general-maintenance cadence is deliberately NOT a field here. It lives
+ * where every other recurring service lives — a `MaintenancePlan` against this
+ * category — so there is one answer to "when is this next due" rather than two
+ * that can disagree.
+ */
+export interface EquipmentCategory {
+  /** Never changes once written. Seeded ids are the original SCREAMING_CASE. */
+  id: string;
+  label: string;
+  /** Withdrawn categories are archived, never deleted, while jobs name them. */
+  active: boolean;
+  createdAt: string;
+}
 
-export const MAINTENANCE_CATEGORY_LABEL: Record<MaintenanceCategory, string> = {
-  REFRIGERATION: 'Refrigeration',
-  AC_VENTILATION: 'AC & ventilation',
-  ELECTRICAL: 'Electrical',
-  PLUMBING: 'Plumbing & drainage',
-  GAS: 'Gas',
-  COOKING_EQUIPMENT: 'Cooking equipment',
-  FIRE_SAFETY: 'Fire safety',
-  STRUCTURAL: 'Building & fabric',
-  PEST_CONTROL: 'Pest control',
-  IT_EQUIPMENT: 'IT & printers',
-  OTHER: 'Other',
-};
+/**
+ * The category anything unrecognised falls to.
+ *
+ * A system category: the store refuses to rename or withdraw it, because
+ * three separate fallbacks in the intake and the import name it, and a
+ * taxonomy whose "don't know" bucket can be deleted has no honest answer for
+ * a job nobody has classified.
+ */
+export const FALLBACK_CATEGORY = 'OTHER';
+
+// ---------------------------------------------------------------------------
+// How often something recurs
+// ---------------------------------------------------------------------------
+
+/**
+ * Days or months, and not interchangeable.
+ *
+ * Months are calendar months — the 14th to the 14th — because that is what a
+ * service contract says and what the person booking it means. Days are days,
+ * for the cadences nobody would express in months: a filter rinsed every ten
+ * days, a bait station checked every fortnight. Storing the second as "0.33
+ * months" would be arithmetic nobody asked for.
+ */
+export type IntervalUnit = 'days' | 'months';
+
+export interface Interval {
+  /** A whole number, at least 1. Halves of a month are not a cadence. */
+  every: number;
+  unit: IntervalUnit;
+}
 
 /**
  * Why a job exists: something broke, or something fell due.
@@ -665,11 +684,20 @@ export interface Equipment {
   notes: string | null;
 
   /**
-   * Intervals this asset keeps instead of its category's, in months, by plan
-   * id. `null` exempts it from that plan entirely — the display fridge that
-   * is on a contract, the printer that is leased and serviced by the lessor.
+   * Intervals this asset keeps instead of its category's, by plan id — the
+   * fridge in the window that gets looked at monthly while the rest go six.
+   *
+   * Three states, and the difference between the last two is load-bearing:
+   * a key that is absent means "follow the category", an `Interval` means
+   * "keep this one instead", and an explicit `null` exempts the asset from
+   * that plan entirely — the display fridge on a contract, the printer the
+   * lessor services. Never collapse absent and null with `??`; `overrideOf`
+   * is the read-through that keeps them apart.
+   *
+   * A bare number is a record written before intervals could be counted in
+   * days, and reads as that many months.
    */
-  planOverrides?: Record<string, number | null>;
+  planOverrides?: Record<string, Interval | number | null>;
 
   /**
    * Withdrawn assets are archived, never deleted: jobs record the asset they
@@ -694,8 +722,19 @@ export interface MaintenancePlan {
   category: MaintenanceCategory;
   /** What recurs, e.g. "Service" or "Toner refill". */
   task: string;
-  /** How often, in whole months. */
+  /**
+   * How often, in whole months.
+   *
+   * Superseded by `every` and `unit`, and kept because every plan already in
+   * a browser carries it and nothing rewrites stored records. `intervalOf` is
+   * the read-through: renaming this field rather than leaving it would not
+   * crash, it would quietly hand `addMonths` an undefined and bake the string
+   * "NaN-NaN-NaN" into derived job ids.
+   */
   everyMonths: number;
+  /** How often, once a cadence could be counted in days as well as months. */
+  every?: number;
+  unit?: IntervalUnit;
   /** How urgent the job it raises should be. */
   priority: Severity;
   /** What the raised job should tell whoever picks it up. */

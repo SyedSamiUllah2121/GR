@@ -10,10 +10,10 @@ import {
   Wrench,
 } from 'lucide-react';
 import {
-  MAINTENANCE_CATEGORY_LABEL,
   MaintenanceJob,
   Severity,
 } from '../types';
+import { categoryLabel } from '../services/categoryStore';
 
 import { getJobs, subscribeToMaintenance, workMinutes } from '../services/maintenanceStore';
 import {
@@ -247,7 +247,7 @@ export const MaintenanceReportScreen: React.FC = () => {
                     {report.byCategory.map((cat) => (
                       <li key={cat.key} className="flex items-center gap-3">
                         <span className="flex-1 min-w-0 text-xs font-semibold text-[#17181D] truncate">
-                          {MAINTENANCE_CATEGORY_LABEL[cat.key]}
+                          {categoryLabel(cat.key)}
                         </span>
                         <div className="w-24 sm:w-40 h-2.5 bg-[#F6F6F8] rounded-full overflow-hidden shrink-0">
                           <div
@@ -321,7 +321,7 @@ export const MaintenanceReportScreen: React.FC = () => {
                           <p className="text-xs text-[#6B6F76] mt-0.5">
                             {job.branchName}
                             {job.equipment ? ` • ${job.equipment}` : ''} •{' '}
-                            {MAINTENANCE_CATEGORY_LABEL[job.category]}
+                            {categoryLabel(job.category)}
                           </p>
                           {job.resolutionNote && (
                             <p className="text-xs text-[#6B6F76] mt-1">{job.resolutionNote}</p>

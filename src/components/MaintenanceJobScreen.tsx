@@ -21,7 +21,8 @@ import {
   User,
   Wrench,
 } from 'lucide-react';
-import { MAINTENANCE_CATEGORY_LABEL, MaintenanceJob, jobKindOf } from '../types';
+import { MaintenanceJob, jobKindOf } from '../types';
+import { categoryLabel } from '../services/categoryStore';
 import { getEquipmentById } from '../services/equipmentStore';
 import { getPlanById } from '../services/maintenancePlanStore';
 
@@ -200,7 +201,7 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
             )}
           </div>
           <p className="text-xs text-[#6B6F76] mt-1.5">
-            {job.branchName} • {MAINTENANCE_CATEGORY_LABEL[job.category]}
+            {job.branchName} • {categoryLabel(job.category)}
             {job.equipment ? ` • ${job.equipment}` : ''}
           </p>
         </div>
@@ -385,7 +386,7 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
               {job.equipment || '—'}
             </Field>
             <Field icon={Tag} label="Category">
-              {MAINTENANCE_CATEGORY_LABEL[job.category]}
+              {categoryLabel(job.category)}
             </Field>
             <Field icon={User} label="Reported by">
               {job.reportedBy}

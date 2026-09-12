@@ -20,8 +20,6 @@ import {
   X,
 } from 'lucide-react';
 import {
-  MAINTENANCE_CATEGORY_KEYS,
-  MAINTENANCE_CATEGORY_LABEL,
   MaintenanceCategory,
   MaintenanceJob,
   MaintenanceJobKind,
@@ -49,17 +47,37 @@ import { EndMaintenanceDialog } from './EndMaintenanceDialog';
 import { JobTimesDialog } from './JobTimesDialog';
 import { useToast } from './ToastProvider';
 import { useBranches } from '../hooks/useBranches';
+import { useCategories } from '../hooks/useCategories';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { activeBranches } from '../services/branchStore';
-import { can, canManageJobs, fixedBranchFor, visibleJobs } from '../services/permissions';
+import { activeCategories, categoryLabel, defaultCategory } from '../services/categoryStore';
+import {
+  can,
+  canManageEquipment,
+  canManageJobs,
+  fixedBranchFor,
+  visibleJobs,
+} from '../services/permissions';
+import {
+  MaintenanceSchedulePanel,
+  PlanBeingEdited,
+  useMaintenanceSchedule,
+} from './MaintenanceSchedulePanel';
 
-/** 'repeats' is a different shape of list, not another status slice. */
-type Filter = 'open' | MaintenanceStatus | 'all' | 'repeats';
+/**
+ * 'repeats' and 'schedule' are different shapes of list, not further status
+ * slices — what recurs and what is coming, either of which is read against
+ * the board rather than away from it.
+ */
+type Filter = 'open' | MaintenanceStatus | 'all' | 'repeats' | 'schedule';
 
 export const MaintenanceScreen: React.FC = () => {
   const router = useRouter();
   const showToast = useToast();
   const user = useCurrentUser();
+  // Held here rather than read where it is needed, so a category renamed in
+  // another tab repaints the board's search and its rows together
+  const categories = useCategories();
   const [allJobs, setAllJobs] = useState<MaintenanceJob[]>(() => getJobs());
   const [filter, setFilter] = useState<Filter>('open');
   const [branchFilter, setBranchFilter] = useState<string>('all');
@@ -73,6 +91,12 @@ export const MaintenanceScreen: React.FC = () => {
   const [logging, setLogging] = useState(false);
   const [ending, setEnding] = useState<MaintenanceJob | null>(null);
   const [starting, setStarting] = useState<MaintenanceJob | null>(null);
+  /*
+   * The plan editor belongs to the board rather than to the schedule panel
+   * because the button that opens it is the header's, and the header is the
+   * board's. The panel opens it too, from a plan's pencil.
+   */
+  const [editingPlan, setEditingPlan] = useState<PlanBeingEdited>(null);
 
   useEffect(() => {
     const refresh = () => setAllJobs(getJobs());
@@ -104,7 +128,20 @@ export const MaintenanceScreen: React.FC = () => {
    */
   const scopedTo = can(user, 'maintenance.view') ? null : fixedBranchFor(user);
 
+  /*
+   * Setting the intervals is estate-wide configuration — what every branch's
+   * chillers are serviced on — so unlike the board itself it is not a
+   * branch's to open, and the tab is simply absent for them.
+   */
+  const mayPlan = canManageEquipment(user);
+
   const board = useMemo(() => buildBoard(jobs), [jobs]);
+
+  /*
+   * Handed the unnarrowed list deliberately: the schedule covers the estate,
+   * and it is only ever shown to the people who hold the estate.
+   */
+  const schedule = useMaintenanceSchedule(allJobs);
 
   /** Free text against everything worth searching on one job. */
   const matchesQuery = useMemo(() => {
@@ -118,12 +155,12 @@ export const MaintenanceScreen: React.FC = () => {
         job.details,
         job.reportedBy,
         job.attendedBy ?? '',
-        MAINTENANCE_CATEGORY_LABEL[job.category],
+        categoryLabel(job.category, categories),
       ]
         .join(' ')
         .toLowerCase()
         .includes(q);
-  }, [query]);
+  }, [query, categories]);
 
   const repeats = useMemo(() => {
     const scoped = jobs.filter(
@@ -141,12 +178,31 @@ export const MaintenanceScreen: React.FC = () => {
     [jobs]
   );
 
+  const tabs: { key: Filter; label: string; count: number }[] = [
+    { key: 'open', label: 'Open', count: board.openCount },
+    { key: 'reported', label: 'Not started', count: board.counts.reported },
+    { key: 'in-progress', label: 'In progress', count: board.counts['in-progress'] },
+    { key: 'completed', label: 'Done', count: board.counts.completed },
+    { key: 'all', label: 'All', count: jobs.length },
+    { key: 'repeats', label: 'Repeated', count: repeatCount },
+    ...(mayPlan
+      ? [{ key: 'schedule' as Filter, label: 'Schedule', count: schedule.activeCount }]
+      : []),
+  ];
+
+  /*
+   * A tab that is not on offer is not a view. Asked of the list itself rather
+   * than of each right in turn, so a tab withheld from someone can never be
+   * what their board is showing — whatever the reason it was withheld.
+   */
+  const view: Filter = tabs.some((tab) => tab.key === filter) ? filter : 'open';
+
   const visible = useMemo(() => {
     const byStatus = jobs.filter((job) => {
       const status = statusOf(job);
-      if (filter === 'all') return true;
-      if (filter === 'open') return status !== 'completed';
-      return status === filter;
+      if (view === 'all') return true;
+      if (view === 'open') return status !== 'completed';
+      return status === view;
     });
     const byBranch =
       branchFilter === 'all'
@@ -167,18 +223,10 @@ export const MaintenanceScreen: React.FC = () => {
       if (rank[a.priority] !== rank[b.priority]) return rank[a.priority] - rank[b.priority];
       return a.reportedAt.localeCompare(b.reportedAt);
     });
-  }, [jobs, filter, branchFilter, kindFilter, matchesQuery]);
+  }, [jobs, view, branchFilter, kindFilter, matchesQuery]);
 
-
-
-  const tabs: { key: Filter; label: string; count: number }[] = [
-    { key: 'open', label: 'Open', count: board.openCount },
-    { key: 'reported', label: 'Not started', count: board.counts.reported },
-    { key: 'in-progress', label: 'In progress', count: board.counts['in-progress'] },
-    { key: 'completed', label: 'Done', count: board.counts.completed },
-    { key: 'all', label: 'All', count: jobs.length },
-    { key: 'repeats', label: 'Repeated', count: repeatCount },
-  ];
+  /** Only the job lists are searched and narrowed; the schedule is neither. */
+  const filtersApply = view !== 'schedule';
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
@@ -188,24 +236,53 @@ export const MaintenanceScreen: React.FC = () => {
           <p className="text-[#6B6F76] text-xs mt-0.5">
             {/* Named, so a board covering one branch never reads as the estate */}
             {scopedTo && <span className="font-semibold text-[#17181D]">{scopedTo} • </span>}
-            {board.openCount === 0
-              ? 'Nothing outstanding'
-              : `${board.openCount} job${board.openCount === 1 ? '' : 's'} outstanding${
-                  board.urgentCount > 0 ? ` • ${board.urgentCount} urgent` : ''
-                }`}
+            {view === 'schedule' ? (
+              <>
+                {schedule.activeCount} plan{schedule.activeCount === 1 ? '' : 's'} running
+                {schedule.overdue.length > 0 && (
+                  <span className="text-[#C8202D] font-semibold">
+                    {' '}
+                    • {schedule.overdue.length} due now
+                  </span>
+                )}
+              </>
+            ) : board.openCount === 0 ? (
+              'Nothing outstanding'
+            ) : (
+              `${board.openCount} job${board.openCount === 1 ? '' : 's'} outstanding${
+                board.urgentCount > 0 ? ` • ${board.urgentCount} urgent` : ''
+              }`
+            )}
           </p>
         </div>
 
+        {/*
+          One primary action, belonging to whichever tab is open — two red
+          buttons offering different things is how somebody reporting a
+          breakdown ends up writing a servicing plan.
+        */}
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <button
-            id="log-problem-btn"
-            type="button"
-            onClick={() => setLogging(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Report a problem</span>
-          </button>
+          {view === 'schedule' ? (
+            <button
+              id="add-plan-btn"
+              type="button"
+              onClick={() => setEditingPlan('new')}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add a plan</span>
+            </button>
+          ) : (
+            <button
+              id="log-problem-btn"
+              type="button"
+              onClick={() => setLogging(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Report a problem</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -228,7 +305,7 @@ export const MaintenanceScreen: React.FC = () => {
                 type="button"
                 onClick={() => setFilter(tab.key)}
                 className={`px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
-                  filter === tab.key
+                  view === tab.key
                     ? 'border-[#C8202D] text-[#C8202D]'
                     : 'border-transparent text-[#6B6F76] hover:text-[#17181D]'
                 }`}
@@ -238,6 +315,8 @@ export const MaintenanceScreen: React.FC = () => {
             ))}
           </div>
 
+          {/* Nothing to search or narrow on the schedule — so nothing offered */}
+          {filtersApply && (
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-[#9CA1A9] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -287,9 +366,17 @@ export const MaintenanceScreen: React.FC = () => {
             </select>
           )}
           </div>
+          )}
         </div>
 
-        {filter === 'repeats' ? (
+        {view === 'schedule' ? (
+          <MaintenanceSchedulePanel
+            schedule={schedule}
+            jobs={allJobs}
+            editing={editingPlan}
+            onEditing={setEditingPlan}
+          />
+        ) : view === 'repeats' ? (
           repeats.length === 0 ? (
             <div className="bg-white border border-[#E6E7EB] rounded-lg p-10 text-center shadow-xs">
               <CheckCircle2 className="w-8 h-8 text-[#157F4B] mx-auto mb-2.5" />
@@ -318,7 +405,7 @@ export const MaintenanceScreen: React.FC = () => {
             <CheckCircle2 className="w-8 h-8 text-[#157F4B] mx-auto mb-2.5" />
             <p className="text-sm font-bold text-[#17181D]">Nothing here</p>
             <p className="text-xs text-[#6B6F76] mt-1">
-              {filter === 'open'
+              {view === 'open'
                 ? 'No maintenance is outstanding.'
                 : 'No jobs match this filter.'}
             </p>
@@ -518,7 +605,7 @@ const JobRow: React.FC<{
         <p className="text-xs text-[#6B6F76] mt-1">
           {job.branchName}
           {job.equipment ? ` • ${job.equipment}` : ''} •{' '}
-          {MAINTENANCE_CATEGORY_LABEL[job.category]}
+          {categoryLabel(job.category)}
         </p>
         <p className="text-[11px] text-[#6B6F76] mt-0.5">
           Reported {formatDateTime(job.reportedAt)} by {job.reportedBy}
@@ -642,7 +729,8 @@ const ReportProblemDialog: React.FC<{
   const [showMore, setShowMore] = useState(false);
   const [equipment, setEquipment] = useState('');
   const [details, setDetails] = useState('');
-  const [category, setCategory] = useState<MaintenanceCategory>('OTHER');
+  const categories = useCategories();
+  const [category, setCategory] = useState<MaintenanceCategory>(() => defaultCategory());
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -845,9 +933,9 @@ const ReportProblemDialog: React.FC<{
                     onChange={(e) => setCategory(e.target.value as MaintenanceCategory)}
                     className={inputClass}
                   >
-                    {MAINTENANCE_CATEGORY_KEYS.map((key) => (
-                      <option key={key} value={key}>
-                        {MAINTENANCE_CATEGORY_LABEL[key]}
+                    {activeCategories(categories).map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
                       </option>
                     ))}
                   </select>

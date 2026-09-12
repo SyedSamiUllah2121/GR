@@ -1,10 +1,12 @@
-import type {Metadata} from 'next';
-import {MaintenanceScheduleScreen} from '@/components/MaintenanceScheduleScreen';
+import {redirect} from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Schedule | Inspection Log',
-};
-
+/**
+ * The schedule is a tab on the job board now, not a screen of its own.
+ *
+ * Kept as a redirect rather than deleted because this URL was in the rail
+ * until recently, so it is in somebody's bookmarks and somebody's history.
+ * The board's own route rule decides who may go on from here.
+ */
 export default function MaintenanceSchedulePage() {
-  return <MaintenanceScheduleScreen />;
+  redirect('/maintenance/jobs');
 }

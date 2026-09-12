@@ -38,12 +38,12 @@ import {
   INSPECTION_KIND_SHORT,
   INSPECTION_TYPE_LABEL,
   Inspection,
-  MAINTENANCE_CATEGORY_LABEL,
   MaintenanceJob,
   Severity,
   effectiveReasonGroup,
   inspectionKindOf,
 } from '../types';
+import { categoryLabel } from '../services/categoryStore';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
 import { useChecklist } from '../hooks/useChecklist';
 import { getInspectionById, getInspections, subscribeToStorage } from '../services/storage';
@@ -1161,7 +1161,7 @@ const MaintenancePanel: React.FC<{ model: ReportModel }> = ({ model }) => {
                 {marked && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <span className="text-xs font-semibold text-[#B4740A]">
-                      Maintenance · {MAINTENANCE_CATEGORY_LABEL[suggestCategory(item, answer)]}
+                      Maintenance · {categoryLabel(suggestCategory(item, answer))}
                     </span>
                     {job ? (
                       <>

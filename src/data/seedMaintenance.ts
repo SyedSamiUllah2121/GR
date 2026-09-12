@@ -1,4 +1,6 @@
 import { MaintenanceJob } from '../types';
+import { SEED_EQUIPMENT } from './seedEquipment';
+import { SEED_PLANS } from './seedPlans';
 
 /**
  * Demo maintenance jobs, so the module has something to show on first run.
@@ -14,7 +16,8 @@ function at(date: string, hour: number, minute: number): string {
   return d.toISOString();
 }
 
-export const SEED_MAINTENANCE: MaintenanceJob[] = [
+/** The hand-written demo jobs: breakdowns, spread across the three states. */
+const REPORTED_JOBS: MaintenanceJob[] = [
   {
     id: 'mnt-seed-1',
     branchName: "Zahra's Kitchen",
@@ -144,3 +147,107 @@ export const SEED_MAINTENANCE: MaintenanceJob[] = [
     photo: null,
   },
 ];
+
+// ---------------------------------------------------------------------------
+// What has already been looked after
+// ---------------------------------------------------------------------------
+
+/**
+ * One recorded general maintenance per seeded asset, so a fresh installation
+ * opens on a register that has been looked after rather than one that has
+ * never been touched.
+ *
+ * This is not decoration. The schedule counts from the last recorded
+ * completion, so without it every asset would anchor to its install date in
+ * 2025 and the very first load would raise ninety-one overdue services in one
+ * go — a board nobody can read, on a feature whose whole point is telling you
+ * what actually needs doing.
+ *
+ * The days are staggered across the summer so the arithmetic lands somewhere
+ * interesting: a fortnightly display fridge serviced in early September is
+ * comfortably in period, a monthly extinguisher serviced in July is not, and
+ * the register shows both states the moment it opens.
+ *
+ * Fixed dates rather than dates relative to today, because these are rendered
+ * on the server and again on the client and a seed computed from the clock can
+ * differ across a midnight boundary.
+ *
+ * Reaches a fresh browser only. The job store has no seed marker — unlike the
+ * branches, the plans and the register, it holds work rather than reference
+ * data, and merging records into somebody's board is not a thing to do quietly.
+ */
+const LAST_SERVICED = [
+  '2026-06-14',
+  '2026-07-02',
+  '2026-07-19',
+  '2026-08-01',
+  '2026-08-13',
+  '2026-08-27',
+  '2026-09-05',
+];
+
+/** Exactly as `generalPlanIdFor` derives it. */
+const generalPlanId = (category: string) =>
+  `plan-${category.toLowerCase()}-general-maintenance`;
+
+/** Exactly as `scheduledJobIdFor` derives it, so the sweep finds these already done. */
+const scheduledJobId = (planId: string, equipmentId: string, dueOn: string) =>
+  `mnt-plan-${planId}-${equipmentId}-${dueOn}`;
+
+/**
+ * One recorded completion per asset per plan that covers it.
+ *
+ * Every plan, not only the general one. A record covering general maintenance
+ * alone would leave each asset's named services — the annual gas check, the
+ * printer service — anchored to a 2025 install date, and the first sweep would
+ * still put sixty of them on the board at once.
+ *
+ * The staggering is what makes the demo read: general maintenance runs on short
+ * cadences, so spreading the last service across the summer leaves some assets
+ * comfortably in period and some plainly overdue, which is the state the screen
+ * exists to show. The named services are mostly annual, so a completion in the
+ * same window puts them all quietly in the future, where an annual service
+ * carried out this year belongs.
+ */
+const SERVICE_HISTORY: MaintenanceJob[] = SEED_EQUIPMENT.filter((item) => item.active).flatMap(
+  (item, itemIndex) =>
+    SEED_PLANS.filter(
+      (plan) =>
+        plan.active &&
+        plan.category === item.category &&
+        // An asset on somebody else's contract has no history of ours to show
+        item.planOverrides?.[plan.id] !== null
+    ).map((plan, planIndex) => {
+      const on = LAST_SERVICED[(itemIndex + planIndex) % LAST_SERVICED.length];
+      const general = plan.id === generalPlanId(item.category);
+      const where = item.location ? ` (${item.location})` : '';
+
+      return {
+        id: general
+          ? // The id `generalDoneIdFor` builds, so recording the same day
+            // twice lands on one record rather than two
+            `mnt-general-${item.id}-${on}`
+          : scheduledJobId(plan.id, item.id, on),
+        branchName: item.branchName,
+        title: `${plan.task} — ${item.name}`,
+        details: `${plan.task} carried out on ${on}. Unit: ${item.name}${where}.`,
+        equipment: item.name,
+        category: item.category,
+        priority: plan.priority,
+        reportedBy: general ? 'Recorded on the register' : 'Maintenance schedule',
+        reportedAt: at(on, 9, 0),
+        startedAt: at(on, 9, 0),
+        completedAt: at(on, 11, 30),
+        attendedBy: itemIndex % 3 === 0 ? 'In-house maintenance' : 'Gujrat Facility Services',
+        resolutionNote: 'Cleaned, checked and tested. Nothing found needing a repair.',
+        cost: null,
+        photo: null,
+        kind: 'scheduled',
+        equipmentId: item.id,
+        planId: plan.id,
+        dueOn: on,
+      } as MaintenanceJob;
+    })
+);
+
+export const SEED_MAINTENANCE: MaintenanceJob[] = [...REPORTED_JOBS, ...SERVICE_HISTORY];

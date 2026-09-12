@@ -10,7 +10,8 @@ import {
   PenTool,
   Wrench,
 } from 'lucide-react';
-import { Inspection, Item, MAINTENANCE_CATEGORY_LABEL } from '../types';
+import { Inspection, Item } from '../types';
+import { categoryLabel } from '../services/categoryStore';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
 import { numberingFor } from '../services/checklistStore';
 import { useChecklist } from '../hooks/useChecklist';
@@ -656,7 +657,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                           <div className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-[#B4740A]">
                             <Wrench className="w-3.5 h-3.5 shrink-0" />
                             <span>
-                              Repair job — {MAINTENANCE_CATEGORY_LABEL[suggestCategory(item, answer)]}
+                              Repair job — {categoryLabel(suggestCategory(item, answer))}
                             </span>
                           </div>
                         )}

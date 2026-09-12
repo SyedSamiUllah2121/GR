@@ -1,5 +1,6 @@
 import {
   Answer,
+  Equipment,
   Inspection,
   Item,
   MaintenanceCategory,
@@ -9,9 +10,11 @@ import {
   effectiveReasonGroup,
   usableDetails,
 } from '../types';
+import { activeCategories, defaultCategory } from './categoryStore';
 import { RankedIssue } from './priority';
 import { ChecklistView } from './checklistStore';
-import { deleteJob, getJobs, saveJob } from './maintenanceStore';
+import { deleteJob, getJobs, saveJob, statusOf } from './maintenanceStore';
+import { activeEquipment } from './equipmentStore';
 
 /**
  * Inspection findings that become maintenance jobs.
@@ -53,7 +56,13 @@ export function needsMaintenance(item: Item, answer: Answer | undefined): boolea
  * check, so the board is not a wall of "Other". Nobody is asked to confirm
  * it: the inspector says whether something needs repairing, and working out
  * which trade that is belongs to whoever runs the board. Anything
- * unrecognised is left as OTHER rather than forced into a category.
+ * unrecognised falls to the fallback category rather than being forced into
+ * one that half fits.
+ *
+ * Kept as authored patterns even though categories are now the operator's own
+ * list, because these read the wording of a *fault* — "cold room", "bain
+ * marie", "wi-fi" — which is not what a category is called. The operator's
+ * labels are matched too, in `suggestCategory`, after these have had their go.
  *
  * First match wins, so the more specific patterns are listed first.
  */
@@ -85,8 +94,147 @@ export function suggestCategory(item: Item, answer?: Answer): MaintenanceCategor
     item.text,
     ...effectiveDetails(item, answer).map((d) => `${d.label} ${d.value}`),
   ].join(' ');
-  const hit = CATEGORY_HINTS.find(([, pattern]) => pattern.test(haystack));
-  return hit ? hit[0] : 'OTHER';
+
+  /*
+   * The curated patterns first, narrowed to trades still on the list — a
+   * chain that withdrew "IT & printers" must not have faults filed under it.
+   */
+  const live = activeCategories();
+  const onOffer = new Set(live.map((c) => c.id));
+  const hinted = CATEGORY_HINTS.find(
+    ([key, pattern]) => onOffer.has(key) && pattern.test(haystack)
+  );
+  if (hinted) return hinted[0];
+
+  /*
+   * Then the operator's own words. Nobody is going to author a regular
+   * expression for a category they add, so the label itself is the pattern:
+   * a category called "Fridges" catches a finding that says fridge, and one
+   * called "Air conditioners" catches air conditioner. Longest label first, so
+   * "Water heating" wins over "Water" rather than losing to list order.
+   */
+  const text = haystack.toLowerCase();
+  const byLabel = [...live]
+    .sort((a, b) => b.label.length - a.label.length)
+    .find((c) =>
+      c.label
+        .toLowerCase()
+        .split(/[^a-z]+/)
+        .filter((word) => word.length > 3)
+        .some((word) => text.includes(word) || text.includes(word.replace(/s$/, '')))
+    );
+  if (byLabel) return byLabel.id;
+
+  return defaultCategory(live);
+}
+
+// ---------------------------------------------------------------------------
+// Checks that are already somebody else's problem
+// ---------------------------------------------------------------------------
+
+/** Why a check is being held, in the words the inspector is shown. */
+export type HeldBecause = 'same-check' | 'same-unit';
+
+export interface HeldCheck {
+  job: MaintenanceJob;
+  because: HeldBecause;
+  /** The unit, when it is a unit that is held rather than the check itself. */
+  unitName?: string;
+}
+
+/**
+ * The asset a check names, when it names one on the register.
+ *
+ * Matched on the whole value of a detail against an asset's name or its serial
+ * — exactly, not by substring. A question recording "Unit: Dining area AC 1"
+ * finds that asset; one that merely mentions "AC" finds nothing, which is the
+ * right answer. Guessing loosely here would hold a check about a different
+ * unit, and a check nobody can answer is a worse failure than one that has to
+ * be answered twice.
+ */
+export function assetForCheck(
+  item: Item,
+  answer: Answer | undefined,
+  atBranch: Equipment[]
+): Equipment | null {
+  const values = usableDetails(effectiveDetails(item, answer)).map((d) =>
+    d.value.trim().toLowerCase()
+  );
+  if (values.length === 0) return null;
+
+  return (
+    atBranch.find(
+      (asset) =>
+        values.includes(asset.name.trim().toLowerCase()) ||
+        (!!asset.serialNumber && values.includes(asset.serialNumber.trim().toLowerCase()))
+    ) ?? null
+  );
+}
+
+/**
+ * Which checks are already covered by work outstanding on the maintenance
+ * board, so the inspector is not asked about them again.
+ *
+ * This is the answer to a real complaint: the extraction hood has been broken
+ * for three weeks, everybody knows, a job is open and somebody is waiting on a
+ * part — and every Monday the round asks whether it works, the inspector says
+ * no, and the board grows another job for the same fault. The repeat count
+ * then reports a branch as deteriorating when nothing has changed.
+ *
+ * Two ways a check is held, both exact:
+ *
+ *   same-check  the same question at the same branch raised a job that is
+ *               still open. The job records the item it came from, so this
+ *               needs no guessing at all.
+ *   same-unit   the check names a unit on the register, and that unit has
+ *               work outstanding — a repair, or a service somebody has
+ *               started. It does not matter which question noticed it.
+ *
+ * Completed jobs hold nothing. The point is work in hand, not history: a fault
+ * repaired last month is exactly what the round should be checking.
+ */
+export function heldChecks(
+  branchName: string,
+  items: Item[],
+  answers: Record<number, Answer>,
+  jobs: MaintenanceJob[] = getJobs(),
+  equipment: Equipment[] = activeEquipment()
+): Map<number, HeldCheck> {
+  const open = jobs.filter(
+    (job) => job.branchName === branchName && statusOf(job) !== 'completed'
+  );
+  if (open.length === 0) return new Map();
+
+  const byItem = new Map<number, MaintenanceJob>();
+  const byEquipment = new Map<string, MaintenanceJob>();
+  open.forEach((job) => {
+    if (job.sourceItemId !== undefined && !byItem.has(job.sourceItemId)) {
+      byItem.set(job.sourceItemId, job);
+    }
+    if (job.equipmentId && !byEquipment.has(job.equipmentId)) {
+      byEquipment.set(job.equipmentId, job);
+    }
+  });
+
+  const atBranch = equipment.filter((e) => e.branchName === branchName);
+  const held = new Map<number, HeldCheck>();
+
+  items.forEach((item) => {
+    const sameCheck = byItem.get(item.id);
+    if (sameCheck) {
+      held.set(item.id, { job: sameCheck, because: 'same-check' });
+      return;
+    }
+
+    const asset = assetForCheck(item, answers[item.id], atBranch);
+    if (!asset) return;
+    const sameUnit = byEquipment.get(asset.id);
+    if (sameUnit) {
+      held.set(item.id, { job: sameUnit, because: 'same-unit', unitName: asset.name });
+    }
+  });
+
+  return held;
 }
 
 /**
@@ -192,6 +340,7 @@ export function raiseMaintenanceJobs(
 
   const raised: MaintenanceJob[] = [];
   let alreadyRaised = 0;
+  const atBranch = activeEquipment().filter((e) => e.branchName === inspection.branchName);
 
   candidates.forEach((issue) => {
     const id = jobIdFor(inspection.id, issue.item.id);
@@ -201,12 +350,20 @@ export function raiseMaintenanceJobs(
     }
 
     const section = checklist.getSectionOf(issue.item.id);
+    /*
+     * The asset the finding names, when the inspector picked one off the
+     * register. This is what makes a fault reported on the round and the
+     * register's own history the same thing rather than two lists that happen
+     * to use the same words.
+     */
+    const asset = assetForCheck(issue.item, issue.answer, atBranch);
     const job: MaintenanceJob = {
       id,
       branchName: inspection.branchName,
       title: issue.item.text,
       details: detailsFor(issue, section?.title ?? null),
       equipment: equipmentFor(issue, section?.title ?? null),
+      ...(asset ? { equipmentId: asset.id } : {}),
       category: suggestCategory(issue.item, issue.answer),
       // The priority the report gave it, so the board agrees with the record
       priority: issue.priority.severity,

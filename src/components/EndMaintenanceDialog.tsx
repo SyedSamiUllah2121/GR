@@ -2,9 +2,22 @@
 
 import React, { useState } from 'react';
 import { Camera, CheckCircle2, Loader2, Receipt, Trash2 } from 'lucide-react';
-import { MaintenanceJob } from '../types';
-import { completeJob, getLastPerson, rememberPerson } from '../services/maintenanceStore';
+import { Interval, MaintenanceJob } from '../types';
+import { completeJob, getJobs, getLastPerson, rememberPerson } from '../services/maintenanceStore';
 import { approximateBytes, formatBytes, readImageFile } from '../services/photoFile';
+import { getEquipmentById } from '../services/equipmentStore';
+import {
+  generalMaintenanceState,
+  recordGeneralMaintenance,
+} from '../services/generalMaintenance';
+import {
+  addInterval,
+  intervalFor,
+  intervalOf,
+  intervalText,
+  toIsoDay,
+} from '../services/maintenanceSchedule';
+import { IntervalPicker } from './IntervalPicker';
 
 const inputClass =
   'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
@@ -44,6 +57,39 @@ export const EndMaintenanceDialog: React.FC<{
   const [photos, setPhotos] = useState<string[]>([]);
   const [reading, setReading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  /*
+   * A repair is often when the general maintenance gets done too — somebody is
+   * already at the unit with it opened up, so they clean and check it while
+   * they are there. Without a way to say so, that work goes unrecorded and the
+   * board raises the service again a fortnight later, which is how a schedule
+   * stops being believed.
+   */
+  const today = toIsoDay(new Date());
+  const asset = job.equipmentId ? getEquipmentById(job.equipmentId) : null;
+  const general = asset ? generalMaintenanceState(asset, today, undefined, getJobs()) : null;
+  /*
+   * Not offered on the general-maintenance job itself. Closing that one already
+   * resets the clock, and a tickbox saying "the thing you are closing was also
+   * done" would be asking somebody to confirm the same fact twice.
+   */
+  const offerGeneral = !!asset && !!general && job.planId !== general.plan.id;
+  const currentCadence =
+    asset && general ? intervalFor(asset, general.plan) ?? intervalOf(general.plan) : null;
+
+  const [alsoGeneral, setAlsoGeneral] = useState(false);
+  /*
+   * Starts on whatever the asset already keeps, so the ordinary case is to
+   * leave it alone: the field states the period rather than asking for it, and
+   * the next date falls out of the interval that was already chosen. An
+   * override is only written when the number in it actually differs.
+   */
+  const [cadence, setCadence] = useState<Interval>(
+    () => currentCadence ?? { every: 6, unit: 'months' }
+  );
+  const cadenceChanged =
+    !!currentCadence &&
+    (cadence.every !== currentCadence.every || cadence.unit !== currentCadence.unit);
 
   const photoBytes = photos.reduce((sum, p) => sum + approximateBytes(p), 0);
 
@@ -118,6 +164,34 @@ export const EndMaintenanceDialog: React.FC<{
       setErrors({ form: error ?? 'Could not close this job' });
       return;
     }
+
+    /*
+     * After the repair is safely stored, never before. If the store is full the
+     * repair is the record that matters, and a reset clock on an asset whose
+     * repair was refused would say work happened that nothing can show.
+     */
+    if (offerGeneral && alsoGeneral && asset) {
+      const result = recordGeneralMaintenance(
+        asset,
+        {
+          on: today,
+          attendedBy,
+          note: resolutionNote.trim()
+            ? `General maintenance done alongside the repair. ${resolutionNote.trim()}`
+            : 'General maintenance done alongside the repair.',
+          // The repair's cost covers the visit; splitting it between the two
+          // records would count the same money twice in the month-end report
+          cost: null,
+          newInterval: cadenceChanged ? cadence : undefined,
+        },
+        today
+      );
+      if (!result.ok) {
+        setErrors({ form: result.error ?? 'The repair was closed, but the service was not recorded' });
+        return;
+      }
+    }
+
     onDone(saved);
   };
 
@@ -262,6 +336,61 @@ export const EndMaintenanceDialog: React.FC<{
               <p className="text-xs font-semibold text-[#C8202D] mt-2">{errors.photos}</p>
             )}
           </div>
+
+          {offerGeneral && currentCadence && (
+            <div className="rounded-md border border-[#E6E7EB] bg-[#FAFAFA] p-3.5 space-y-3">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={alsoGeneral}
+                  onChange={(e) => {
+                    setAlsoGeneral(e.target.checked);
+                    if (!e.target.checked && currentCadence) setCadence(currentCadence);
+                  }}
+                  className="mt-0.5 w-4 h-4 accent-[#C8202D] cursor-pointer"
+                />
+                <span>
+                  <span className="block text-xs font-bold text-[#17181D]">
+                    General maintenance was done too
+                  </span>
+                  <span className="block text-[11px] text-[#6B6F76] mt-0.5">
+                    While the unit was open. Its clock resets from today, so the next one
+                    falls due {intervalText(currentCadence)} from now rather than from the
+                    date it was already on.
+                  </span>
+                </span>
+              </label>
+
+              {alsoGeneral && (
+                <div className="pl-7 space-y-2.5">
+                  {/*
+                    The period is on the form rather than behind a second
+                    tickbox. It is already filled in with what this unit keeps,
+                    so leaving it alone is the ordinary case — but somebody who
+                    has just had the thing apart and wants it looked at more
+                    often should not have to find a checkbox first.
+                  */}
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76]">
+                    How often from now on
+                  </span>
+                  <IntervalPicker
+                    id="mnt-general-cadence"
+                    value={cadence}
+                    onChange={setCadence}
+                    label="general maintenance for this unit"
+                  />
+                  <p className="text-[11px] text-[#6B6F76]">
+                    Next general maintenance falls due{' '}
+                    <strong>{addInterval(today, cadence) ?? '—'}</strong> —{' '}
+                    {intervalText(cadence)}
+                    {cadenceChanged
+                      ? ', kept for this unit alone from now on.'
+                      : ', which is what it was already on.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {errors.form && (
             <p className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">

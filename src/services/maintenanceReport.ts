@@ -1,11 +1,11 @@
 import {
-  MAINTENANCE_CATEGORY_LABEL,
   MaintenanceCategory,
   MaintenanceJob,
   MaintenanceStatus,
   Severity,
   jobKindOf,
 } from '../types';
+import { categoryLabel } from './categoryStore';
 import { daysOpen, statusOf, turnaroundHours, workMinutes } from './maintenanceStore';
 
 /**
@@ -485,7 +485,7 @@ export function buildMaintenanceOverview(
     const inCategory = jobs.filter((j) => j.category === key);
     return {
       key,
-      label: MAINTENANCE_CATEGORY_LABEL[key],
+      label: categoryLabel(key),
       total: count,
       open: inCategory.filter((j) => statusOf(j) !== 'completed').length,
       averageTurnaroundHours: averageTurnaround(inCategory),

@@ -1,6 +1,7 @@
-import { Equipment, MaintenanceCategory } from '../types';
+import { Equipment, Interval, MaintenanceCategory } from '../types';
 import { SEED_EQUIPMENT } from '../data/seedEquipment';
-import { isRealIsoDay } from './maintenanceSchedule';
+import { isRealIsoDay, isUsableInterval } from './maintenanceSchedule';
+import { generalPlanIdFor } from './maintenancePlanStore';
 
 /**
  * The assets each branch runs.
@@ -28,8 +29,10 @@ const EVENT = 'inspection_log_equipment_change';
  * would be invisible to every installation already in use.
  *
  *   1  the first set — one printer, one chiller and one AC per branch
+ *   2  the rest of a restaurant: display fridge, freezer, second AC, second
+ *      extinguisher, oven, water heater, CCTV, gas bank, leased coffee machine
  */
-const SEED_VERSION = 1;
+const SEED_VERSION = 2;
 const SEED_VERSION_KEY = 'inspection_log_equipment_seed_version';
 
 function notify(): void {
@@ -94,11 +97,20 @@ export function getEquipment(): Equipment[] {
 
     const known = new Set(current.map((e) => e.id));
     const missing = SEED_EQUIPMENT.filter((e) => !known.has(e.id));
-    markSeeded();
-    if (missing.length === 0) return current;
+    if (missing.length === 0) {
+      markSeeded();
+      return current;
+    }
 
+    /*
+     * Written before the marker, not after. Marking first meant a browser that
+     * was full at the moment of a version bump recorded the seed as applied
+     * and lost the new assets with no retry — `branchStore` has the ordering
+     * right and says why.
+     */
     const merged = [...current, ...missing];
-    write(merged);
+    if (!write(merged)) return current;
+    markSeeded();
     return merged;
   } catch (err) {
     console.error('Failed to read equipment:', err);
@@ -143,6 +155,15 @@ export interface EquipmentDraft {
   location?: string | null;
   installedOn?: string | null;
   notes?: string | null;
+  /**
+   * The intervals this asset keeps instead of its category's.
+   *
+   * Carried on the draft rather than written through `setPlanOverride`
+   * afterwards, so saving an asset is one write and one change event. Two
+   * writes in sequence would fire `notify` twice and re-read storage in
+   * between, and the screens would repaint on a half-saved record.
+   */
+  planOverrides?: Record<string, Interval | number | null>;
 }
 
 export interface SaveEquipmentResult {
@@ -168,6 +189,45 @@ function installDateProblem(value: string | null): string | null {
   if (value === null) return null;
   if (!isRealIsoDay(value)) return `“${value}” is not a real date — use YYYY-MM-DD`;
   return null;
+}
+
+/**
+ * Keeps nonsense out of the overrides, at the write.
+ *
+ * A NaN interval cannot be repaired at the read, which is why it is stopped
+ * here: `JSON.stringify` turns NaN into `null`, and `null` in this map means
+ * "exempt". So a mistyped number does not fail loudly — it survives the reload
+ * as a deliberate-looking exemption, and the asset simply stops being
+ * serviced. Anything that is not a usable cadence is dropped rather than
+ * stored, leaving the asset on its category's rule.
+ */
+function cleanOverrides(
+  overrides: Record<string, Interval | number | null> | undefined
+): Record<string, Interval | number | null> | undefined {
+  if (!overrides) return undefined;
+  const out: Record<string, Interval | number | null> = {};
+  Object.entries(overrides).forEach(([planId, value]) => {
+    if (value === null) {
+      out[planId] = null;
+      return;
+    }
+    if (typeof value === 'number') {
+      if (Number.isInteger(value) && value > 0) out[planId] = value;
+      return;
+    }
+    if (isUsableInterval(value)) out[planId] = { every: value.every, unit: value.unit };
+  });
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** The overrides without the general-maintenance key for a given category. */
+function withoutGeneralOf(
+  category: MaintenanceCategory,
+  overrides: Record<string, Interval | number | null> | undefined
+): Record<string, Interval | number | null> | undefined {
+  if (!overrides) return undefined;
+  const { [generalPlanIdFor(category)]: _dropped, ...rest } = overrides;
+  return rest;
 }
 
 /** Adds an asset, refusing a nameless one and a duplicate of one on record. */
@@ -196,6 +256,7 @@ export function addEquipment(draft: EquipmentDraft, now: string): SaveEquipmentR
     location: trimmed(draft.location),
     installedOn: trimmed(draft.installedOn),
     notes: trimmed(draft.notes),
+    planOverrides: cleanOverrides(draft.planOverrides),
     active: true,
     createdAt: now,
   };
@@ -228,6 +289,27 @@ export function updateEquipment(id: string, draft: EquipmentDraft): SaveEquipmen
     ...existing,
     name,
     category: draft.category,
+    /*
+     * An override is keyed by a plan id, and a general plan id is built from
+     * the category — so moving an asset to another trade leaves its old
+     * general override pointing at a plan that no longer applies to it. Pruned
+     * narrowly: only the general key, and only when the category actually
+     * changed, so a named-service override survives a re-filing.
+     *
+     * A draft that says nothing about overrides is not a draft that clears
+     * them. The asset form sends the whole map back, but a caller that only
+     * means to correct a serial number must not silently withdraw an asset
+     * from its schedule — an exemption nobody remembers making is exactly the
+     * bug this field is most likely to cause.
+     */
+    ...(() => {
+      const kept = draft.planOverrides === undefined ? existing.planOverrides : draft.planOverrides;
+      return {
+        planOverrides: cleanOverrides(
+          draft.category !== existing.category ? withoutGeneralOf(existing.category, kept) : kept
+        ),
+      };
+    })(),
     serialNumber: trimmed(draft.serialNumber),
     make: trimmed(draft.make),
     model: trimmed(draft.model),
@@ -242,19 +324,27 @@ export function updateEquipment(id: string, draft: EquipmentDraft): SaveEquipmen
   return { ok: true, equipment: next };
 }
 
-/** Sets or clears the interval this asset keeps instead of its category's. */
+/**
+ * Sets or clears the interval this asset keeps instead of its category's.
+ *
+ * Three arguments and three meanings: an `Interval` is its own cadence, `null`
+ * exempts it, and `undefined` puts it back on the category's rule.
+ */
 export function setPlanOverride(
   id: string,
   planId: string,
-  months: number | null | undefined
+  interval: Interval | null | undefined
 ): SaveEquipmentResult {
   const all = getEquipment();
   const existing = all.find((e) => e.id === id);
   if (!existing) return { ok: false, error: 'That asset is no longer on record' };
+  if (interval && !isUsableInterval(interval)) {
+    return { ok: false, error: 'An interval has to be a whole number of days or months' };
+  }
 
   const overrides = { ...(existing.planOverrides ?? {}) };
-  if (months === undefined) delete overrides[planId];
-  else overrides[planId] = months;
+  if (interval === undefined) delete overrides[planId];
+  else overrides[planId] = interval;
 
   const next: Equipment = {
     ...existing,
