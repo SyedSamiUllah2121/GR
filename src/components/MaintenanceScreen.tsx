@@ -792,6 +792,28 @@ const ReportProblemDialog: React.FC<{
           }}
           className="p-6 space-y-5"
         >
+          {/*
+            The unit first, then the fault. Somebody reporting a problem is
+            standing in front of the thing — naming it is the easier half and
+            the half that decides who the job goes to, so it is asked before
+            they have to put the fault into words.
+          */}
+          <div>
+            <label htmlFor="mnt-equipment" className={labelClass}>
+              Which unit or area{' '}
+              <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+            </label>
+            <input
+              id="mnt-equipment"
+              type="text"
+              value={equipment}
+              onChange={(e) => setEquipment(e.target.value)}
+              autoFocus
+              placeholder="e.g. Split AC 2 — dining area"
+              className={inputClass}
+            />
+          </div>
+
           <div>
             <label htmlFor="mnt-title" className={labelClass}>
               What is wrong?
@@ -801,7 +823,6 @@ const ReportProblemDialog: React.FC<{
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              autoFocus
               placeholder="e.g. Dining area AC not cooling"
               className={inputClass}
             />
@@ -910,19 +931,6 @@ const ReportProblemDialog: React.FC<{
 
             {showMore && (
               <div className="mt-4 space-y-4">
-                <div>
-                  <label htmlFor="mnt-equipment" className={labelClass}>
-                    Which unit or area
-                  </label>
-                  <input
-                    id="mnt-equipment"
-                    type="text"
-                    value={equipment}
-                    onChange={(e) => setEquipment(e.target.value)}
-                    placeholder="e.g. Split AC 2 — dining area"
-                    className={inputClass}
-                  />
-                </div>
                 <div>
                   <label htmlFor="mnt-category" className={labelClass}>
                     Category
