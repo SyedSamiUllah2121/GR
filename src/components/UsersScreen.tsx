@@ -34,6 +34,7 @@ import {
 } from '../services/userStore';
 import { activeBranches } from '../services/branchStore';
 import { useBranches } from '../hooks/useBranches';
+import { useDialog } from '../hooks/useDialog';
 import { useUsers } from '../hooks/useUsers';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { formatDate } from '../services/reportModel';
@@ -604,9 +605,11 @@ const RemovalDialog: React.FC<{
   onConfirm: () => void;
 }> = ({ user, usage, onCancel, onConfirm }) => {
   const referenced = usage.submitted > 0 || usage.assigned > 0;
+  const dialogRef = useDialog<HTMLDivElement>(onCancel);
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"

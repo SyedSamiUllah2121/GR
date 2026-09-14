@@ -68,6 +68,7 @@ import { getInspections } from '../services/storage';
 import { DetailFields } from './DetailFields';
 import { PriorityBadge } from './PriorityBadge';
 import { useToast } from './ToastProvider';
+import { useConfirm } from './ConfirmProvider';
 
 /**
  * Editing the master checklist.
@@ -131,6 +132,7 @@ const iconBtnClass =
 
 export const ChecklistEditorScreen: React.FC = () => {
   const showToast = useToast();
+  const confirm = useConfirm();
   const [doc, setDoc] = useState<ChecklistDoc>(() => getChecklist());
   const [answered, setAnswered] = useState<Set<number>>(() => new Set());
   const [showArchived, setShowArchived] = useState(false);
@@ -155,14 +157,13 @@ export const ChecklistEditorScreen: React.FC = () => {
 
   const isAnswered = (id: number) => answered.has(id);
 
-  const handleReset = () => {
-    if (
-      !window.confirm(
-        'Reset the checklist to the shipped default? Questions you have added will be lost. Past inspection records are not affected.'
-      )
-    ) {
-      return;
-    }
+  const handleReset = async () => {
+    const ok = await confirm({
+      title: 'Reset the checklist to the shipped default?',
+      body: 'Questions you have added will be lost. Past inspection records are not affected.',
+      confirmLabel: 'Reset checklist',
+    });
+    if (!ok) return;
     resetChecklist();
     setDoc(getChecklist());
     showToast('Checklist reset to default');
@@ -281,6 +282,7 @@ const ListGroup: React.FC<ListGroupProps> = ({
   isAnswered,
   removedNotice,
 }) => {
+  const confirm = useConfirm();
   const count = list.sections
     .filter((s) => !s.archived)
     .reduce((n, s) => n + s.items.filter((i) => !i.archived).length, 0);
@@ -313,8 +315,13 @@ const ListGroup: React.FC<ListGroupProps> = ({
             onDown={() => commit(moveList(doc, list.key, 1))}
             canUp={listIndex > 0}
             canDown={listIndex < doc.lists.length - 1}
-            onRemove={() => {
-              if (!window.confirm(`Remove the list "${list.label}" and everything in it?`)) return;
+            onRemove={async () => {
+              const ok = await confirm({
+                title: `Remove the list “${list.label}”?`,
+                body: 'Everything in it goes with it.',
+                confirmLabel: 'Remove list',
+              });
+              if (!ok) return;
               const { doc: next, archived } = removeList(doc, list.key, isAnswered);
               commit(next, removedNotice(archived, 'List'));
             }}
@@ -388,6 +395,7 @@ const SectionCard: React.FC<SectionCardProps> = ({
   isAnswered,
   removedNotice,
 }) => {
+  const confirm = useConfirm();
   const [adding, setAdding] = useState(false);
   const Icon = iconFor(section.title);
   const items = section.items.filter((i) => showArchived || !i.archived);
@@ -441,9 +449,13 @@ const SectionCard: React.FC<SectionCardProps> = ({
             onDown={() => commit(moveSection(doc, list.key, section.key, 1))}
             canUp={sectionIndex > 0}
             canDown={sectionIndex < list.sections.length - 1}
-            onRemove={() => {
-              if (!window.confirm(`Remove the category "${section.title}" and its questions?`))
-                return;
+            onRemove={async () => {
+              const ok = await confirm({
+                title: `Remove the category “${section.title}”?`,
+                body: 'Its questions are removed with it.',
+                confirmLabel: 'Remove category',
+              });
+              if (!ok) return;
               const { doc: next, archived } = removeSection(doc, list.key, section.key, isAnswered);
               commit(next, removedNotice(archived, 'Category'));
             }}
@@ -576,6 +588,7 @@ const QuestionRow: React.FC<QuestionRowProps> = ({
   onRemove,
   onRestore,
 }) => {
+  const confirm = useConfirm();
   const details = item.details ?? [];
   /* Open when there is something to see, so recorded kit is never hidden. */
   const [showDetails, setShowDetails] = useState(details.length > 0);
@@ -683,11 +696,15 @@ const QuestionRow: React.FC<QuestionRowProps> = ({
           onDown={() => onMove(1)}
           canUp={canMoveUp}
           canDown={canMoveDown}
-          onRemove={() => {
-            const warning = hasHistory
-              ? 'Remove this question? Past reports that already answered it will keep showing it.'
-              : 'Remove this question?';
-            if (window.confirm(warning)) onRemove();
+          onRemove={async () => {
+            const ok = await confirm({
+              title: 'Remove this question?',
+              body: hasHistory
+                ? 'Past reports that already answered it will keep showing it.'
+                : undefined,
+              confirmLabel: 'Remove question',
+            });
+            if (ok) onRemove();
           }}
           removeTitle="Remove question"
         />

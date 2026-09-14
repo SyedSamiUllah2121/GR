@@ -35,6 +35,7 @@ import {
 } from '../services/priority';
 import { useRouter } from 'next/navigation';
 import { useToast } from './ToastProvider';
+import { useConfirm } from './ConfirmProvider';
 import {
   maintenanceIssues,
   raiseMaintenanceJobs,
@@ -65,6 +66,7 @@ const SIGNATORY_ROLES = [
 export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
   const router = useRouter();
   const showToast = useToast();
+  const confirm = useConfirm();
   const checklist = useChecklist();
   const user = useCurrentUser();
   const [inspection, setInspection] = useState<Inspection | null>(() =>
@@ -314,7 +316,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     ? frozenIds.filter((id) => !checklist.getItem(id)).length
     : 0;
 
-  const handleSubmitInspection = () => {
+  const handleSubmitInspection = async () => {
     // Sections can be jumped from the checklist, so re-check completeness here
     if (unansweredItems.length > 0) {
       showToast(
@@ -350,16 +352,20 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
 
     // Re-submitting rewrites itemIds from what is on screen. When the checklist
     // has moved on, that quietly narrows what the record says it covered.
-    if (
-      droppedItemCount > 0 &&
-      !window.confirm(
-        `${droppedItemCount} item${droppedItemCount === 1 ? '' : 's'} this inspection ` +
-          `originally covered ${droppedItemCount === 1 ? 'is' : 'are'} no longer in the checklist. ` +
-          `Submitting now records it as covering ${totalItemsCount} items instead of ` +
-          `${frozenIds ? frozenIds.length : totalItemsCount}, and rescores it out of ${totalItemsCount}. Continue?`
-      )
-    ) {
-      return;
+    if (droppedItemCount > 0) {
+      const proceed = await confirm({
+        title: `Submit against ${totalItemsCount} items rather than ${
+          frozenIds ? frozenIds.length : totalItemsCount
+        }?`,
+        body:
+          `${droppedItemCount} item${droppedItemCount === 1 ? '' : 's'} this inspection ` +
+          `originally covered ${droppedItemCount === 1 ? 'is' : 'are'} no longer in the ` +
+          `checklist. Submitting now records it as covering ${totalItemsCount} items, and ` +
+          `rescores it out of ${totalItemsCount}.`,
+        confirmLabel: 'Submit anyway',
+        destructive: false,
+      });
+      if (!proceed) return;
     }
 
     const canvas = canvasRef.current;
@@ -723,6 +729,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
         {signError && (
           <div
             id="signature-error-msg"
+            role="alert"
             className="mb-3 p-2.5 rounded-md bg-[#FDECEE] border border-[#C8202D]/30 text-[#C8202D] text-xs font-semibold flex items-center gap-1.5"
           >
             <AlertTriangle className="w-4 h-4 shrink-0" />

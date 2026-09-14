@@ -29,6 +29,8 @@ import {
 } from '../types';
 import { FULL_CHECKLIST_LABEL } from '../data/defaultChecklist';
 import { useChecklist } from '../hooks/useChecklist';
+import { useDialog } from '../hooks/useDialog';
+import { useConfirm } from './ConfirmProvider';
 import { useBranches } from '../hooks/useBranches';
 import { useUsers } from '../hooks/useUsers';
 import { useCurrentUser } from '../hooks/useCurrentUser';
@@ -61,6 +63,7 @@ const RANDOM = '__random__';
 
 export const NewInspectionScreen: React.FC = () => {
   const router = useRouter();
+  const confirm = useConfirm();
   const checklist = useChecklist();
   const branches = activeBranches(useBranches());
   const user = useCurrentUser();
@@ -317,7 +320,7 @@ export const NewInspectionScreen: React.FC = () => {
       : inspectorChoice.trim()
     : user?.name ?? '';
 
-  const handleStartInspection = (e: React.FormEvent) => {
+  const handleStartInspection = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (kind === 'surprise') {
@@ -337,12 +340,12 @@ export const NewInspectionScreen: React.FC = () => {
     setNameError(null);
 
     if (existingDraft && existingDraft.status === 'draft') {
-      const confirmDiscard = window.confirm(
-        `Starting a new inspection will replace the existing draft for ${existingDraft.branchName}. Do you want to proceed?`
-      );
-      if (!confirmDiscard) {
-        return;
-      }
+      const proceed = await confirm({
+        title: 'Replace the unfinished draft?',
+        body: `Starting a new inspection discards the draft already open for ${existingDraft.branchName}.`,
+        confirmLabel: 'Replace draft',
+      });
+      if (!proceed) return;
       deleteInspection(existingDraft.id);
       clearActiveDraft();
     }
@@ -378,14 +381,18 @@ export const NewInspectionScreen: React.FC = () => {
     }
   };
 
-  const handleDiscardDraft = () => {
+  const handleDiscardDraft = async () => {
     if (!existingDraft) return;
-    if (window.confirm('Are you sure you want to discard this unfinished draft?')) {
-      // Also drop the row the draft left in the records store as it was answered
-      deleteInspection(existingDraft.id);
-      clearActiveDraft();
-      setExistingDraft(null);
-    }
+    const ok = await confirm({
+      title: 'Discard this unfinished draft?',
+      body: 'The answers recorded on it so far are deleted.',
+      confirmLabel: 'Discard draft',
+    });
+    if (!ok) return;
+    // Also drop the row the draft left in the records store as it was answered
+    deleteInspection(existingDraft.id);
+    clearActiveDraft();
+    setExistingDraft(null);
   };
 
   return (
@@ -691,7 +698,7 @@ export const NewInspectionScreen: React.FC = () => {
             )}
 
             {!addingBranch && branchError && (
-              <p className="mt-2 text-xs font-semibold text-[#C8202D]">{branchError}</p>
+              <p role="alert" className="mt-2 text-xs font-semibold text-[#C8202D]">{branchError}</p>
             )}
           </div>
           )}
@@ -946,7 +953,7 @@ export const NewInspectionScreen: React.FC = () => {
               </div>
 
               {assignError && (
-                <p id="assign-error" className="text-xs font-semibold text-[#C8202D]">
+                <p role="alert" id="assign-error" className="text-xs font-semibold text-[#C8202D]">
                   {assignError}
                 </p>
               )}
@@ -1032,7 +1039,7 @@ export const NewInspectionScreen: React.FC = () => {
                 />
               )}
               {nameError && (
-                <p id="inspector-name-error" className="text-xs font-semibold text-[#C8202D] mt-1">
+                <p role="alert" id="inspector-name-error" className="text-xs font-semibold text-[#C8202D] mt-1">
                   {nameError}
                 </p>
               )}
@@ -1203,17 +1210,13 @@ const RemoveBranchDialog: React.FC<{
 
   const willClose = history.length > 0;
 
-  // Escape cancels, the same as clicking away from any other dialog here
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  // Escape cancels, Tab stays inside, and whatever opened this gets focus
+  // back when it closes — the same as every other dialog here.
+  const dialogRef = useDialog<HTMLDivElement>(onCancel);
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onCancel();

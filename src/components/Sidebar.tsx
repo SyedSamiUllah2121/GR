@@ -128,7 +128,7 @@ const NAV: NavEntry[] = [
       {
         id: 'sidebar-nav-maintenance-equipment',
         href: '/maintenance/equipment',
-        label: 'Equipment',
+        label: 'Appliances',
         isActive: (p) => p === '/maintenance/equipment',
         // A branch sees its own register; changing it is a separate right
         needs: ['maintenance.view', 'maintenance.reportOwnBranch'],
@@ -206,6 +206,14 @@ export const Sidebar: React.FC = () => {
       return { ...entry, children, href: children[0]?.href ?? entry.href };
     }
   );
+
+  /*
+   * The open section, which below `md` is the only thing that decides what
+   * the second row of the top bar shows. On the rail proper a section's pages
+   * hang under it and every section can be opened at once; a top bar has one
+   * line to give them, so it gives it to the section you are standing in.
+   */
+  const openSection = entries.find((entry) => entry.isActive(pathname));
 
   /*
    * Read straight in the initialiser rather than in an effect. Safe here
@@ -321,6 +329,42 @@ export const Sidebar: React.FC = () => {
           ))}
         </div>
       </nav>
+
+      {/*
+        A section's pages, on a phone.
+
+        The rail hangs them under the section and hides them below `md`,
+        which on a phone left them with no way in at all — the top bar shows
+        sections only, so the appliance register, the job board and the
+        month-end report could be reached by typing the address and by
+        nothing else. They get the row under the sections instead, for the
+        one section you are actually in, which is the only one whose pages
+        are any use to you.
+      */}
+      {openSection && openSection.children.length > 1 && (
+        <nav
+          aria-label={`${openSection.label} pages`}
+          className="md:hidden flex gap-1 px-3 pb-3 -mt-1 overflow-x-auto"
+        >
+          {openSection.children.map((child) => {
+            const childActive = child.isActive(pathname);
+            return (
+              <Link
+                key={child.id}
+                href={child.href}
+                aria-current={childActive ? 'page' : undefined}
+                className={`shrink-0 px-3 py-2 rounded-md text-[13px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                  childActive
+                    ? 'bg-white text-[#A81823]'
+                    : 'bg-white/10 text-white/75 hover:text-white hover:bg-white/20'
+                }`}
+              >
+                {child.label}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </aside>
   );
 };

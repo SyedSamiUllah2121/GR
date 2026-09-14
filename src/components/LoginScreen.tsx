@@ -243,7 +243,7 @@ export const LoginScreen: React.FC = () => {
       </div>
 
       {/* Form half */}
-      <div className="flex-1 flex flex-col justify-center items-center px-5 sm:px-8 py-12">
+      <div className="flex-1 min-w-0 flex flex-col justify-center items-center px-5 sm:px-8 py-12">
         <div className="w-full max-w-[24rem]">
           {/* The brand panel is gone at this width, so the mark comes inline */}
           <div className="lg:hidden mb-8">

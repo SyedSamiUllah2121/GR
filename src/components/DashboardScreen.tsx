@@ -302,7 +302,7 @@ export const DashboardScreen: React.FC = () => {
           <AttentionStrip model={model} />
 
           {/* The core panel: where every branch stands */}
-          <section className="bg-white border border-[#E6E7EB] rounded-xl shadow-sm overflow-hidden">
+          <section className="@container bg-white border border-[#E6E7EB] rounded-xl shadow-sm overflow-hidden">
             <div className="px-5 py-4 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="w-8 h-8 rounded-lg bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
@@ -325,7 +325,7 @@ export const DashboardScreen: React.FC = () => {
             </div>
 
             {/* Column headings. Hidden where the rows stack and the labels would lie. */}
-            <div className="hidden lg:grid grid-cols-[1.6fr_9.5rem_8rem_1.1fr_9rem_1.25rem] gap-x-5 px-5 py-2 border-y border-[#EFEFF2] bg-[#FBFBFC] text-[9px] font-bold uppercase tracking-[0.14em] text-[#9CA1A9]">
+            <div className="hidden @min-[48rem]:grid grid-cols-[minmax(12.5rem,1.6fr)_minmax(6rem,9.5rem)_minmax(4.5rem,8rem)_minmax(8rem,1.1fr)_minmax(6rem,9rem)_1.25rem] gap-x-5 px-5 py-2 border-y border-[#EFEFF2] bg-[#FBFBFC] text-[9px] font-bold uppercase tracking-[0.14em] text-[#9CA1A9]">
               <span>Branch</span>
               <span>Last visit</span>
               <span>Overall score</span>
@@ -334,7 +334,7 @@ export const DashboardScreen: React.FC = () => {
               <span />
             </div>
 
-            <div className="divide-y divide-[#EFEFF2] border-t border-[#EFEFF2] lg:border-t-0">
+            <div className="divide-y divide-[#EFEFF2] border-t border-[#EFEFF2] @min-[48rem]:border-t-0">
               {model.branches.map((branch) => (
                 <BranchRow key={branch.name} branch={branch} />
               ))}
@@ -669,13 +669,15 @@ const Panel: React.FC<{
 );
 
 /**
- * One branch, on the same column grid as the headings above it. Below `lg`
- * the grid collapses and each cell carries its own label, because a bare date
- * or a bare percentage means nothing once the heading row is gone.
+ * One branch, on the same column grid as the headings above it. Below the
+ * panel's 48rem the grid collapses and each cell carries its own label,
+ * because a bare date or a bare percentage means nothing once the heading row
+ * is gone. Measured against the panel and not the window, so the rail being
+ * open or shut moves the switch with it.
  */
 const BranchRow: React.FC<{ branch: BranchSnapshot }> = ({ branch }) => {
   const rowClasses =
-    'px-5 py-4 grid grid-cols-1 lg:grid-cols-[1.6fr_9.5rem_8rem_1.1fr_9rem_1.25rem] gap-x-5 gap-y-3 lg:items-center hover:bg-[#FAFAFA] transition-colors group';
+    'px-5 py-4 grid grid-cols-1 @min-[48rem]:grid-cols-[minmax(12.5rem,1.6fr)_minmax(6rem,9.5rem)_minmax(4.5rem,8rem)_minmax(8rem,1.1fr)_minmax(6rem,9rem)_1.25rem] gap-x-5 gap-y-3 @min-[48rem]:items-center hover:bg-[#FAFAFA] transition-colors group';
 
   const identity = (
     <div className="flex items-center gap-3 min-w-0">
@@ -698,11 +700,11 @@ const BranchRow: React.FC<{ branch: BranchSnapshot }> = ({ branch }) => {
     return (
       <Link href="/inspections" className={rowClasses}>
         {identity}
-        <div className="lg:col-span-4">
+        <div className="@min-[48rem]:col-span-4">
           <p className="text-xs font-bold text-[#C8202D]">Never inspected</p>
           <p className="text-[11px] text-[#6B6F76] mt-0.5">Start the first visit</p>
         </div>
-        <ChevronRight className="hidden lg:block w-4 h-4 text-[#C9CCD2] group-hover:text-[#17181D]" />
+        <ChevronRight className="hidden @min-[48rem]:block w-4 h-4 text-[#C9CCD2] group-hover:text-[#17181D]" />
       </Link>
     );
   }
@@ -793,7 +795,7 @@ const BranchRow: React.FC<{ branch: BranchSnapshot }> = ({ branch }) => {
         )}
       </div>
 
-      <ChevronRight className="hidden lg:block w-4 h-4 text-[#C9CCD2] group-hover:text-[#17181D]" />
+      <ChevronRight className="hidden @min-[48rem]:block w-4 h-4 text-[#C9CCD2] group-hover:text-[#17181D]" />
     </Link>
   );
 };

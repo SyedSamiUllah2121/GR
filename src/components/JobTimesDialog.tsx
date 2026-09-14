@@ -6,6 +6,7 @@ import { MaintenanceJob } from '../types';
 import { setJobTimes } from '../services/maintenanceStore';
 import { fromLocalInputValue, toLocalInputValue } from '../services/localDateTime';
 import { formatDateTime } from '../services/reportModel';
+import { useDialog } from '../hooks/useDialog';
 
 const inputClass =
   'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
@@ -44,11 +45,19 @@ export const JobTimesDialog: React.FC<{
     if (result.job) onSaved(result.job);
   };
 
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="jobtimesdialog-dialog-1-title"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+    >
       <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-md my-8">
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
-          <h3 className="text-base font-bold text-[#17181D]">
+          <h3 id="jobtimesdialog-dialog-1-title" className="text-base font-bold text-[#17181D]">
             {job.startedAt ? 'Adjust the times' : 'Start maintenance'}
           </h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
@@ -99,7 +108,7 @@ export const JobTimesDialog: React.FC<{
           )}
 
           {error && (
-            <p className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/25 rounded-md px-3 py-2">
+            <p role="alert" className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/25 rounded-md px-3 py-2">
               {error}
             </p>
           )}

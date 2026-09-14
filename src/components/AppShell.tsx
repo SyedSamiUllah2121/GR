@@ -1,10 +1,11 @@
 'use client';
 
-import {useEffect} from 'react';
+import React, {useEffect} from 'react';
 import {usePathname, useRouter} from 'next/navigation';
 import {Sidebar} from './Sidebar';
 import {Topbar} from './Topbar';
 import {ToastProvider} from './ToastProvider';
+import {ConfirmProvider} from './ConfirmProvider';
 import {getInspections} from '../services/storage';
 import {sweepSchedule} from '../services/maintenanceSchedule';
 import {ensureGeneralPlans} from '../services/maintenancePlanStore';
@@ -85,19 +86,65 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
     }
   }, [mounted, user, pathname, router]);
 
-  if (!mounted || !allowed) return null;
+  /*
+   * Everything is read out of the browser store, so nothing can be drawn
+   * until the client has mounted. Rendering nothing left a white flash on
+   * every load and made a slow phone look broken; a grey cast of the
+   * furniture that is about to arrive holds the shape of the page instead.
+   */
+  if (!mounted || !allowed) return <AppShellFallback />;
 
   return (
     <ToastProvider>
-      <div className="min-h-screen bg-[#F6F6F8] flex flex-col md:flex-row text-[#17181D]">
-        {/* Persistent left rail (top bar on mobile) */}
-        <Sidebar />
+      <ConfirmProvider>
+        {/*
+          First stop for a keyboard, and the only way past the rail without
+          tabbing the whole of it on every page. Off-screen until it takes
+          focus, which is the one moment it is any use to anybody.
+        */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:px-4 focus:py-2.5 focus:bg-white focus:text-[#17181D] focus:text-xs focus:font-bold focus:rounded-md focus:shadow-lg focus:border focus:border-[#E6E7EB]"
+        >
+          Skip to main content
+        </a>
 
-        <main className="flex-1 flex flex-col min-w-0">
-          <Topbar />
-          <div className="flex-1 flex flex-col min-w-0">{children}</div>
-        </main>
-      </div>
+        <div className="min-h-screen bg-[#F6F6F8] flex flex-col md:flex-row text-[#17181D]">
+          {/* Persistent left rail (top bar on mobile) */}
+          <Sidebar />
+
+          <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0">
+            <Topbar />
+            <div className="flex-1 flex flex-col min-w-0">{children}</div>
+          </main>
+        </div>
+      </ConfirmProvider>
     </ToastProvider>
   );
 }
+
+/**
+ * What stands in for the app while the browser store is being read.
+ *
+ * Deliberately not a spinner: the wait is a few frames, and a spinner that
+ * flashes up and goes reads as a stutter rather than as loading.
+ */
+const AppShellFallback: React.FC = () => (
+  <div
+    className="min-h-screen bg-[#F6F6F8] flex flex-col md:flex-row"
+    role="status"
+    aria-label="Loading"
+  >
+    <div className="w-full h-16 md:h-auto md:w-[16rem] md:min-h-screen bg-[#A81823] shrink-0" />
+    <div className="flex-1 p-6 md:p-10 space-y-4">
+      <div className="h-7 w-48 rounded-md bg-[#E6E7EB] animate-pulse" />
+      <div className="h-3.5 w-72 rounded bg-[#EFEFF2] animate-pulse" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 pt-2">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-32 rounded-lg bg-white border border-[#E6E7EB] animate-pulse" />
+        ))}
+      </div>
+      <div className="h-64 rounded-lg bg-white border border-[#E6E7EB] animate-pulse" />
+    </div>
+  </div>
+);

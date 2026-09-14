@@ -45,8 +45,10 @@ import {
 } from '../services/maintenanceSchedule';
 import { activeCategories, categoryLabel, defaultCategory } from '../services/categoryStore';
 import { useCategories } from '../hooks/useCategories';
+import { useDialog } from '../hooks/useDialog';
 import { PriorityBadge } from './PriorityBadge';
 import { useToast } from './ToastProvider';
+import { useConfirm } from './ConfirmProvider';
 
 const inputClass =
   'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
@@ -191,17 +193,21 @@ export const MaintenanceSchedulePanel: React.FC<{
   onEditing: (plan: PlanBeingEdited) => void;
 }> = ({ schedule, jobs, editing, onEditing }) => {
   const showToast = useToast();
+  const confirm = useConfirm();
   const { coverage, byCategory, upcoming, overdue, soon } = schedule;
 
-  const remove = (plan: MaintenancePlan) => {
+  const remove = async (plan: MaintenancePlan) => {
     const raised = jobs.some((j) => j.planId === plan.id);
     if (raised) {
       showToast('That plan has already raised work — turn it off instead');
       return;
     }
-    if (!window.confirm(`Delete “${plan.task}” for ${categoryLabel(plan.category)}?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Delete “${plan.task}”?`,
+      body: `The plan for ${categoryLabel(plan.category)} stops raising work.`,
+      confirmLabel: 'Delete plan',
+    });
+    if (!ok) return;
     const result = deletePlan(plan.id);
     showToast(result.ok ? 'Plan deleted' : result.error ?? 'Could not delete that plan');
   };
@@ -454,11 +460,19 @@ const PlanDialog: React.FC<{
     onSaved(result.plan?.task ?? draft.task);
   };
 
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="maintenanceschedulepanel-dialog-1-title"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+    >
       <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-lg my-8">
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
-          <h3 className="text-base font-bold text-[#17181D]">
+          <h3 id="maintenanceschedulepanel-dialog-1-title" className="text-base font-bold text-[#17181D]">
             {plan ? 'Edit plan' : 'Add a plan'}
           </h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
@@ -586,7 +600,7 @@ const PlanDialog: React.FC<{
           </div>
 
           {error && (
-            <p className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
+            <p role="alert" className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
               {error}
             </p>
           )}

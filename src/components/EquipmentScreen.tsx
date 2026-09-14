@@ -30,6 +30,7 @@ import {
   MaintenancePlan,
 } from '../types';
 import { useCategories } from '../hooks/useCategories';
+import { useDialog } from '../hooks/useDialog';
 import {
   activeCategories,
   addCategory,
@@ -87,6 +88,7 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useBranches } from '../hooks/useBranches';
 import { activeBranches } from '../services/branchStore';
 import { useToast } from './ToastProvider';
+import { useConfirm } from './ConfirmProvider';
 import { IntervalPicker } from './IntervalPicker';
 
 const inputClass =
@@ -111,6 +113,7 @@ export const EquipmentScreen: React.FC = () => {
   const router = useRouter();
   const user = useCurrentUser();
   const showToast = useToast();
+  const confirm = useConfirm();
 
   const [all, setAll] = useState<Equipment[]>(() => getEquipment());
   const [jobs, setJobs] = useState(() => getJobs());
@@ -320,16 +323,16 @@ export const EquipmentScreen: React.FC = () => {
     ? grouped.find((group) => group.id === openCategory) ?? null
     : null;
 
-  const withdraw = (item: Equipment) => {
-    if (
-      !window.confirm(
-        referenced.has(item.id)
-          ? `Withdraw “${item.name}”? Jobs already name it, so it will be archived rather than deleted.`
-          : `Delete “${item.name}”? Nothing refers to it, so this cannot be undone.`
-      )
-    ) {
-      return;
-    }
+  const withdraw = async (item: Equipment) => {
+    const inUse = referenced.has(item.id);
+    const ok = await confirm({
+      title: inUse ? `Withdraw “${item.name}”?` : `Delete “${item.name}”?`,
+      body: inUse
+        ? 'Jobs already name it, so it is archived rather than deleted and they stay readable.'
+        : 'Nothing refers to it, so this cannot be undone.',
+      confirmLabel: inUse ? 'Withdraw' : 'Delete',
+    });
+    if (!ok) return;
     const result = removeEquipment(item.id, referenced);
     if (!result.ok) {
       showToast(result.error ?? 'Could not withdraw that asset');
@@ -368,9 +371,9 @@ export const EquipmentScreen: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
-      <header className="min-h-[5rem] bg-white border-b border-[#E6E7EB] flex flex-col sm:flex-row sm:items-center justify-between px-6 md:px-10 shrink-0 gap-4 py-4 sm:py-0">
-        <div>
-          <h2 className="text-xl font-bold text-[#17181D]">Equipment</h2>
+      <header className="min-h-[5rem] bg-white border-b border-[#E6E7EB] flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between px-6 md:px-10 shrink-0 gap-4 py-4 sm:py-4">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-[#17181D]">Appliances</h2>
           <p className="text-[#6B6F76] text-xs mt-0.5">
             {scopedTo && <span className="font-semibold text-[#17181D]">{scopedTo} • </span>}
             {mine.filter((e) => e.active).length} asset
@@ -379,7 +382,7 @@ export const EquipmentScreen: React.FC = () => {
         </div>
 
         {mayManage && (
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             {/*
               In the page header rather than on a category, so it is in the
               same place whether you are looking at the list of trades or
@@ -471,8 +474,8 @@ export const EquipmentScreen: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="relative">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="relative basis-full sm:basis-auto sm:flex-none">
               <Search className="w-3.5 h-3.5 text-[#9CA1A9] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id="equipment-search"
@@ -480,8 +483,8 @@ export const EquipmentScreen: React.FC = () => {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search name, serial, make…"
-                aria-label="Search equipment"
-                className="w-52 sm:w-64 pl-9 pr-8 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] transition-colors"
+                aria-label="Search appliances"
+                className="w-full sm:w-64 pl-9 pr-8 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] transition-colors"
               />
               {query && (
                 <button
@@ -499,7 +502,7 @@ export const EquipmentScreen: React.FC = () => {
                 value={branchFilter}
                 onChange={(e) => setBranchFilter(e.target.value)}
                 aria-label="Filter by branch"
-                className="px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                className="flex-1 sm:flex-none min-w-0 px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
               >
                 <option value="all">All branches</option>
                 {branches.map((name) => (
@@ -793,11 +796,19 @@ const EquipmentDialog: React.FC<{
     onSaved(result.equipment?.name ?? draft.name);
   };
 
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="equipmentscreen-dialog-1-title"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+    >
       <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-lg my-8">
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
-          <h3 className="text-base font-bold text-[#17181D]">
+          <h3 id="equipmentscreen-dialog-1-title" className="text-base font-bold text-[#17181D]">
             {item ? 'Edit asset' : 'Add an asset'}
           </h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
@@ -1042,7 +1053,7 @@ const EquipmentDialog: React.FC<{
           </div>
 
           {error && (
-            <p className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
+            <p role="alert" className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
               {error}
             </p>
           )}
@@ -1203,11 +1214,19 @@ const ImportDialog: React.FC<{
     onDone(`${added} added, ${updated} updated`);
   };
 
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="equipmentscreen-dialog-2-title"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+    >
       <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-2xl my-8">
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
-          <h3 className="text-base font-bold text-[#17181D]">Import an appliance list</h3>
+          <h3 id="equipmentscreen-dialog-2-title" className="text-base font-bold text-[#17181D]">Import an appliance list</h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
             Paste it straight out of a spreadsheet — one asset per line.
           </p>
@@ -1242,7 +1261,7 @@ const ImportDialog: React.FC<{
           </div>
 
           {error && (
-            <div className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
+            <div role="alert" className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
               <p>{error}</p>
               {skipped.length > 0 && (
                 <ul className="mt-1.5 font-normal space-y-0.5">
@@ -1309,6 +1328,7 @@ const CategoryDialog: React.FC<{
   onClose: () => void;
 }> = ({ inUse, onClose }) => {
   const showToast = useToast();
+  const confirm = useConfirm();
   const categories = useCategories();
   const [allPlans, setAllPlans] = useState<MaintenancePlan[]>(() => getPlans());
   const [error, setError] = useState<string | null>(null);
@@ -1342,17 +1362,16 @@ const CategoryDialog: React.FC<{
     if (!result.ok) setError(result.error ?? 'Could not save that');
   };
 
-  const remove = (id: string, label: string) => {
+  const remove = async (id: string, label: string) => {
     const referenced = inUse.has(id);
-    if (
-      !window.confirm(
-        referenced
-          ? `Withdraw “${label}”? Assets and jobs already name it, so it will be archived rather than deleted and they stay readable.`
-          : `Delete “${label}”? Nothing is filed under it, so this cannot be undone.`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: referenced ? `Withdraw “${label}”?` : `Delete “${label}”?`,
+      body: referenced
+        ? 'Assets and jobs already name it, so it is archived rather than deleted and they stay readable.'
+        : 'Nothing is filed under it, so this cannot be undone.',
+      confirmLabel: referenced ? 'Withdraw' : 'Delete',
+    });
+    if (!ok) return;
     const result = removeCategory(id, referenced);
     if (!result.ok) {
       setError(result.error ?? 'Could not withdraw that category');
@@ -1365,11 +1384,19 @@ const CategoryDialog: React.FC<{
   const live = categories.filter((c) => c.active);
   const archived = categories.filter((c) => !c.active);
 
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="equipmentscreen-dialog-3-title"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+    >
       <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-2xl my-8">
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
-          <h3 className="text-base font-bold text-[#17181D]">
+          <h3 id="equipmentscreen-dialog-3-title" className="text-base font-bold text-[#17181D]">
             Categories and their general maintenance
           </h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
@@ -1521,7 +1548,7 @@ const CategoryDialog: React.FC<{
           </div>
 
           {error && (
-            <p className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
+            <p role="alert" className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
               {error}
             </p>
           )}
@@ -1622,11 +1649,19 @@ const MarkGeneralDoneDialog: React.FC<{
     );
   };
 
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="equipmentscreen-dialog-4-title"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+    >
       <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-md my-8">
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
-          <h3 className="text-base font-bold text-[#17181D]">General maintenance done</h3>
+          <h3 id="equipmentscreen-dialog-4-title" className="text-base font-bold text-[#17181D]">General maintenance done</h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
             {item.name} · {item.branchName}
             {item.location ? ` · ${item.location}` : ''}
@@ -1726,7 +1761,7 @@ const MarkGeneralDoneDialog: React.FC<{
           </div>
 
           {error && (
-            <p className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
+            <p role="alert" className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
               {error}
             </p>
           )}
@@ -1998,11 +2033,19 @@ const AddCategoryDialog: React.FC<{
     onAdded(result.category.label, result.category.id);
   };
 
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="equipmentscreen-dialog-5-title"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+    >
       <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-md my-8">
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
-          <h3 className="text-base font-bold text-[#17181D]">Add a category</h3>
+          <h3 id="equipmentscreen-dialog-5-title" className="text-base font-bold text-[#17181D]">Add a category</h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
             A trade to file appliances under, and what they are serviced on.
           </p>
@@ -2063,7 +2106,7 @@ const AddCategoryDialog: React.FC<{
           </div>
 
           {error && (
-            <p className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
+            <p role="alert" className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
               {error}
             </p>
           )}

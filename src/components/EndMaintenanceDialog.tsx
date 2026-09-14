@@ -18,6 +18,7 @@ import {
   toIsoDay,
 } from '../services/maintenanceSchedule';
 import { IntervalPicker } from './IntervalPicker';
+import { useDialog } from '../hooks/useDialog';
 
 const inputClass =
   'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
@@ -195,11 +196,19 @@ export const EndMaintenanceDialog: React.FC<{
     onDone(saved);
   };
 
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="endmaintenancedialog-dialog-1-title"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+    >
       <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-lg my-8">
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
-          <h3 className="text-base font-bold text-[#17181D]">End maintenance</h3>
+          <h3 id="endmaintenancedialog-dialog-1-title" className="text-base font-bold text-[#17181D]">End maintenance</h3>
           <p className="text-xs text-[#6B6F76] mt-0.5 truncate">{job.title}</p>
         </div>
 
@@ -393,7 +402,7 @@ export const EndMaintenanceDialog: React.FC<{
           )}
 
           {errors.form && (
-            <p className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
+            <p role="alert" className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
               {errors.form}
             </p>
           )}

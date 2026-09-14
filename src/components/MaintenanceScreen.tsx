@@ -47,6 +47,7 @@ import { EndMaintenanceDialog } from './EndMaintenanceDialog';
 import { JobTimesDialog } from './JobTimesDialog';
 import { useToast } from './ToastProvider';
 import { useBranches } from '../hooks/useBranches';
+import { useDialog } from '../hooks/useDialog';
 import { useCategories } from '../hooks/useCategories';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { activeBranches } from '../services/branchStore';
@@ -317,8 +318,8 @@ export const MaintenanceScreen: React.FC = () => {
 
           {/* Nothing to search or narrow on the schedule — so nothing offered */}
           {filtersApply && (
-          <div className="flex items-center gap-2">
-            <div className="relative">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="relative basis-full sm:basis-auto sm:flex-none">
               <Search className="w-3.5 h-3.5 text-[#9CA1A9] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 id="maintenance-search"
@@ -327,7 +328,7 @@ export const MaintenanceScreen: React.FC = () => {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search jobs, units, branches…"
                 aria-label="Search maintenance"
-                className="w-52 sm:w-64 pl-9 pr-8 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] transition-colors"
+                className="w-full sm:w-64 pl-9 pr-8 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] transition-colors"
               />
               {query && (
                 <button
@@ -344,7 +345,7 @@ export const MaintenanceScreen: React.FC = () => {
               value={kindFilter}
               onChange={(e) => setKindFilter(e.target.value as 'all' | MaintenanceJobKind)}
               aria-label="Filter by kind"
-              className="px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+              className="flex-1 sm:flex-none min-w-0 px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
             >
               <option value="all">Problems &amp; services</option>
               <option value="problem">Problems only</option>
@@ -355,7 +356,7 @@ export const MaintenanceScreen: React.FC = () => {
               value={branchFilter}
               onChange={(e) => setBranchFilter(e.target.value)}
               aria-label="Filter by branch"
-              className="px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+              className="flex-1 sm:flex-none min-w-0 px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
             >
               <option value="all">All branches</option>
               {board.branches.map((name) => (
@@ -775,11 +776,19 @@ const ReportProblemDialog: React.FC<{
     onSaved(job, startNow);
   };
 
+  const dialogRef = useDialog<HTMLDivElement>(onClose);
+
   return (
-    <div className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="maintenancescreen-dialog-1-title"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+    >
       <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-lg my-8">
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
-          <h3 className="text-base font-bold text-[#17181D]">Report a problem</h3>
+          <h3 id="maintenancescreen-dialog-1-title" className="text-base font-bold text-[#17181D]">Report a problem</h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
             Three things is enough. Add the rest later if you need to.
           </p>

@@ -44,6 +44,7 @@ import { StatusPill } from './MaintenanceStatusPill';
 import { EndMaintenanceDialog } from './EndMaintenanceDialog';
 import { JobTimesDialog } from './JobTimesDialog';
 import { useToast } from './ToastProvider';
+import { useConfirm } from './ConfirmProvider';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import {
   canManageJobs,
@@ -61,6 +62,7 @@ interface MaintenanceJobScreenProps {
 export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobId }) => {
   const router = useRouter();
   const showToast = useToast();
+  const confirm = useConfirm();
   const user = useCurrentUser();
   const [job, setJob] = useState<MaintenanceJob | null>(() => getJobById(jobId));
   /*
@@ -159,16 +161,25 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
    */
   const mayManage = canManageJobs(user);
 
-  const handleReopen = () => {
-    if (!window.confirm('Clear the start and completion times and put this back to reported?')) {
-      return;
-    }
+  const handleReopen = async () => {
+    const ok = await confirm({
+      title: 'Put this job back to reported?',
+      body: 'The start and completion times already recorded on it are cleared.',
+      confirmLabel: 'Reopen job',
+      destructive: false,
+    });
+    if (!ok) return;
     setJob(reopenJob(job));
     showToast('Job reopened');
   };
 
-  const handleDelete = () => {
-    if (!window.confirm(`Delete "${job.title}"? This cannot be undone.`)) return;
+  const handleDelete = async () => {
+    const ok = await confirm({
+      title: `Delete “${job.title}”?`,
+      body: 'This cannot be undone.',
+      confirmLabel: 'Delete job',
+    });
+    if (!ok) return;
     deleteJob(job.id);
     showToast('Job deleted');
     router.push('/maintenance/jobs');

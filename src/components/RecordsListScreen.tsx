@@ -51,9 +51,11 @@ import { PriorityBadge } from './PriorityBadge';
 import { useRouter } from 'next/navigation';
 import { ScorePill } from './ScorePill';
 import { formatDate, formatDateTime, formatTimeOnly } from '../services/reportModel';
+import { useConfirm } from './ConfirmProvider';
 
 export const RecordsListScreen: React.FC = () => {
   const router = useRouter();
+  const confirm = useConfirm();
   const checklist = useChecklist();
   const user = useCurrentUser();
   const [allInspections, setInspections] = useState<Inspection[]>(() => getInspections());
@@ -141,8 +143,14 @@ export const RecordsListScreen: React.FC = () => {
     page * pageSize
   );
 
-  const handleDiscardDraft = () => {
-    if (!activeDraft || !window.confirm('Discard the unfinished draft?')) return;
+  const handleDiscardDraft = async () => {
+    if (!activeDraft) return;
+    const ok = await confirm({
+      title: 'Discard the unfinished draft?',
+      body: 'The answers recorded on it so far are deleted.',
+      confirmLabel: 'Discard draft',
+    });
+    if (!ok) return;
     // A draft is written to the records store as it is answered, so clearing
     // the draft slot alone would leave the half-finished row behind
     deleteInspection(activeDraft.id);
