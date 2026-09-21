@@ -159,28 +159,54 @@ an annual full service beside it.
 An individual asset that genuinely differs carries an override on its own
 record, including being exempted outright.
 
-### The register's own status is a starting position
+### The register's status is recorded, not acted on
 
 38 of the 302 assets arrive with the master document already saying something
-is owed — 33 `SERVICE DUE`, 3 pending, 2 `NOT WORKING`. Those are facts about
-the asset, and the schedule reads them:
+is owed — 33 `SERVICE DUE`, 3 pending, 2 `NOT WORKING`. Those are kept on the
+asset, drive the coloured pill and the status filter on the Appliances screen,
+and are searchable. **They do not create jobs.**
 
-- **Due or pending** anchors one full interval *before* the register was
-  written, so the routine service reads as owed from that day and a job is
-  raised on the first open. Anchoring on the register date itself would have
-  claimed the service was *done* that day and pushed the next one an interval
-  into the future — the exact opposite of what the document says.
-- Only the **routine** service, never the annual one. Reading "SERVICE DUE" as
-  both raised two jobs per unit and would have sent a fitter to do a year's
-  work on a unit that wanted its filters washed.
-- **Not working** raises a *repair*, not a service — `kind: 'problem'`, so the
-  Repeated tab and the month-end report count it correctly. A dead unit is not
-  on a cadence, so nothing in the schedule would otherwise have found it.
+That is deliberate, and it was tried the other way first. Reading the stamps as
+work put 38 jobs on the board on the first load — none of which anybody in the
+company had raised. A board is a list of work somebody is accountable for, and
+filling it from a transcribed document breaks that: the operator opens the app
+on day one and is answerable for 38 things they never agreed to.
 
-All of it self-clears. Once a completed job exists for that asset and plan it
-wins over the register line, so this is a starting position rather than a
-permanent state. On first open the board comes up with **36 services and 2
-repairs**, which matches the register flags branch for branch.
+So the board starts empty. Work arrives three ways, all of them traceable to a
+person or to this app's own arithmetic:
+
+- somebody reports a problem
+- a failed maintenance check on the Monday round raises one
+- a service falls due on its cadence
+
+The flags are not lost, they are just where a statement copied out of a
+document belongs — on the record, not on the work queue. **Appliances → filter
+by "Service due"** is the list of what the register says is owed.
+
+In practice the board does not stay empty for long: 47 air conditioners carry a
+real service date from August, and a 45-day cadence brings the first six round
+on 26 September. That is the app's own clock, counted from work that actually
+happened.
+
+Every job title leads with the asset number — `RG-ACU-013 — General
+maintenance — Split AC`. Without it the board is unreadable: twenty-eight
+Split ACs come due together, and twenty-eight rows reading "General
+maintenance — Split AC" look like a bug in the app rather than twenty-eight
+machines.
+
+### Clearing what the earlier build raised
+
+For one release the app read those stamps as work and put 38 jobs on the board
+before anyone had opened it. Removing that code does not remove the jobs — they
+were written into the browser at the time — so `maintenanceStore` clears them
+once, on the next read.
+
+Narrow on purpose: it removes only jobs the app raised itself (`reportedBy` of
+"Maintenance schedule" or "Asset register") that nobody has touched. A job a
+person reported, one that has been started, and one that has been finished are
+all kept, because those are records of real work. After it runs once a marker
+stops it for good, so the services that genuinely fall due from here on are
+left alone.
 
 ### Finishing the work corrects the register
 
@@ -296,6 +322,37 @@ the Gujarat name and the area is what tells them apart on the floor.
 These are starting credentials, not a security model. The admin resets them
 from `/users`.
 
+## Naming the unit on a finding
+
+When a maintenance check fails, **Which unit** picks the machine off that
+branch's register, grouped by trade:
+
+```
+AC & ventilation
+  RG-ACU-008 — Split AC — 2.5 Ton — Juice & Sweets
+  RG-ACU-009 — Split AC — 2.5 Ton — Juice & Sweets
+Refrigeration & chillers
+  RG-CHL-030 — Refrigerator — Main Kitchen
+```
+
+The asset number leads because on this estate nothing else identifies a unit:
+Royal Gujarat has nine assets called "Refrigerator" and ten called "Fan", and
+the register records no serial numbers. Before this, all ten fans read "Fan" in
+the dropdown — 73 assets produced 33 distinct labels.
+
+Worse, the finding stored only the name, so `assetForCheck` matched the first
+asset carrying it. Picking `RG-CHL-030` and reopening the inspection resolved
+to `RG-CHL-020`: the unit changed underneath the inspector, the dropdown showed
+the wrong one selected, and the job went to the wrong machine with nothing
+reporting a problem. Matching is now by asset number, then serial, then a name
+**only when exactly one asset at the branch carries it** — an ambiguous name
+resolves to null, which reads as "not about a particular unit", the honest
+answer to a record that does not say which.
+
+The number is carried onto the job, so the board can tell that a fault reported
+today is one it already has somebody working on, and withdrawn assets are not
+offered.
+
 ## Reading a fault into a trade
 
 A failed maintenance check on the Monday round becomes a job, and the trade is
@@ -326,11 +383,11 @@ need a code change.
 | `npm run build` | Production build                               |
 | `npm run start` | Serve the production build                     |
 | `npm run lint`  | Typecheck with `tsc --noEmit`                  |
-| `npm test`      | The suite below — 112 assertions               |
+| `npm test`      | The suite below — 127 assertions               |
 
 ## Tests
 
-`npm test` runs five suites against the real register, under a `localStorage`
+`npm test` runs six suites against the real register, under a `localStorage`
 shim, with no browser. Each runs in its own process: the stores hold
 module-level state and read a shim installed on the global, so two suites
 sharing a process would share a browser and the second would inherit what the
@@ -342,9 +399,10 @@ first left behind — which is the bug these tests exist to catch.
 | `b-data`     | All 302 rows transcribed without drift, spot-checked against the printed documents; asset numbering, duplicate refusal, dropdown options, status wording, import round-trip |
 | `c-time`     | The board over nine months of sweeps — nothing raised twice, no asset ever holding two open jobs for one plan, storage footprint, schedule under 50ms at full volume |
 | `d-screens`  | Board, month-end report, overview and permissions across nine branches; every job names a live branch, asset and trade |
-| `e-lifecycle`| A due AC serviced and a dead AC repaired, end to end, including the status the register is left holding |
+| `e-lifecycle`| A service carried out and a dead AC repaired, end to end, including the status the register is left holding |
+| `f-unitpicker`| Every one of the 302 assets is distinguishable in the dropdown and survives a round trip back to itself |
 
-Three of these were written because something was wrong. They are worth
+Four of these were written because something was wrong. They are worth
 keeping for that reason.
 
 ## Routes

@@ -13,6 +13,59 @@ import { SEED_MAINTENANCE } from '../data/seedMaintenance';
 const KEY = 'inspection_log_maintenance_v1';
 const EVENT = 'inspection_log_maintenance_change';
 
+/**
+ * Clears the jobs an earlier build raised out of the asset register.
+ *
+ * For one release this app read the register's "SERVICE DUE" and "NOT
+ * WORKING" stamps as work and put 38 jobs on the board before anybody had
+ * opened it. That was wrong — a board is a list of work somebody is
+ * accountable for, and those 38 were transcribed from a document, not raised
+ * by a person — and the code that did it is gone.
+ *
+ * Removing the code does not remove the jobs. They were written into the
+ * browser at the time and would sit on the board for ever, so this clears
+ * them out, once.
+ *
+ * Narrow on purpose. It removes only jobs that the app raised *itself* and
+ * that nobody has touched since: never one a person reported, never one that
+ * has been started, and never one that has been finished, because those are
+ * records of real work and deleting them would be the worse mistake. After it
+ * has run once the marker stops it for good, so the services that genuinely
+ * fall due from here on are left alone.
+ */
+const PURGE_KEY = 'inspection_log_maintenance_register_purge_v1';
+
+/** Who the app names itself as when it raises work without being asked. */
+const RAISED_BY_THE_APP = ['Maintenance schedule', 'Asset register'];
+
+function purgeRegisterRaised(jobs: MaintenanceJob[]): MaintenanceJob[] {
+  try {
+    if (localStorage.getItem(PURGE_KEY) !== null) return jobs;
+  } catch {
+    return jobs;
+  }
+
+  const kept = jobs.filter(
+    (job) =>
+      !(
+        RAISED_BY_THE_APP.includes(job.reportedBy) &&
+        !job.startedAt &&
+        !job.completedAt
+      )
+  );
+
+  try {
+    if (kept.length !== jobs.length) localStorage.setItem(KEY, JSON.stringify(kept));
+    // Written last, so a purge that could not save is retried rather than
+    // recorded as done — the same ordering every seed marker here uses
+    localStorage.setItem(PURGE_KEY, new Date().toISOString());
+  } catch (err) {
+    console.error('Failed to clear register-raised jobs:', err);
+    return jobs;
+  }
+  return kept;
+}
+
 function notify(): void {
   window.dispatchEvent(new Event(EVENT));
 }
@@ -30,7 +83,7 @@ export function getJobs(): MaintenanceJob[] {
       localStorage.setItem(KEY, JSON.stringify(SEED_MAINTENANCE));
       return SEED_MAINTENANCE;
     }
-    return parsed as MaintenanceJob[];
+    return purgeRegisterRaised(parsed as MaintenanceJob[]);
   } catch (err) {
     console.error('Failed to read maintenance jobs:', err);
     return SEED_MAINTENANCE;

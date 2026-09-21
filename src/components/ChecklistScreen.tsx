@@ -217,10 +217,18 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
   const numberOf = numberingFor(allItems.map((i) => i.id));
   const totalItems = allItems.length;
 
-  /** This branch's appliances, which is the list the unit is chosen from. */
+  /**
+   * This branch's appliances, which is the list the unit is chosen from.
+   *
+   * Withdrawn assets are left out: naming one on a finding raised today would
+   * send a job to a machine the branch no longer has. Sorted by asset number
+   * rather than by name, because the number is what the picker groups and
+   * labels by — sorting by name put the ten fans in the middle of the list
+   * and left the numbers running backwards inside every group.
+   */
   const branchAssets = equipment
-    .filter((e) => e.branchName === inspection.branchName)
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter((e) => e.active && e.branchName === inspection.branchName)
+    .sort((a, b) => (a.assetNo ?? a.name).localeCompare(b.assetNo ?? b.name));
 
   /**
    * The checks the board has already got in hand, which the inspector is not

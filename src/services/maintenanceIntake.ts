@@ -208,13 +208,41 @@ export function assetForCheck(
   );
   if (values.length === 0) return null;
 
-  return (
-    atBranch.find(
-      (asset) =>
-        values.includes(asset.name.trim().toLowerCase()) ||
-        (!!asset.serialNumber && values.includes(asset.serialNumber.trim().toLowerCase()))
-    ) ?? null
+  /*
+   * The asset number first, and on its own.
+   *
+   * Matching by name was silent corruption on a real register. Royal Gujarat
+   * has nine assets named "Refrigerator"; an inspector picked `RG-CHL-030`,
+   * the finding stored only the word "Refrigerator", and reopening it
+   * resolved to `RG-CHL-020` — the first of the nine. The unit changed under
+   * them, the dropdown showed the wrong one selected, and the job went to the
+   * wrong machine, with nothing anywhere reporting a problem.
+   *
+   * An asset number is unique across the estate by construction, so this
+   * settles it exactly when one was recorded.
+   */
+  const byNumber = atBranch.find(
+    (asset) => !!asset.assetNo && values.includes(asset.assetNo.trim().toLowerCase())
   );
+  if (byNumber) return byNumber;
+
+  /*
+   * Then the serial, which is also unique where it exists. Only then the
+   * name, and only when exactly one asset at the branch carries it — because
+   * a name shared by nine units identifies none of them, and returning the
+   * first is how the bug above happened. An ambiguous name resolves to null,
+   * which reads on screen as "not about a particular unit": the honest answer
+   * to a record that does not say which.
+   *
+   * Kept at all only for findings written before asset numbers existed.
+   */
+  const bySerial = atBranch.find(
+    (asset) => !!asset.serialNumber && values.includes(asset.serialNumber.trim().toLowerCase())
+  );
+  if (bySerial) return bySerial;
+
+  const byName = atBranch.filter((asset) => values.includes(asset.name.trim().toLowerCase()));
+  return byName.length === 1 ? byName[0] : null;
 }
 
 /**

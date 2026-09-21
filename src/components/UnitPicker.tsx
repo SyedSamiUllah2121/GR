@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Equipment, ItemDetail } from '../types';
+import { categoryLabel } from '../services/categoryStore';
 
 /**
  * Which unit a finding is about, chosen from the branch's register.
@@ -19,20 +20,65 @@ import { Equipment, ItemDetail } from '../types';
  * new shape of record.
  */
 
-/** The three facts worth carrying onto a job, as this app already stores them. */
+/**
+ * The facts worth carrying onto a job, as this app already stores them.
+ *
+ * The asset number leads and is not optional where the unit has one, because
+ * it is the only field that identifies the unit. Royal Gujarat has nine
+ * assets called "Refrigerator" and ten called "Fan"; a job that says
+ * "Unit: Refrigerator" sends a fitter to a branch to look for one of nine,
+ * and — worse — cannot be matched back to a record, so the board cannot tell
+ * that this fault is the fault it already has somebody working on.
+ *
+ * Serial is kept for the assets that carry one. The register records none, so
+ * in practice this is the asset number's job now.
+ */
 export function detailsForAsset(asset: Equipment): ItemDetail[] {
   const model = [asset.make, asset.model].filter(Boolean).join(' ').trim();
   return [
+    ...(asset.assetNo ? [{ label: 'Asset no', value: asset.assetNo }] : []),
     { label: 'Unit', value: asset.name },
+    ...(asset.location ? [{ label: 'Where', value: asset.location }] : []),
     ...(model ? [{ label: 'Model', value: model }] : []),
     ...(asset.serialNumber ? [{ label: 'Serial', value: asset.serialNumber }] : []),
   ];
 }
 
-/** "Walk-in chiller — Carrier CWC-220 — SN-1188", skipping what is not recorded. */
+/**
+ * "RG-CHL-030 — Refrigerator — Main Kitchen", skipping what is not recorded.
+ *
+ * Number, then what it is, then where it stands — which is the order somebody
+ * scanning a list of seventy-three actually needs. Capacity is included for
+ * air conditioning because two Split ACs in the same hall are told apart by
+ * their tonnage as often as by anything else.
+ */
 export function describeAsset(asset: Equipment): string {
-  const model = [asset.make, asset.model].filter(Boolean).join(' ').trim();
-  return [asset.name, model, asset.serialNumber].filter(Boolean).join(' — ');
+  return [asset.assetNo, asset.name, asset.capacity, asset.location]
+    .filter(Boolean)
+    .join(' — ');
+}
+
+/** The branch's assets, in trade order, each trade sorted by asset number. */
+function groupByTrade(assets: Equipment[]): [string, Equipment[]][] {
+  const groups = new Map<string, Equipment[]>();
+  for (const asset of assets) {
+    const label = categoryLabel(asset.category);
+    const list = groups.get(label);
+    if (list) list.push(asset);
+    else groups.set(label, [asset]);
+  }
+  return [...groups.entries()]
+    .map(([label, list]): [string, Equipment[]] => [
+      label,
+      /*
+       * By asset number, not by name. The numbers run in the order the
+       * register walks the branch — juice area, then bakery, then kitchen —
+       * so a numeric sort puts the machines in roughly the order somebody
+       * standing in the building would come across them.
+       */
+      [...list].sort((a, b) => (a.assetNo ?? a.name).localeCompare(b.assetNo ?? b.name)),
+    ])
+    .sort((a, b) => a[0].localeCompare(b[0]));
 }
 
 export const UnitPicker: React.FC<{
@@ -67,10 +113,21 @@ export const UnitPicker: React.FC<{
         className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] disabled:bg-[#F6F6F8] disabled:text-[#6B6F76]"
       >
         <option value="">Not about a particular unit</option>
-        {assets.map((asset) => (
-          <option key={asset.id} value={asset.id}>
-            {describeAsset(asset)}
-          </option>
+        {/*
+          Grouped by trade. Royal Gujarat alone has seventy-three assets, and
+          an inspector looking for a fridge should not be scrolling past forty
+          fans and ovens to reach it. The groups are built from whatever the
+          assets say rather than from a fixed list, so a trade added later
+          appears here without this component knowing about it.
+        */}
+        {groupByTrade(assets).map(([trade, inTrade]) => (
+          <optgroup key={trade} label={trade}>
+            {inTrade.map((asset) => (
+              <option key={asset.id} value={asset.id}>
+                {describeAsset(asset)}
+              </option>
+            ))}
+          </optgroup>
         ))}
       </select>
 

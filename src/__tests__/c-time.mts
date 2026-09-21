@@ -38,11 +38,12 @@ const { sweepSchedule: sweep2, nextDueFor: next2 } = await import('../services/m
 const { getJobs: gj2, saveJob: sj2 } = await import('../services/maintenanceStore.ts?v=2');
 const { activePlans: ap2 } = await import('../services/maintenancePlanStore.ts?v=2');
 
-sweep2(new Date('2026-09-21T09:00:00'));
+// swept forward to a day the routine service has genuinely come round
+sweep2(new Date('2026-09-26T09:00:00'));
 const eq2 = ge2();
-const target = eq2.find(e => e.assetNo === 'NHB-ACU-003')!;
+const target = eq2.find(e => e.assetNo === 'NHB-ACU-001')!;  // serviced 12 Aug, due 26 Sep
 const gplan = ap2().find(p => p.id === 'plan-ac_ventilation-general-maintenance')!;
-note('before the work, next due', next2(gplan, target, gj2(), '2026-09-21'));
+note('before the work, next due', next2(gplan, target, gj2(), '2026-09-26'));
 
 const open = gj2().find(j => j.equipmentId === target.id && j.planId === gplan.id)!;
 sj2({ ...open, startedAt: '2026-09-22T09:00:00.000Z', completedAt: '2026-09-22T12:00:00.000Z',
