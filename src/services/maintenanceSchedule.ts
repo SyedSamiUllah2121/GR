@@ -7,7 +7,7 @@ import {
   jobKindOf,
 } from '../types';
 import { getEquipment } from './equipmentStore';
-import { activePlans } from './maintenancePlanStore';
+import { activePlans, isGeneralPlan } from './maintenancePlanStore';
 import { getJobs, saveJob, statusOf } from './maintenanceStore';
 
 /**
@@ -235,9 +235,11 @@ export interface DueOccurrence {
  * The last time this plan was actually carried out on this asset, if it ever
  * was — a service done early or late resets the interval from when the work
  * happened, which is what "every three months" means to the person doing it.
- * Failing that, the day the asset went in. Failing that, the day it was
- * written down, so an asset with no install date still comes due eventually
- * instead of never.
+ * Failing that, the service date the register itself carries. Failing that —
+ * when the register says the service is already owed — a point one interval
+ * before the register was written, so it reads as due that day. Failing that,
+ * the day the asset went in, and failing that the day it was written down, so
+ * an asset with no install date still comes due eventually instead of never.
  */
 export function anchorFor(
   plan: MaintenancePlan,
@@ -263,6 +265,81 @@ export function anchorFor(
     .sort();
 
   if (completed.length > 0) return completed[completed.length - 1];
+
+  /*
+   * The service the register itself records, before the install date.
+   *
+   * This is what the imported estate runs on: 47 of its 91 air conditioners
+   * carry a date off the master document — "Serviced 25 Aug 2026" — and no
+   * job in this app, because the work was done before anybody typed the asset
+   * in. Anchoring those on the install date instead would raise a service for
+   * a unit a fitter had visited three weeks earlier.
+   *
+   * Only ahead of `installedOn`, never ahead of a completed job: a job is
+   * this app's own record of work it watched happen, and the register line is
+   * somebody's transcription of a document. When both exist the job wins.
+   *
+   * A date in the future is ignored for the same reason the completions above
+   * are: a typo of 2027 would otherwise silence the asset for a year.
+   */
+  const serviced = equipment.lastServicedOn?.slice(0, 10) ?? null;
+  if (serviced && isRealIsoDay(serviced) && (!today || daysBetween(serviced, today) >= 0)) {
+    return serviced;
+  }
+
+  /*
+   * The register saying the service is already owed.
+   *
+   * "SERVICE DUE" is a statement about the asset, not the absence of one, and
+   * until now the schedule threw it away: 33 air conditioners arrived marked
+   * due, and the board raised nothing for any of them because the only date
+   * on the record was the day the register was transcribed. The estate's own
+   * paperwork said thirty-three units were overdue and the app that imported
+   * it showed an empty board — which is worse than showing nothing, because
+   * an empty board reads as "nothing to do".
+   *
+   * Anchored one full interval BEFORE the register was written, so the first
+   * occurrence lands exactly on the register's own date and is overdue from
+   * that day. Anchoring on the register date itself would instead say the
+   * service was *done* that day and push the next one an interval into the
+   * future — the precise opposite of what the document says.
+   *
+   * Everything downstream then behaves normally and needs no special case:
+   * the long-gap rule still collapses this to one job rather than one per
+   * missed interval, and the moment somebody records the work a completed job
+   * exists and wins above, so this stops applying on its own. It is a
+   * starting position, not a permanent state.
+   */
+  const owed =
+    (equipment.serviceStatus === 'due' || equipment.serviceStatus === 'pending') &&
+    /*
+     * The routine service only. "SERVICE DUE" on the master register is one
+     * service owed, not every plan the trade carries — reading it as both
+     * raised two jobs for each of the thirty-six units that carry it, a
+     * general maintenance and an annual full service, and sent a fitter to do
+     * a year's work on a unit that wanted its filters washed.
+     *
+     * The annual service keeps its own clock, which is the point of its being
+     * a separate plan.
+     */
+    isGeneralPlan(plan);
+  if (owed) {
+    const interval = intervalFor(equipment, plan);
+    const from = equipment.createdAt?.slice(0, 10) ?? null;
+    if (interval && from && isRealIsoDay(from)) {
+      /*
+       * Subtraction by negation. `addInterval` takes a positive count, so a
+       * negative one is expressed as its own unit — 45 days back, 3 months
+       * back — rather than by reaching for a second date helper.
+       */
+      const back =
+        interval.unit === 'days'
+          ? addDays(from, -interval.every)
+          : addMonths(from, -interval.every);
+      if (back) return back;
+    }
+  }
+
   if (equipment.installedOn) return equipment.installedOn.slice(0, 10);
   return equipment.createdAt ? equipment.createdAt.slice(0, 10) : null;
 }
@@ -432,6 +509,62 @@ export function jobForOccurrence(occurrence: DueOccurrence, now: string): Mainte
   };
 }
 
+/** The id a register breakdown becomes, derived so it cannot be raised twice. */
+export function faultJobIdFor(equipmentId: string): string {
+  return `mnt-register-fault-${equipmentId}`;
+}
+
+/**
+ * The repair job an asset the register calls broken becomes.
+ *
+ * A breakdown, not a service, and it matters which: the **Repeated** tab
+ * counts only breakdowns and the month-end report keeps problems and services
+ * in separate columns, so filing a dead air conditioner as a scheduled
+ * service would flatter the branch that owns it.
+ *
+ * Reported as the register rather than as a person, for the same reason the
+ * scheduled jobs are: nobody noticed this here, it arrived written down.
+ */
+export function jobForRegisterFault(equipment: Equipment, on: string): MaintenanceJob {
+  const where = equipment.location ? ` (${equipment.location})` : '';
+  const tag = equipment.assetNo ? `${equipment.assetNo} — ` : '';
+
+  return {
+    id: faultJobIdFor(equipment.id),
+    branchName: equipment.branchName,
+    title: `${tag}${equipment.name} not working`,
+    details: [
+      `Recorded as out of service on the asset register.`,
+      equipment.statusNote ? `The register says: “${equipment.statusNote}”.` : null,
+      `Unit: ${equipment.name}${where}.`,
+      equipment.capacity ? `Capacity ${equipment.capacity}.` : null,
+      equipment.make ? `Make ${equipment.make}.` : null,
+    ]
+      .filter(Boolean)
+      .join(' '),
+    equipment: equipment.name,
+    category: equipment.category,
+    /*
+     * High rather than critical. It is a unit that does not run, which is
+     * urgent — but it is also a line transcribed from a document of unknown
+     * age, and "critical" on this board means somebody is standing in front
+     * of the thing right now. Whoever triages it can raise it.
+     */
+    priority: 'high',
+    reportedBy: 'Asset register',
+    reportedAt: new Date(`${on}T09:00:00`).toISOString(),
+    startedAt: null,
+    completedAt: null,
+    attendedBy: null,
+    resolutionNote: null,
+    cost: null,
+    photo: null,
+    kind: 'problem',
+    equipmentId: equipment.id,
+    // No plan and no due date: a breakdown is not an occurrence of anything
+  };
+}
+
 export interface SweepResult {
   raised: MaintenanceJob[];
   /** Occurrences that fell due but could not be written — storage full. */
@@ -461,6 +594,30 @@ export function sweepSchedule(now: Date = new Date()): SweepResult {
     if (saveJob(job)) raised.push(job);
     else failed += 1;
   });
+
+  /*
+   * The units the register says do not run at all.
+   *
+   * These raise nothing through the schedule, because a plan describes work
+   * that comes round and a breakdown is not on a cadence — so before this
+   * they were visible only as a coloured pill on the register screen, and the
+   * board, which is where repairs are actually run from, never heard of them.
+   *
+   * Raised once and then left alone. The id is derived from the asset, so a
+   * second sweep finds the job already there; and a job that has since been
+   * closed is not raised again, because re-raising work somebody has
+   * completed is how a board stops being believed.
+   */
+  const existing = getJobs();
+  getEquipment()
+    .filter((item) => item.active && item.serviceStatus === 'faulty')
+    .filter((item) => !existing.some((j) => j.id === faultJobIdFor(item.id)))
+    .forEach((item) => {
+      const on = item.createdAt?.slice(0, 10) ?? today;
+      const job = jobForRegisterFault(item, on);
+      if (saveJob(job)) raised.push(job);
+      else failed += 1;
+    });
 
   return { raised, failed };
 }

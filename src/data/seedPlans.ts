@@ -45,6 +45,19 @@ function generalPlan(
 }
 
 /** What each trade is generally looked at on, and how urgent that is. */
+/**
+ * What each trade is generally looked at on, and how urgent that is.
+ *
+ * The three the estate has, and the fallback. A category the operator adds
+ * later is not listed here and does not need to be — the export below gives
+ * anything unlisted a six-monthly general plan, which is a defensible default
+ * and editable the moment they look at it.
+ *
+ * The air-conditioning cadence is the one worth defending: 45 days, not six
+ * months, because these are kitchen and hall units in Abu Dhabi and the
+ * register that shipped with this app already shows 35 of 91 overdue. A
+ * six-monthly rule would have agreed with that backlog instead of raising it.
+ */
 const GENERAL: Record<string, { interval: Interval; priority: Severity; note: string }> = {
   REFRIGERATION: {
     interval: { every: 3, unit: 'months' },
@@ -59,52 +72,7 @@ const GENERAL: Record<string, { interval: Interval; priority: Severity; note: st
   ELECTRICAL: {
     interval: { every: 6, unit: 'months' },
     priority: 'medium',
-    note: 'Sockets, switches and visible wiring checked for heat and damage.',
-  },
-  PLUMBING: {
-    interval: { every: 6, unit: 'months' },
-    priority: 'medium',
-    note: 'Traps cleared, taps and seals checked for leaks.',
-  },
-  GAS: {
-    interval: { every: 6, unit: 'months' },
-    priority: 'critical',
-    note: 'Connections leak-tested, hoses checked for perishing.',
-  },
-  COOKING_EQUIPMENT: {
-    interval: { every: 2, unit: 'months' },
-    priority: 'medium',
-    note: 'Burners and thermostats checked, seals and cut-outs tested.',
-  },
-  FIRE_SAFETY: {
-    interval: { every: 30, unit: 'days' },
-    priority: 'critical',
-    note: 'Pressure gauge in the green, pin and seal intact, access clear.',
-  },
-  STRUCTURAL: {
-    interval: { every: 12, unit: 'months' },
-    priority: 'low',
-    note: 'Tiles, grout, doors and shelving checked for damage.',
-  },
-  PEST_CONTROL: {
-    interval: { every: 3, unit: 'months' },
-    priority: 'high',
-    note: 'Stations checked and the report filed.',
-  },
-  IT_EQUIPMENT: {
-    interval: { every: 3, unit: 'months' },
-    priority: 'medium',
-    note: 'Cleaned, cabling checked, firmware current, test print.',
-  },
-  WATER_HEATING: {
-    interval: { every: 6, unit: 'months' },
-    priority: 'high',
-    note: 'Element and thermostat checked, tank flushed, relief valve tested.',
-  },
-  SECURITY: {
-    interval: { every: 3, unit: 'months' },
-    priority: 'medium',
-    note: 'Lenses cleaned, angles checked, recording confirmed and retention verified.',
+    note: 'Plug, lead and switch checked for heat and damage; casing and guards sound.',
   },
   OTHER: {
     interval: { every: 12, unit: 'months' },
@@ -116,26 +84,14 @@ const GENERAL: Record<string, { interval: Interval; priority: Severity; note: st
 /** The work that recurs on its own clock and has to be called something. */
 const NAMED: MaintenancePlan[] = [
   {
-    id: 'plan-it_equipment-service',
-    category: 'IT_EQUIPMENT',
-    task: 'Printer service',
-    every: 6,
+    id: 'plan-ac_ventilation-service',
+    category: 'AC_VENTILATION',
+    task: 'Full service',
+    every: 12,
     unit: 'months',
-    everyMonths: 6,
+    everyMonths: 12,
     priority: 'medium',
-    instructions: 'Full service: rollers, head clean, firmware, test print.',
-    active: true,
-    createdAt: '2026-01-01',
-  },
-  {
-    id: 'plan-it_equipment-toner-refill',
-    category: 'IT_EQUIPMENT',
-    task: 'Toner refill',
-    every: 6,
-    unit: 'months',
-    everyMonths: 6,
-    priority: 'low',
-    instructions: 'Replace or refill toner and log the cartridge number.',
+    instructions: 'Gas pressure, coil wash, drainage flushed, electricals checked.',
     active: true,
     createdAt: '2026-01-01',
   },
@@ -152,76 +108,17 @@ const NAMED: MaintenancePlan[] = [
     createdAt: '2026-01-01',
   },
   {
-    id: 'plan-ac_ventilation-service',
-    category: 'AC_VENTILATION',
-    task: 'Service',
-    every: 12,
-    unit: 'months',
-    everyMonths: 12,
-    priority: 'medium',
-    instructions: 'Filters, gas, drainage. Extraction hoods degreased.',
-    active: true,
-    createdAt: '2026-01-01',
-  },
-  {
-    id: 'plan-fire_safety-inspection',
-    category: 'FIRE_SAFETY',
-    task: 'Extinguisher inspection',
-    every: 12,
-    unit: 'months',
-    everyMonths: 12,
-    priority: 'critical',
-    instructions: 'Certified inspection. Record the certificate with the job.',
-    active: true,
-    createdAt: '2026-01-01',
-  },
-  {
-    id: 'plan-pest_control-visit',
-    category: 'PEST_CONTROL',
-    task: 'Contract visit',
-    every: 3,
-    unit: 'months',
-    everyMonths: 3,
-    priority: 'high',
-    instructions: 'Bait stations checked and the report filed.',
-    active: true,
-    createdAt: '2026-01-01',
-  },
-  {
-    id: 'plan-cooking_equipment-service',
-    category: 'COOKING_EQUIPMENT',
-    task: 'Service',
-    every: 12,
-    unit: 'months',
-    everyMonths: 12,
-    priority: 'medium',
-    instructions: 'Burners, thermostats, seals and safety cut-outs.',
-    active: true,
-    createdAt: '2026-01-01',
-  },
-  {
-    id: 'plan-gas-safety-check',
-    category: 'GAS',
+    id: 'plan-electrical-safety-check',
+    category: 'ELECTRICAL',
     task: 'Safety check',
     every: 12,
     unit: 'months',
     everyMonths: 12,
     priority: 'critical',
-    instructions: 'Certified gas safety check. Certificate required.',
+    instructions:
+      'Earth continuity, insulation and RCD tested. Certificate recorded with the job.',
     active: true,
-    createdAt: '2026-01-01',
-  },
-  {
-    id: 'plan-water_heating-descale',
-    category: 'WATER_HEATING',
-    task: 'Descale',
-    every: 12,
-    unit: 'months',
-    everyMonths: 12,
-    priority: 'medium',
-    instructions: 'Tank drained and descaled, anode checked.',
-    active: true,
-    createdAt: '2026-01-01',
+    createdAt: '2026-09-17',
   },
 ];
 

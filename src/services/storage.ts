@@ -1,4 +1,5 @@
 import { Inspection } from '../types';
+import { ensureEstate } from './estateReset';
 import { SEED_INSPECTIONS } from '../data/seedData';
 
 const STORAGE_KEYS = {
@@ -28,6 +29,7 @@ const STORAGE_KEYS = {
 
 // Retrieve all inspections (seeding if empty)
 export function getInspections(): Inspection[] {
+  ensureEstate();
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.INSPECTIONS);
     if (!raw) {

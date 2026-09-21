@@ -7,6 +7,7 @@ import {
   Severity,
 } from '../types';
 import { SEED_PLANS } from '../data/seedPlans';
+import { ensureEstate } from './estateReset';
 
 /**
  * The recurring services, one rule per task per category.
@@ -30,11 +31,13 @@ const EVENT = 'inspection_log_maintenance_plans_change';
  * equipment use: the seed is only written to an *empty* store, so without a
  * marker a plan added later would never reach an installation in use.
  *
- *   1  the first set — the intervals discussed when the feature was specified
- *   2  a general-maintenance plan for every category, and cadences that can be
- *      counted in days as well as months
+ *   1  a general-maintenance plan for each of the three trades, and an annual
+ *      named service beside each
+ *
+ * The count restarts here, with the trades. `estateReset` clears the plans
+ * written against the invented estate rather than migrating them.
  */
-const SEED_VERSION = 2;
+const SEED_VERSION = 1;
 const SEED_VERSION_KEY = 'inspection_log_maintenance_plans_seed_version';
 
 /** Intervals the editor offers. Longer than two years stops being a plan. */
@@ -104,6 +107,7 @@ function markSeeded(): void {
 }
 
 export function getPlans(): MaintenancePlan[] {
+  ensureEstate();
   if (typeof window === 'undefined') return SEED_PLANS;
   try {
     const raw = localStorage.getItem(KEY);

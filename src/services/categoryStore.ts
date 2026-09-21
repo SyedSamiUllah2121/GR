@@ -1,4 +1,5 @@
 import { EquipmentCategory, FALLBACK_CATEGORY, MaintenanceCategory } from '../types';
+import { ensureEstate } from './estateReset';
 import { SEED_CATEGORIES } from '../data/seedCategories';
 
 /**
@@ -33,7 +34,12 @@ const EVENT = 'inspection_log_equipment_categories_change';
  * Nothing predates this store, so an installation with no marker has genuinely
  * had nothing applied and must reconcile.
  *
- *   1  the original eleven trades, plus water heating and security
+ *   1  the three trades the estate's registers actually have — AC,
+ *      refrigeration and electrical — plus the system "Other"
+ *
+ * The count restarts here. The eleven trades that came before were invented
+ * ahead of any register and every one of them turned out to be empty;
+ * `estateReset` removes that store rather than migrating it.
  */
 const SEED_VERSION = 1;
 const SEED_VERSION_KEY = 'inspection_log_equipment_categories_seed_version';
@@ -107,6 +113,7 @@ function reconcileSeeds(stored: EquipmentCategory[]): EquipmentCategory[] {
 
 /** Every category, archived ones included. */
 export function getCategories(): EquipmentCategory[] {
+  ensureEstate();
   if (typeof window === 'undefined') return SEED_CATEGORIES;
   try {
     const raw = localStorage.getItem(KEY);

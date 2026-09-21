@@ -61,21 +61,67 @@ export function needsMaintenance(item: Item, answer: Answer | undefined): boolea
  *
  * Kept as authored patterns even though categories are now the operator's own
  * list, because these read the wording of a *fault* — "cold room", "bain
- * marie", "wi-fi" — which is not what a category is called. The operator's
- * labels are matched too, in `suggestCategory`, after these have had their go.
+ * marie", "not cooling" — which is not what a category is called. The
+ * operator's labels are matched too, in `suggestCategory`, after these have
+ * had their go.
  *
  * First match wins, so the more specific patterns are listed first.
  */
 const CATEGORY_HINTS: [MaintenanceCategory, RegExp][] = [
-  ['REFRIGERATION', /chiller|fridge|refrigerat|freezer|cold room|cooling/i],
-  ['AC_VENTILATION', /air.?condition|\bac\b|ventilat|extract|exhaust|hood|fan\b/i],
+  /*
+   * Written from the estate's own register rather than from what a kitchen
+   * generally contains, which is why two of these look wrong until you check.
+   *
+   * A FAN is electrical here, not ventilation. The register has fifteen of
+   * them — ten in Royal Gujarat's outdoor area and dish wash, one in
+   * Manpasand's main kitchen — and every one is an ELC asset. They are
+   * standing and wall fans, not extraction, and filing "fan not working"
+   * under air conditioning would send the AC contractor to a fan.
+   *
+   * An OVEN, FRYER or BAIN-MARIE is electrical too. There is no cooking-gas
+   * trade on this estate: the pizza ovens, fryers and bain-maries are all on
+   * the electrical register, so a fault on one is an electrician's job.
+   */
+  [
+    'REFRIGERATION',
+    /chiller|fridge|refrigerat|freezer|cold room|walk.?in|kulfi|salaja|deep freeze|cake display|sweet display|sweets display|display chiller|chaat freezer|room cooling/i,
+  ],
+  [
+    'AC_VENTILATION',
+    /air.?condition|\bac\b|\bacu\b|split ac|floor.?standing|ventilat|extract|exhaust|\bhood\b|compressor|\bton\b|not cooling|blows warm/i,
+  ],
+  [
+    'ELECTRICAL',
+    new RegExp(
+      [
+        // the machines this estate actually runs, off the ELC register
+        'fryer|oven|blender|grinder|mixer|mincer|keema|masala|spice',
+        'shake machine|juicer|juice machine|juice blender|sugarcane',
+        'sealing machine|dome|packing machine|packet seal|date cod|dating machine',
+        'bain.?marie|hot plate|hot case|hot holding|food warmer|hot.?light|warmer',
+        'water cooler|water filter|drinking water|ice maker|coffee machine|brewer',
+        'tea kettle|kettle|microwave|toaster|griddle|grill machine|burger',
+        'dough|atta|flour|potato machine|salad machine|raita|rasmalai|gulab jamun',
+        'weighing|weight scale|knife sharpen|printer|\\bfan\\b|menu display|\\btv\\b',
+        // and the generic electrical faults a checklist actually words
+        'electric|wiring|socket|switch|\\blight\\b|bulb|power|voltage|plug point|tripping|short circuit',
+      ].join('|'),
+      'i'
+    ),
+  ],
+
+  /*
+   * Trades this estate has no assets for. They stay listed because
+   * `suggestCategory` skips any category that is not on the operator's live
+   * list, so these cost nothing while they are absent and start working the
+   * moment somebody adds gas or fire safety back — which is a button, and a
+   * register that gains a gas bank should not also need a code change.
+   */
   ['GAS', /\bgas\b|lpg|cylinder|burner/i],
-  ['COOKING_EQUIPMENT', /oven|fryer|grill|griddle|hob|stove|cooker|range|bain.?marie/i],
   ['FIRE_SAFETY', /fire|extinguisher|alarm|smoke|sprinkler|emergency exit/i],
-  ['PLUMBING', /plumb|drain|tap\b|sink|water|leak|plug|toilet|wash basin|geyser/i],
-  ['ELECTRICAL', /electric|wiring|socket|switch|light|bulb|power|voltage/i],
+  ['PLUMBING', /plumb|drain|tap\b|sink|leak|toilet|wash basin|geyser/i],
   ['PEST_CONTROL', /pest|rodent|insect|cockroach|fly killer|bait/i],
-  ['IT_EQUIPMENT', /printer|toner|cartridge|\bpos\b|\btill\b|terminal|router|wi.?fi|network|cctv|monitor|scanner/i],
+  ['IT_EQUIPMENT', /toner|cartridge|\bpos\b|\btill\b|router|wi.?fi|network|cctv|scanner/i],
   ['STRUCTURAL', /wall|floor|ceiling|tile|door|window|shelf|shelving|paint|grout|fabric/i],
 ];
 

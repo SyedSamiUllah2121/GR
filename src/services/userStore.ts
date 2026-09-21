@@ -1,4 +1,5 @@
 import { BRANCHES, USER_ROLE_LABEL, User, UserRole, initialsOf } from '../types';
+import { ensureEstate } from './estateReset';
 import { getInspections } from './storage';
 
 /**
@@ -28,21 +29,31 @@ const EVENT = 'inspection_log_users_change';
  * operator would be told a Maintenance Manager exists and find no account to
  * sign in as, no matter how many times they reloaded.
  *
- *   1  the original set: one admin, four branch managers, three inspectors
- *   2  adds the maintenance manager over the maintenance board
- *   3  adds a manager for each of the three branches opened alongside it,
- *      since a branch nobody manages cannot run its own Monday round
+ *   1  one admin, a manager for each of the nine branches, the maintenance
+ *      manager over the board, and three inspectors
+ *
+ * The count restarts with the estate. The accounts that came before managed
+ * branches that do not exist, and `estateReset` clears them rather than
+ * repointing them — a manager whose branch was invented has nothing to manage.
  */
-const SEED_VERSION = 3;
+const SEED_VERSION = 1;
 const SEED_VERSION_KEY = 'inspection_log_users_seed_version';
 
 /**
  * The demo accounts.
  *
- * One admin, a manager for each of the seven seeded branches, one job
- * manager over the maintenance board, and three inspectors. The passwords are deliberately
- * memorable — this is a demo, and whoever is being shown the system has to
- * be able to sign in as each role in turn.
+ * One admin, a manager for each of the nine branches, one maintenance manager
+ * over the whole board, and three inspectors. Every branch has a manager by
+ * construction, because a branch nobody manages cannot run its own Monday
+ * round or report its own repairs.
+ *
+ * The addresses name the branch the way the estate does — `shabiya11`,
+ * `mussafah17`, `zaharat` — rather than the brand, because three branches
+ * share the Gujarat name and the area is what tells them apart on the floor.
+ *
+ * The passwords are deliberately memorable: whoever is being shown the system
+ * has to be able to sign in as each role in turn. They are starting
+ * credentials, not a security model, and the admin resets them from /users.
  *
  * Only ever written to a store that is empty, so an installation already in
  * use does not gain an account behind its operator's back. There, a new role
@@ -63,81 +74,103 @@ export const SEED_USERS: User[] = [
     createdAt: '2026-01-05',
   },
   {
-    id: 'usr-bm-zahras',
+    id: 'usr-bm-nhb',
     name: 'Imran Yousaf',
-    email: 'zahras@royalgujrat.com',
+    email: 'shabiya11@royalgujrat.com',
     password: 'branch123',
     role: 'branch-manager',
     branchName: BRANCHES[0].name,
     initials: 'IY',
     active: true,
-    createdAt: '2026-01-05',
+    createdAt: '2026-09-17',
   },
   {
-    id: 'usr-bm-gujrat',
+    id: 'usr-bm-rg',
     name: 'Bilal Tariq',
-    email: 'gujrat@royalgujrat.com',
+    email: 'royal@royalgujrat.com',
     password: 'branch123',
     role: 'branch-manager',
     branchName: BRANCHES[1].name,
     initials: 'BT',
     active: true,
-    createdAt: '2026-01-05',
+    createdAt: '2026-09-17',
   },
   {
-    id: 'usr-bm-mafraq',
+    id: 'usr-bm-dgr',
     name: 'Adeel Nawaz',
-    email: 'mafraq@royalgujrat.com',
+    email: 'mussafah17@royalgujrat.com',
     password: 'branch123',
     role: 'branch-manager',
     branchName: BRANCHES[2].name,
     initials: 'AN',
     active: true,
-    createdAt: '2026-01-05',
+    createdAt: '2026-09-17',
   },
   {
-    id: 'usr-bm-naan',
+    id: 'usr-bm-grsb',
     name: 'Kashif Mehmood',
-    email: 'naanhouse@royalgujrat.com',
+    email: 'shabiya12@royalgujrat.com',
     password: 'branch123',
     role: 'branch-manager',
     branchName: BRANCHES[3].name,
     initials: 'KM',
     active: true,
-    createdAt: '2026-01-05',
+    createdAt: '2026-09-17',
   },
   {
-    id: 'usr-bm-sweets',
+    id: 'usr-bm-nh',
     name: 'Usman Zafar',
-    email: 'sweets@royalgujrat.com',
+    email: 'shabiya10@royalgujrat.com',
     password: 'branch123',
     role: 'branch-manager',
     branchName: BRANCHES[4].name,
     initials: 'UZ',
     active: true,
-    createdAt: '2026-09-09',
+    createdAt: '2026-09-17',
   },
   {
-    id: 'usr-bm-grill',
+    id: 'usr-bm-mgr',
     name: 'Hamza Sattar',
-    email: 'grill@royalgujrat.com',
+    email: 'mafraq@royalgujrat.com',
     password: 'branch123',
     role: 'branch-manager',
     branchName: BRANCHES[5].name,
     initials: 'HS',
     active: true,
-    createdAt: '2026-09-09',
+    createdAt: '2026-09-17',
   },
   {
-    id: 'usr-bm-bazaar',
+    id: 'usr-bm-mps',
     name: 'Rizwan Shah',
-    email: 'bazaar@royalgujrat.com',
+    email: 'manpasand@royalgujrat.com',
     password: 'branch123',
     role: 'branch-manager',
     branchName: BRANCHES[6].name,
     initials: 'RS',
     active: true,
-    createdAt: '2026-09-09',
+    createdAt: '2026-09-17',
+  },
+  {
+    id: 'usr-bm-grs',
+    name: 'Faisal Mahmood',
+    email: 'hotel@royalgujrat.com',
+    password: 'branch123',
+    role: 'branch-manager',
+    branchName: BRANCHES[7].name,
+    initials: 'FM',
+    active: true,
+    createdAt: '2026-09-17',
+  },
+  {
+    id: 'usr-bm-zg',
+    name: 'Waqar Aslam',
+    email: 'zaharat@royalgujrat.com',
+    password: 'branch123',
+    role: 'branch-manager',
+    branchName: BRANCHES[8].name,
+    initials: 'WA',
+    active: true,
+    createdAt: '2026-09-17',
   },
   {
     /*
@@ -269,6 +302,7 @@ function reconcileSeeds(stored: User[]): User[] {
 
 /** Every account, withdrawn ones included. */
 export function getUsers(): User[] {
+  ensureEstate();
   if (typeof window === 'undefined') return SEED_USERS;
   try {
     const raw = localStorage.getItem(KEY);

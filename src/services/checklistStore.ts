@@ -7,6 +7,7 @@ import {
   Severity,
 } from '../types';
 import { DEFAULT_CHECKLIST } from '../data/defaultChecklist';
+import { ensureEstate } from './estateReset';
 
 /**
  * Bumped whenever the shipped default changes shape, because a stored copy is
@@ -24,6 +25,7 @@ function clone<T>(value: T): T {
 
 /** The stored checklist, falling back to the shipped default on first run. */
 export function getChecklist(): ChecklistDoc {
+  ensureEstate();
   try {
     const raw = localStorage.getItem(CHECKLIST_KEY);
     if (!raw) return clone(DEFAULT_CHECKLIST);

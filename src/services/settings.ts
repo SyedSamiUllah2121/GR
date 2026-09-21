@@ -1,3 +1,5 @@
+import { ensureEstate } from './estateReset';
+
 /**
  * System settings the main admin controls.
  *
@@ -43,6 +45,7 @@ function notify(): void {
  * falls back to sensible behaviour instead of undefined.
  */
 export function getSettings(): Settings {
+  ensureEstate();
   if (typeof window === 'undefined') return DEFAULT_SETTINGS;
   try {
     const raw = localStorage.getItem(KEY);

@@ -28,7 +28,19 @@ import {
   IntervalUnit,
   MaintenanceCategory,
   MaintenancePlan,
+  SERVICE_STATUS_LABELS,
+  SERVICE_STATUS_ORDER,
+  ServiceStatus,
 } from '../types';
+import { Combobox } from './Combobox';
+import { SEGMENT_CATEGORY } from '../data/assetRegister';
+import {
+  assetOptionsFor,
+  categoryForType,
+  readServiceDate,
+  readServiceStatus,
+  usesCapacity,
+} from '../services/assetOptions';
 import { useCategories } from '../hooks/useCategories';
 import { useDialog } from '../hooks/useDialog';
 import {
@@ -44,8 +56,10 @@ import {
 import {
   EquipmentDraft,
   addEquipment,
+  equipmentSeedProblem,
   getEquipment,
   importEquipment,
+  nextAssetNo,
   removeEquipment,
   restoreEquipment,
   subscribeToEquipment,
@@ -128,7 +142,22 @@ export const EquipmentScreen: React.FC = () => {
   const [allPlans, setAllPlans] = useState<MaintenancePlan[]>(() => getPlans());
   const [query, setQuery] = useState('');
   const [branchFilter, setBranchFilter] = useState('all');
+  /**
+   * Which service state to show, or every one.
+   *
+   * Worth its own control now that the register holds the real estate: 35 of
+   * the 91 air conditioners are due and two do not run at all, and finding
+   * those by scrolling 302 assets is not finding them.
+   */
+  const [statusFilter, setStatusFilter] = useState<ServiceStatus | 'all'>('all');
   const [showArchived, setShowArchived] = useState(false);
+  /*
+   * Read after mount rather than during render: the reason is set by
+   * `getEquipment`, which the effect below is what actually calls first on the
+   * client, and reading it in an initialiser would sample it before the seed
+   * had been attempted at all.
+   */
+  const [seedProblem, setSeedProblem] = useState<string | null>(null);
   /*
    * Either an asset being corrected, or a new one and the category it is being
    * added into — `{ newIn }` rather than a bare 'new', because the register is
@@ -155,7 +184,11 @@ export const EquipmentScreen: React.FC = () => {
   const categories = useCategories();
 
   useEffect(() => {
-    const refresh = () => setAll(getEquipment());
+    const refresh = () => {
+      setAll(getEquipment());
+      // Read after the call, because the call is what sets it
+      setSeedProblem(equipmentSeedProblem());
+    };
     refresh();
     return subscribeToEquipment(refresh);
   }, []);
@@ -246,9 +279,23 @@ export const EquipmentScreen: React.FC = () => {
       .filter((e) => (showArchived ? !e.active : e.active))
       .filter((e) => branchFilter === 'all' || e.branchName === branchFilter)
       .filter(
+        (e) => statusFilter === 'all' || (e.serviceStatus ?? 'inventory') === statusFilter
+      )
+      .filter(
         (e) =>
           !q ||
-          [e.name, e.serialNumber, e.make, e.model, e.location, e.branchName]
+          [
+            e.assetNo,
+            e.name,
+            e.assetType,
+            e.capacity,
+            e.serialNumber,
+            e.make,
+            e.model,
+            e.location,
+            e.branchName,
+            e.statusNote,
+          ]
             .filter(Boolean)
             .join(' ')
             .toLowerCase()
@@ -257,9 +304,30 @@ export const EquipmentScreen: React.FC = () => {
       .sort(
         (a, b) => a.branchName.localeCompare(b.branchName) || a.name.localeCompare(b.name)
       );
-  }, [mine, query, branchFilter, showArchived]);
+  }, [mine, query, branchFilter, statusFilter, showArchived]);
 
   const archivedCount = mine.filter((e) => !e.active).length;
+
+  /**
+   * How many assets sit in each service state, on the tab being looked at.
+   *
+   * Counted before the status filter is applied but after the archived tab is
+   * chosen, which is the only way the numbers stay still: counting after the
+   * filter would show "Service due (33)" until it was picked and "(33)" of a
+   * list of 33 thereafter, and counting across both tabs would promise rows
+   * the archived tab does not have.
+   */
+  const statusCounts = useMemo(() => {
+    const counts = new Map<ServiceStatus, number>();
+    mine
+      .filter((e) => (showArchived ? !e.active : e.active))
+      .filter((e) => branchFilter === 'all' || e.branchName === branchFilter)
+      .forEach((e) => {
+        const status = e.serviceStatus ?? 'inventory';
+        counts.set(status, (counts.get(status) ?? 0) + 1);
+      });
+    return counts;
+  }, [mine, showArchived, branchFilter]);
 
   /**
    * The register, category by category.
@@ -432,6 +500,21 @@ export const EquipmentScreen: React.FC = () => {
 
       <div className="p-6 md:p-10 flex-1 space-y-5">
         {/*
+          Said in the screen rather than the console. A register that silently
+          stays on the previous estate is indistinguishable from an app that
+          has not been updated, and the person looking at it has no way to tell
+          those apart — so when the shipped register could not be written, the
+          screen says so and says what frees the room.
+        */}
+        {seedProblem && (
+          <p
+            role="alert"
+            className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3.5 py-3"
+          >
+            {seedProblem}
+          </p>
+        )}
+        {/*
           The way back out, and the only thing on the screen saying which
           category is open — the section heading below repeats the name, but a
           heading is not something anybody reads as a control.
@@ -482,7 +565,7 @@ export const EquipmentScreen: React.FC = () => {
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search name, serial, make…"
+                placeholder="Search asset no, name, make…"
                 aria-label="Search appliances"
                 className="w-full sm:w-64 pl-9 pr-8 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] transition-colors"
               />
@@ -512,6 +595,27 @@ export const EquipmentScreen: React.FC = () => {
                 ))}
               </select>
             )}
+            {/*
+              Only the states actually present are offered, with their counts.
+              A filter listing "Not working (0)" invites a click that empties
+              the screen, and a register where nothing is broken should say so
+              by not offering the option at all.
+            */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as ServiceStatus | 'all')}
+              aria-label="Filter by service status"
+              className="flex-1 sm:flex-none min-w-0 px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+            >
+              <option value="all">Any status</option>
+              {SERVICE_STATUS_ORDER.filter((status) => statusCounts.get(status)).map(
+                (status) => (
+                  <option key={status} value={status}>
+                    {SERVICE_STATUS_LABELS[status]} ({statusCounts.get(status)})
+                  </option>
+                )
+              )}
+            </select>
           </div>
         </div>
 
@@ -527,8 +631,8 @@ export const EquipmentScreen: React.FC = () => {
               <Wrench className="w-8 h-8 text-[#9CA1A9] mx-auto mb-2.5" />
               <p className="text-sm font-bold text-[#17181D]">Nothing matches</p>
               <p className="text-xs text-[#6B6F76] mt-1 max-w-sm mx-auto">
-                No appliance matches “{query.trim()}” by name, serial, make, model or
-                where it stands.
+                No appliance matches “{query.trim()}” by asset number, name, type,
+                capacity, serial, make, model or where it stands.
               </p>
             </div>
           ) : (
@@ -742,6 +846,13 @@ const EquipmentDialog: React.FC<{
     branchName: item?.branchName ?? ownBranch ?? branches[0]?.name ?? '',
     name: item?.name ?? '',
     category: item?.category ?? presetCategory ?? defaultCategory(),
+    assetNo: item?.assetNo ?? '',
+    assetType: item?.assetType ?? item?.name ?? '',
+    capacity: item?.capacity ?? '',
+    quantity: item?.quantity ?? 1,
+    serviceStatus: item?.serviceStatus ?? 'inventory',
+    statusNote: item?.statusNote ?? '',
+    lastServicedOn: item?.lastServicedOn ?? '',
     serialNumber: item?.serialNumber ?? '',
     make: item?.make ?? '',
     model: item?.model ?? '',
@@ -752,8 +863,82 @@ const EquipmentDialog: React.FC<{
   }));
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Whether the name is still following the type.
+   *
+   * Most assets are called what they are — a "Kulfi Freezer" is named Kulfi
+   * Freezer — so the name tracks the type field until somebody types a name of
+   * their own, and then it stops for good. Tracking after that would rewrite
+   * "Fryer — left hand" the moment the type was corrected, which is the
+   * behaviour every form that does this silently gets wrong.
+   *
+   * An existing asset starts untracked: its name is already decided.
+   */
+  const [nameFollowsType, setNameFollowsType] = useState(
+    () => !item || (item.assetType ?? '') === item.name
+  );
+
   const set = <K extends keyof EquipmentDraft>(key: K, value: EquipmentDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
+
+  const options = useMemo(
+    () => assetOptionsFor(getEquipment(), draft.branchName, draft.category),
+    [draft.branchName, draft.category]
+  );
+
+  /**
+   * Choosing a type fills in the rest of the sentence.
+   *
+   * The name follows it while untouched, and the category follows it when the
+   * register has only ever filed that type under one trade — pick "Kulfi
+   * Freezer" and the asset lands under refrigeration without being asked. A
+   * type the register has never seen, or has filed under two trades, leaves
+   * the category alone rather than guessing at it.
+   */
+  const setType = (value: string) => {
+    setDraft((d) => {
+      const inferred = categoryForType(value);
+      return {
+        ...d,
+        assetType: value,
+        name: nameFollowsType ? value : d.name,
+        category: inferred && !item ? inferred : d.category,
+      };
+    });
+  };
+
+  /**
+   * The next free number, offered rather than imposed.
+   *
+   * A button and not an auto-fill: the number is the estate's own and a unit
+   * that already carries a tag has to be recorded under the tag on the unit,
+   * not under whatever this app would have handed out next. So the field
+   * starts empty on a new asset and the suggestion is one click away.
+   */
+  const suggestAssetNo = () =>
+    set('assetNo', nextAssetNo(draft.branchName, draft.category));
+
+  /**
+   * Reading a status note back into a status and a date.
+   *
+   * The wording is what gets typed, because the wording is what the master
+   * document says — so typing "Serviced 25 Aug 2026" sets the status to
+   * Serviced and the service date to the 25th, and the operator never has to
+   * say the same thing three times. Both stay editable afterwards; this fills
+   * blanks and corrects the status, it does not lock anything.
+   */
+  const setStatusNote = (value: string) => {
+    setDraft((d) => {
+      const status = readServiceStatus(value);
+      const serviced = readServiceDate(value);
+      return {
+        ...d,
+        statusNote: value,
+        serviceStatus: status ?? d.serviceStatus,
+        lastServicedOn: serviced ?? d.lastServicedOn,
+      };
+    });
+  };
 
   /*
    * The general plan of whichever category is currently chosen — so changing
@@ -818,19 +1003,78 @@ const EquipmentDialog: React.FC<{
         </div>
 
         <form onSubmit={submit} className="p-6 space-y-5">
+          {/*
+            Type first, then name. The type is the field with the answers in
+            it, it fills the name in on the way past, and it is what somebody
+            adding a fryer actually has in mind — asking for a name first makes
+            them invent one before they have said what the thing is.
+          */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="eq-type" className={labelClass}>
+                What it is
+              </label>
+              <Combobox
+                id="eq-type"
+                value={draft.assetType ?? ''}
+                onChange={setType}
+                options={options.types}
+                placeholder="e.g. Split AC, Kulfi Freezer"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="eq-name" className={labelClass}>
+                Called on the floor
+              </label>
+              <input
+                id="eq-name"
+                type="text"
+                value={draft.name}
+                onChange={(e) => {
+                  setNameFollowsType(false);
+                  set('name', e.target.value);
+                }}
+                placeholder={draft.assetType || 'Same as what it is'}
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          {/*
+            The asset number sits on its own row and above everything else that
+            identifies the unit, because on this estate it *is* the
+            identification — nine fridges at one branch are all called
+            "Refrigerator" and only the number tells them apart.
+          */}
           <div>
-            <label htmlFor="eq-name" className={labelClass}>
-              What it is
+            <label htmlFor="eq-asset-no" className={labelClass}>
+              Asset number
             </label>
-            <input
-              id="eq-name"
-              type="text"
-              value={draft.name}
-              onChange={(e) => set('name', e.target.value)}
-              autoFocus
-              placeholder="e.g. Split AC 2 — dining area"
-              className={inputClass}
-            />
+            <div className="flex gap-2">
+              <input
+                id="eq-asset-no"
+                type="text"
+                value={draft.assetNo ?? ''}
+                onChange={(e) => set('assetNo', e.target.value.toUpperCase())}
+                autoFocus={!item}
+                placeholder="e.g. RG-ACU-008"
+                className={`${inputClass} font-mono tracking-wide`}
+              />
+              <button
+                type="button"
+                onClick={suggestAssetNo}
+                className="shrink-0 px-3 py-2.5 rounded-md border border-[#E6E7EB] bg-white text-[11px] font-bold text-[#6B6F76] hover:bg-[#F6F6F8] hover:text-[#17181D] transition-colors cursor-pointer"
+              >
+                Next free
+              </button>
+            </div>
+            <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+              As printed on the unit. <span className="font-mono">Next free</span> offers{' '}
+              <span className="font-mono">{nextAssetNo(draft.branchName, draft.category)}</span> —
+              the number runs across the whole estate, not per branch, so it is free
+              everywhere.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -965,7 +1209,62 @@ const EquipmentDialog: React.FC<{
             </p>
           </div>
 
+          {/*
+            Where it stands and what it is: a combobox each, offering this
+            branch's own locations first and then everywhere else's, and the
+            makes the estate actually buys. Typed answers are kept as typed —
+            these are lists of what has been seen, not lists of what is allowed.
+          */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="eq-location" className={labelClass}>
+                Where it stands
+              </label>
+              <Combobox
+                id="eq-location"
+                value={draft.location ?? ''}
+                onChange={(value) => set('location', value)}
+                options={options.locations}
+                placeholder="e.g. Main Kitchen"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="eq-make" className={labelClass}>
+                Make
+              </label>
+              <Combobox
+                id="eq-make"
+                value={draft.make ?? ''}
+                onChange={(value) => set('make', value)}
+                options={options.makes}
+                placeholder="e.g. O General"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/*
+              Capacity appears only for the trades that measure in tons. On a
+              fryer the field is meaningless, and a form that shows every field
+              to everybody is how registers fill up with blanks.
+            */}
+            {usesCapacity(draft.category) && (
+              <div>
+                <label htmlFor="eq-capacity" className={labelClass}>
+                  Capacity
+                </label>
+                <Combobox
+                  id="eq-capacity"
+                  value={draft.capacity ?? ''}
+                  onChange={(value) => set('capacity', value)}
+                  options={options.capacities}
+                  placeholder="e.g. 2.5 Ton"
+                  className={inputClass}
+                />
+              </div>
+            )}
             <div>
               <label htmlFor="eq-serial" className={labelClass}>
                 Serial number
@@ -975,35 +1274,7 @@ const EquipmentDialog: React.FC<{
                 type="text"
                 value={draft.serialNumber ?? ''}
                 onChange={(e) => set('serialNumber', e.target.value)}
-                placeholder="As printed on the unit"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="eq-location" className={labelClass}>
-                Where it stands
-              </label>
-              <input
-                id="eq-location"
-                type="text"
-                value={draft.location ?? ''}
-                onChange={(e) => set('location', e.target.value)}
-                placeholder="e.g. Back kitchen"
-                className={inputClass}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label htmlFor="eq-make" className={labelClass}>
-                Make
-              </label>
-              <input
-                id="eq-make"
-                type="text"
-                value={draft.make ?? ''}
-                onChange={(e) => set('make', e.target.value)}
+                placeholder="Plate number, if any"
                 className={inputClass}
               />
             </div>
@@ -1019,6 +1290,67 @@ const EquipmentDialog: React.FC<{
                 className={inputClass}
               />
             </div>
+          </div>
+
+          {/*
+            Servicing, all three fields together, because they are three views
+            of one fact. Typing the register's own wording into the note sets
+            the other two — "Serviced 25 Aug 2026" picks Serviced and dates it
+            — so a master document can be copied across a line at a time.
+          */}
+          <div className="rounded-md border border-[#E6E7EB] bg-[#FAFAFA] p-3.5 space-y-3">
+            <span className={`${labelClass} mb-0`}>Service record</span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="eq-status" className="sr-only">
+                  Service status
+                </label>
+                <select
+                  id="eq-status"
+                  value={draft.serviceStatus ?? 'inventory'}
+                  onChange={(e) => set('serviceStatus', e.target.value as ServiceStatus)}
+                  className={inputClass}
+                >
+                  {SERVICE_STATUS_ORDER.map((status) => (
+                    <option key={status} value={status}>
+                      {SERVICE_STATUS_LABELS[status]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="eq-last-serviced" className="sr-only">
+                  Last serviced on
+                </label>
+                <input
+                  id="eq-last-serviced"
+                  type="date"
+                  value={draft.lastServicedOn ?? ''}
+                  onChange={(e) => set('lastServicedOn', e.target.value)}
+                  aria-label="Last serviced on"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <input
+              id="eq-status-note"
+              type="text"
+              value={draft.statusNote ?? ''}
+              onChange={(e) => setStatusNote(e.target.value)}
+              placeholder="The register's own words — “SERVICE DUE”, “Serviced 25 Aug 2026”, “Unit 1 of 2”"
+              aria-label="Status note, as the register words it"
+              className={inputClass}
+            />
+
+            <p className="text-[11px] text-[#6B6F76]">
+              The note is kept exactly as written. Type a date into it and the status
+              and service date above follow — both stay yours to correct.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="eq-installed" className={labelClass}>
                 Installed on
@@ -1031,11 +1363,25 @@ const EquipmentDialog: React.FC<{
                 className={inputClass}
               />
             </div>
+            <div>
+              <label htmlFor="eq-quantity" className={labelClass}>
+                Units this covers
+              </label>
+              <input
+                id="eq-quantity"
+                type="number"
+                min={1}
+                step={1}
+                value={draft.quantity ?? 1}
+                onChange={(e) => set('quantity', Number(e.target.value))}
+                className={inputClass}
+              />
+            </div>
           </div>
 
           <p className="-mt-2 text-[11px] text-[#6B6F76]">
-            The install date is the clock a service plan counts from until the first
-            service is recorded against it. Left blank, it counts from today.
+            A plan counts from the last service where there is one, and from the install
+            date otherwise. With neither, it counts from today.
           </p>
 
           <div>
@@ -1084,7 +1430,21 @@ const EquipmentDialog: React.FC<{
 // The whole appliance list at once
 // ---------------------------------------------------------------------------
 
-const COLUMNS = 'Branch, Name, Category, Serial, Make, Model, Location, Installed (YYYY-MM-DD)';
+/**
+ * The columns a pasted line is read in, in order.
+ *
+ * Asset number leads, because it leads on the master documents and because it
+ * is what the import matches on — a corrected register pasted again lands on
+ * the same records rather than doubling them.
+ *
+ * Every column after Branch is optional: a line stops being read at the last
+ * comma the operator typed, so pasting just the number, the branch and the
+ * type works and fills the rest in as blank. That matters more than it reads.
+ * It is what lets somebody paste four columns off a phone without first
+ * building an eight-column spreadsheet.
+ */
+const COLUMNS =
+  'Asset no, Branch, Type, Capacity, Make, Location, Status, Serial, Model, Installed (YYYY-MM-DD)';
 
 /**
  * Reads a pasted list.
@@ -1161,7 +1521,7 @@ const ImportDialog: React.FC<{
       .map((l) => l.trim())
       .filter(Boolean)
       // A header row pasted along with the data is dropped rather than imported
-      .filter((l, i) => !(i === 0 && /^branch\s*,/i.test(l)));
+      .filter((l, i) => !(i === 0 && /^(asset\s*no|branch)\b/i.test(l)));
 
     if (lines.length === 0) {
       setError('Paste at least one line');
@@ -1170,14 +1530,43 @@ const ImportDialog: React.FC<{
 
     const unknownAt: number[] = [];
     const rows: EquipmentDraft[] = lines.map((line, index) => {
-      const [branchName, name, category, serialNumber, make, model, location, installedOn] =
+      const [assetNo, branchName, assetType, capacity, make, location, status, serialNumber, model, installedOn] =
         parseRow(line);
-      const trade = readCategory(category ?? '', categories);
+
+      /*
+       * The trade is read from the asset number first — `RG-CHL-094` is a
+       * chiller and says so — and only then from a category column, if the
+       * operator bothered to include one. That is the whole reason the
+       * documents can be pasted as they stand: they have no category column
+       * at all, because the number already carries it.
+       */
+      const segment = (assetNo ?? '').split('-')[1]?.toUpperCase() ?? '';
+      const fromNumber = SEGMENT_CATEGORY[segment];
+      const fromType = categoryForType(assetType ?? '');
+      const trade = fromNumber
+        ? { category: fromNumber, unrecognised: false }
+        : fromType
+          ? { category: fromType, unrecognised: false }
+          : readCategory('', categories);
       if (trade.unrecognised) unknownAt.push(index + 1);
+
       return {
         branchName: branchName ?? '',
-        name: name ?? '',
+        // The name defaults to the type, which is what the documents record
+        name: assetType ?? '',
         category: trade.category,
+        assetNo,
+        assetType,
+        capacity,
+        /*
+         * The status column is the register's own wording, so it is kept as
+         * written and read for what it means at the same time — a column of
+         * "SERVICE DUE" and "Serviced 25 Aug 2026" arrives as a status, a
+         * date and the original words, from one paste.
+         */
+        statusNote: status,
+        serviceStatus: readServiceStatus(status ?? '') ?? 'inventory',
+        lastServicedOn: readServiceDate(status ?? ''),
         serialNumber,
         make,
         model,
@@ -1228,7 +1617,7 @@ const ImportDialog: React.FC<{
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
           <h3 id="equipmentscreen-dialog-2-title" className="text-base font-bold text-[#17181D]">Import an appliance list</h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
-            Paste it straight out of a spreadsheet — one asset per line.
+            Paste it straight out of the master register — one asset per line.
           </p>
         </div>
 
@@ -1237,8 +1626,16 @@ const ImportDialog: React.FC<{
             <p className={labelClass}>Columns, in this order</p>
             <code className="text-[11px] text-[#17181D] break-words">{COLUMNS}</code>
             <p className="text-[11px] text-[#6B6F76] mt-2">
-              Only Branch and Name are required. An asset already on record is corrected
-              rather than added twice, so a corrected spreadsheet can be pasted again.
+              Only Branch and Type are required, and a line can stop at any comma. The
+              trade is read from the asset number —{' '}
+              <span className="font-mono">ACU</span>, <span className="font-mono">CHL</span>{' '}
+              and <span className="font-mono">ELC</span> — so the master registers paste in
+              as they stand. The Status column is kept in the register&rsquo;s own wording and
+              read at the same time: “Serviced 25 Aug 2026” sets the status and the date.
+            </p>
+            <p className="text-[11px] text-[#6B6F76] mt-1.5">
+              An asset already on record is corrected rather than added twice, matched on
+              its asset number, so a corrected register can be pasted again.
             </p>
           </div>
 
@@ -1254,7 +1651,9 @@ const ImportDialog: React.FC<{
               autoFocus
               spellCheck={false}
               placeholder={
-                "Zahra's Kitchen, Counter printer, IT & printers, SN-99812, Epson, TM-T88VI, Front counter, 2025-03-14"
+                'RG-ACU-008, Royal Gujarat, Split AC, 2.5 Ton, Mitsubishi, Juice & Sweets, SERVICE DUE\n' +
+                'RG-CHL-021, Royal Gujarat, Walk-In Chiller, , , Kitchen, Corrected / Final\n' +
+                'NHB-ELC-004, Nana House - Shabiya 11, Drinking Water Cooler / Filter, , Milano, Small Kitchen beside Hall'
               }
               className={`${inputClass} resize-y font-mono text-xs`}
             />
@@ -1568,6 +1967,33 @@ const CategoryDialog: React.FC<{
   );
 };
 
+/**
+ * Where an asset stands, as a coloured word.
+ *
+ * Red for what does not work, amber for what is owed, grey for the rest.
+ * 'inventory' gets no pill at all: it is what two thirds of the register is,
+ * it claims nothing, and a badge on 209 of 302 rows would be wallpaper — the
+ * eye stops reading a mark it sees everywhere, which would cost the two
+ * faulty units their visibility.
+ */
+const ServiceStatusPill: React.FC<{ status: ServiceStatus }> = ({ status }) => {
+  if (status === 'inventory') return null;
+  const tone: Record<Exclude<ServiceStatus, 'inventory'>, string> = {
+    faulty: 'bg-[#FDECEE] text-[#C8202D]',
+    due: 'bg-[#FDF6E7] text-[#B4740A]',
+    pending: 'bg-[#FDF6E7] text-[#B4740A]',
+    unknown: 'bg-[#F1F1F4] text-[#6B6F76]',
+    serviced: 'bg-[#EAF6EE] text-[#1E7F45]',
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${tone[status]}`}
+    >
+      {SERVICE_STATUS_LABELS[status]}
+    </span>
+  );
+};
+
 // ---------------------------------------------------------------------------
 // Recording that an asset has been looked after
 // ---------------------------------------------------------------------------
@@ -1834,7 +2260,21 @@ const AssetRow: React.FC<{
     >
       <div className="flex-1 min-w-[14rem]">
         <div className="flex flex-wrap items-center gap-2">
+          {/*
+            The number leads, in a monospaced face so a column of them lines up
+            and a transposed digit is visible. On this estate the name alone is
+            often not an identification at all — eleven rows here say "Fan".
+          */}
+          {item.assetNo && (
+            <span className="font-mono text-[11px] font-bold tracking-wide text-[#C8202D] bg-[#FDECEE] px-1.5 py-0.5 rounded">
+              {item.assetNo}
+            </span>
+          )}
           <span className="text-sm font-bold text-[#17181D]">{item.name}</span>
+          {item.capacity && (
+            <span className="text-[11px] font-semibold text-[#6B6F76]">{item.capacity}</span>
+          )}
+          <ServiceStatusPill status={item.serviceStatus ?? 'inventory'} />
           {/* Redundant inside a category's own list, where every row is that category */}
               {showCategory && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F1F1F4] text-[#6B6F76]">
@@ -1881,6 +2321,17 @@ const AssetRow: React.FC<{
           {(item.make || item.model) && (
             <span>{[item.make, item.model].filter(Boolean).join(' ')}</span>
           )}
+          {/*
+            Shown only when it says something the pill does not. "SERVICE DUE"
+            beside a pill reading Service due is noise; "Unit 1 of 2" and
+            "Fresh lassi / shakes" are the only thing distinguishing two
+            otherwise identical rows.
+          */}
+          {item.statusNote &&
+            item.statusNote.toLowerCase() !==
+              SERVICE_STATUS_LABELS[item.serviceStatus ?? 'inventory'].toLowerCase() && (
+              <span className="italic">{item.statusNote}</span>
+            )}
         </p>
         <div className="mt-1 space-y-0.5">
           {gm && (

@@ -1,6 +1,6 @@
 import { Equipment, Interval, MaintenanceJob, MaintenancePlan } from '../types';
 import { getJobs, saveJob, statusOf } from './maintenanceStore';
-import { setPlanOverride } from './equipmentStore';
+import { reconcileServiceStatus, setPlanOverride } from './equipmentStore';
 import { activePlans, generalPlanIdFor } from './maintenancePlanStore';
 import {
   daysBetween,
@@ -196,6 +196,12 @@ export function recordGeneralMaintenance(
   if (!saveJob(job)) {
     return { ok: false, error: 'There is no room left in this browser to store that' };
   }
+
+  /*
+   * The asset stops claiming the service is owed, in the register's own
+   * wording. Written after the job, for the reason the cadence below is.
+   */
+  reconcileServiceStatus(equipment.id, details.on, 'scheduled');
 
   /*
    * The new cadence is written after the work, not before, so a full browser

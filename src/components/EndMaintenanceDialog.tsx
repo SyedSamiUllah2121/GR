@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Camera, CheckCircle2, Loader2, Receipt, Trash2 } from 'lucide-react';
 import { Interval, MaintenanceJob } from '../types';
 import { completeJob, getJobs, getLastPerson, rememberPerson } from '../services/maintenanceStore';
+import { reconcileServiceStatus } from '../services/equipmentStore';
 import { approximateBytes, formatBytes, readImageFile } from '../services/photoFile';
 import { getEquipmentById } from '../services/equipmentStore';
 import {
@@ -165,6 +166,18 @@ export const EndMaintenanceDialog: React.FC<{
       setErrors({ form: error ?? 'Could not close this job' });
       return;
     }
+
+    /*
+     * The asset's own record catches up with the work. Without this the
+     * register keeps its "SERVICE DUE" pill for ever on a unit somebody has
+     * just serviced, and the status filter — the one place a manager looks to
+     * answer "what still needs doing" — keeps counting it.
+     *
+     * After the job is safely written, never before: a status saying the work
+     * is done, sitting beside no record of the work, is the worse of the two
+     * ways this can be wrong.
+     */
+    reconcileServiceStatus(saved.equipmentId, saved.completedAt ?? '', saved.kind ?? 'problem');
 
     /*
      * After the repair is safely stored, never before. If the store is full the

@@ -113,6 +113,17 @@ export interface Branch {
   /** Where the branch is, shown under its name on the dashboard. */
   location: string;
   /**
+   * The letters its asset numbers start with — `RG` for Royal Gujarat, whose
+   * assets are `RG-ACU-008`, `RG-CHL-012`, `RG-ELC-007`.
+   *
+   * Set on the branches the register already numbers. A branch opened later
+   * has none until somebody gives it one, and `assetPrefixFor` derives a
+   * provisional one from the name so its first asset can still be numbered.
+   * It is not an id: two branches must not share one, but it is the operator's
+   * to correct, and correcting it does not renumber assets already recorded.
+   */
+  assetPrefix?: string;
+  /**
    * Closed. Records name their branch as text, so a branch with history is
    * archived rather than deleted — its past inspections and jobs still read
    * correctly, but it is not offered for new work or chased for being due.
@@ -481,6 +492,53 @@ export function initialsOf(name: string): string {
 export type MaintenanceCategory = string;
 
 /**
+ * Where an asset stands with its servicing, as the register records it.
+ *
+ * Six states rather than a boolean, because the estate's own paperwork
+ * distinguishes them and flattening them loses the distinction that matters:
+ * a unit nobody has serviced yet ('due') and a unit somebody has been asked
+ * to service ('pending') are different phone calls, and a unit that does not
+ * run at all ('faulty') is neither.
+ *
+ * 'inventory' is the honest answer for most of the estate: the chiller and
+ * electrical registers record what exists and where, not when it was last
+ * looked at. Calling those assets 'due' would fill the board with 211 jobs
+ * nobody raised; calling them 'serviced' would claim work that was never
+ * done. They are simply on the inventory, and the schedule brings them up
+ * when their category's plan says so.
+ *
+ * 'unknown' is narrower and is also not a default: it is for the assets whose
+ * own register line says the status was not recorded — "Service status not
+ * stated", "wording to confirm". Those are the ones worth chasing.
+ */
+export type ServiceStatus =
+  | 'serviced'
+  | 'due'
+  | 'pending'
+  | 'faulty'
+  | 'inventory'
+  | 'unknown';
+
+export const SERVICE_STATUS_LABELS: Record<ServiceStatus, string> = {
+  serviced: 'Serviced',
+  due: 'Service due',
+  pending: 'Service pending',
+  faulty: 'Not working',
+  inventory: 'On inventory',
+  unknown: 'Not recorded',
+};
+
+/** The order they read in on a filter — worst first, so what needs doing leads. */
+export const SERVICE_STATUS_ORDER: ServiceStatus[] = [
+  'faulty',
+  'due',
+  'pending',
+  'unknown',
+  'serviced',
+  'inventory',
+];
+
+/**
  * One trade on the operator's own list: what a category is called, and the
  * fact that it exists.
  *
@@ -667,6 +725,75 @@ export interface Equipment {
   /** Which trade looks after it, on the same list a job uses. */
   category: MaintenanceCategory;
 
+  /**
+   * The estate's own number for this unit — `RG-ACU-008`, `NHB-CHL-001`.
+   *
+   * Branch prefix, trade segment, then a number that runs continuously across
+   * the whole estate. This is the asset's real identity: it is what the
+   * register is filed under, what the branch quotes on the phone, and what
+   * the id is derived from, so two fans in the same kitchen stay two records
+   * instead of collapsing into one.
+   *
+   * Optional only because a register written before this field existed has
+   * none. Everything the app offers to create has one — `nextAssetNo` hands
+   * out the next free number for the branch and trade — and an asset without
+   * one still works, it is just harder to find on the floor.
+   */
+  assetNo?: string | null;
+
+  /**
+   * What the unit is, on the register's wording: "Split AC", "Kulfi Freezer",
+   * "Dough / Flour Mixing Machine".
+   *
+   * Separate from `name` because they answer different questions. The type is
+   * the class of machine, shared by the sixty-six kinds of thing on the
+   * electrical register and offered as a dropdown; the name is what this
+   * particular one is called, which is usually the type and occasionally not.
+   */
+  assetType?: string | null;
+
+  /**
+   * Cooling capacity, as written — "2.5 Ton", "Approx. 2.35 Ton".
+   *
+   * Text, not a number, and deliberately. The register contains
+   * "Approx. 2.35 Ton" for a unit whose indoor and outdoor halves are
+   * different makes, and rounding that to 2.35 would quietly claim a
+   * precision the estate does not have.
+   *
+   * Air conditioning in practice; nothing stops a chiller carrying one.
+   */
+  capacity?: string | null;
+
+  /** How many the line covers. One, almost always — the register counts units. */
+  quantity?: number | null;
+
+  /**
+   * Where servicing stands, for filtering and colour.
+   *
+   * Absent on a record written before the field existed, which reads as
+   * 'inventory' — on the register, nothing claimed about its servicing.
+   */
+  serviceStatus?: ServiceStatus;
+
+  /**
+   * The register's own wording about this unit, verbatim: "SERVICE DUE",
+   * "Serviced 25 Aug 2026", "Unit 1 of 2", "Fresh lassi / shakes".
+   *
+   * Kept beside the sorted `serviceStatus` rather than replaced by it,
+   * because the note carries what the status cannot — which of two identical
+   * shake machines this is, or that the date was never written down.
+   */
+  statusNote?: string | null;
+
+  /**
+   * When it was last serviced, ISO `YYYY-MM-DD`, where the register says so.
+   *
+   * The schedule prefers this over `installedOn` when working out what is
+   * due: an AC serviced on 25 August is next due from August, not from the
+   * day it was installed two years ago.
+   */
+  lastServicedOn?: string | null;
+
   /** Serial or asset tag, as printed on the unit. */
   serialNumber: string | null;
   make: string | null;
@@ -843,12 +970,77 @@ export const INSPECTORS: string[] = [
   'R. Chowdhury',
 ];
 
+/**
+ * The nine branches the estate runs.
+ *
+ * Names, order and asset prefixes are taken from the AC, chiller and
+ * electrical master registers dated 17 September 2026 — the same order those
+ * documents list them in, which is also the order their asset numbers run.
+ * The name here has to match the register's wording exactly: inspections,
+ * jobs and every one of the 302 assets are filed against the branch as
+ * *text*, so "Mussafah 26 - Gujarat Hotel" and "Gujarat Hotel" would be two
+ * different branches as far as this app is concerned.
+ *
+ * `location` is the area each name already states. Two of them — Royal
+ * Gujarat and Manpasand - New Store — do not state one, so they read as
+ * Abu Dhabi until somebody corrects them on the branches screen; that is a
+ * field the operator owns, and guessing an address would have been worse
+ * than leaving it broad.
+ */
 export const BRANCHES: Branch[] = [
-  { id: 'zahras-kitchen', name: "Zahra's Kitchen", location: 'Kharian, Gujrat' },
-  { id: 'gujrat-restaurant', name: 'Gujrat Restaurant', location: 'Gujrat City' },
-  { id: 'mafraq-gujrat', name: 'Mafraq Gujrat Restaurant', location: 'Mafraq, Gujrat' },
-  { id: 'naan-house-metro', name: 'Naan House Metro', location: 'Metro, Gujrat' },
-  { id: 'royal-gujrat-sweets', name: 'Royal Gujrat Sweets', location: 'Jalalpur Jattan, Gujrat' },
-  { id: 'gujrat-grill-house', name: 'Gujrat Grill House', location: 'Sarai Alamgir, Gujrat' },
-  { id: 'naan-house-bazaar', name: 'Naan House Bazaar', location: 'Kutchery Bazaar, Gujrat' },
+  {
+    id: 'nana-house-shabiya-11',
+    name: 'Nana House - Shabiya 11',
+    location: 'Shabiya 11, Abu Dhabi',
+    assetPrefix: 'NHB',
+  },
+  {
+    id: 'royal-gujarat',
+    name: 'Royal Gujarat',
+    location: 'Abu Dhabi',
+    assetPrefix: 'RG',
+  },
+  {
+    id: 'mussafah-17-delight-gujarat',
+    name: 'Mussafah 17 - Delight Gujarat',
+    location: 'Mussafah 17, Abu Dhabi',
+    assetPrefix: 'DGR',
+  },
+  {
+    id: 'shabiya-12-gujarat-restaurants',
+    name: 'Shabiya 12 - Gujarat Restaurants',
+    location: 'Shabiya 12, Abu Dhabi',
+    assetPrefix: 'GRSB',
+  },
+  {
+    id: 'nana-house-shabiya-10',
+    name: 'Nana House - Shabiya 10',
+    location: 'Shabiya 10, Abu Dhabi',
+    assetPrefix: 'NH',
+  },
+  {
+    id: 'mafraq-gujarat-restaurant',
+    name: 'Mafraq Gujarat Restaurant',
+    location: 'Mafraq, Abu Dhabi',
+    assetPrefix: 'MGR',
+  },
+  {
+    id: 'manpasand-new-store',
+    name: 'Manpasand - New Store',
+    location: 'Abu Dhabi',
+    assetPrefix: 'MPS',
+  },
+  {
+    id: 'mussafah-26-gujarat-hotel',
+    name: 'Mussafah 26 - Gujarat Hotel',
+    location: 'Mussafah 26, Abu Dhabi',
+    assetPrefix: 'GRS',
+  },
+  {
+    id: 'mussafah-26-zaharat-gujarat',
+    name: 'Mussafah 26 - Zaharat Gujarat',
+    location: 'Mussafah 26, Abu Dhabi',
+    assetPrefix: 'ZG',
+  },
 ];
+

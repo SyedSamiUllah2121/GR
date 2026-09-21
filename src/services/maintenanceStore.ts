@@ -1,4 +1,5 @@
 import { MaintenanceJob, MaintenanceStatus } from '../types';
+import { ensureEstate } from './estateReset';
 import { SEED_MAINTENANCE } from '../data/seedMaintenance';
 
 /**
@@ -17,6 +18,7 @@ function notify(): void {
 }
 
 export function getJobs(): MaintenanceJob[] {
+  ensureEstate();
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) {

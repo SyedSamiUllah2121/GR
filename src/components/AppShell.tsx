@@ -1,6 +1,6 @@
 'use client';
 
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {usePathname, useRouter} from 'next/navigation';
 import {Sidebar} from './Sidebar';
 import {Topbar} from './Topbar';
@@ -32,6 +32,14 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
   const pathname = usePathname();
   const mounted = useMounted();
   const user = useCurrentUser();
+  /*
+   * Work the schedule could not write, which is only ever the store being
+   * full. Held in state rather than logged, because a maintenance board that
+   * is quietly missing jobs is the one failure this app must never keep to
+   * itself — the board reads as "nothing due", which is the same thing it
+   * says when there is genuinely nothing to do.
+   */
+  const [unsaved, setUnsaved] = useState(0);
 
   // Seed the demo records on first run.
   useEffect(() => {
@@ -66,6 +74,7 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
     if (raised.length > 0) {
       console.info(`Maintenance schedule: raised ${raised.length} job(s) now due`);
     }
+    setUnsaved(failed);
     if (failed > 0) {
       console.error(
         `Maintenance schedule: ${failed} due job(s) could not be stored — the browser store is full`
@@ -115,6 +124,25 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
 
           <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0">
             <Topbar />
+            {/*
+              Above the page rather than inside one screen, because the
+              consequence is not local to any screen: every board, overview
+              and month-end figure below is missing the same work.
+            */}
+            {unsaved > 0 && (
+              <div
+                role="alert"
+                className="px-6 md:px-10 py-3 bg-[#FDECEE] border-b border-[#C8202D]/30"
+              >
+                <p className="text-xs font-semibold text-[#C8202D]">
+                  {unsaved} scheduled{' '}
+                  {unsaved === 1 ? 'service is' : 'services are'} due but could not be
+                  saved — there is no room left in this browser. The board below is
+                  incomplete until space is freed; removing photographs from older
+                  completed jobs is the quickest way.
+                </p>
+              </div>
+            )}
             <div className="flex-1 flex flex-col min-w-0">{children}</div>
           </main>
         </div>

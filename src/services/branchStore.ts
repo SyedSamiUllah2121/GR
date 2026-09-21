@@ -1,4 +1,5 @@
 import { BRANCHES, Branch } from '../types';
+import { ensureEstate } from './estateReset';
 import { getInspections } from './storage';
 import { getJobs } from './maintenanceStore';
 
@@ -26,10 +27,14 @@ const EVENT = 'inspection_log_branches_change';
  * written to an *empty* store — and the surprise-visit rotation would keep
  * dealing the old, shorter deck.
  *
- *   1  the original four
- *   2  adds Royal Gujrat Sweets, Gujrat Grill House and Naan House Bazaar
+ *   1  the nine branches of the September 2026 asset registers
+ *
+ * The count restarts here. The demo estate that came before is not a version
+ * of this list, it is a different list, and `estateReset` removes it outright
+ * rather than migrating it — so there is no store in the wild holding an
+ * earlier version of *these* branches to reconcile against.
  */
-const SEED_VERSION = 2;
+const SEED_VERSION = 1;
 const SEED_VERSION_KEY = 'inspection_log_branches_seed_version';
 
 /** Same shape as an id in the seed: lowercase, dashes, no punctuation. */
@@ -61,9 +66,9 @@ function write(branches: Branch[]): boolean {
 function storedSeedVersion(): number {
   try {
     const raw = localStorage.getItem(SEED_VERSION_KEY);
-    // No marker means a store written before the marker existed: version 1
-    const version = raw === null ? 1 : Number(raw);
-    return Number.isFinite(version) ? version : 1;
+    // No marker means nothing has been applied — the estate reset clears both
+    const version = raw === null ? 0 : Number(raw);
+    return Number.isFinite(version) ? version : 0;
   } catch {
     // Storage unreadable: claim to be current, so nothing is written either
     return SEED_VERSION;
@@ -82,9 +87,9 @@ function markSeeded(): void {
  * Brings a store created under an earlier seed version up to date, once.
  *
  * Matched on id *and* name, because a branch is a name as far as records are
- * concerned: an operator who already opened "Royal Gujrat Sweets" by hand
- * must not end up with a second one, since inspections filed against that
- * name would silently split across the two.
+ * concerned: an operator who already opened "Royal Gujarat" by hand must not
+ * end up with a second one, since inspections filed against that name would
+ * silently split across the two.
  *
  * Runs at most once per version, so a seeded branch the operator closes
  * stays closed rather than reopening on the next read. Writes without
@@ -95,6 +100,13 @@ function markSeeded(): void {
 function reconcileSeeds(stored: Branch[]): Branch[] {
   if (storedSeedVersion() >= SEED_VERSION) return stored;
 
+  /*
+   * A branch that happens to share a *name* with a seed is left alone and the
+   * seed is skipped, because records are filed against the name — adding a
+   * second "Royal Gujarat" would split that branch's history across two rows
+   * that look identical on screen. An id collision is skipped for the same
+   * reason.
+   */
   const ids = new Set(stored.map((b) => b.id));
   const names = new Set(stored.map((b) => b.name.trim().toLowerCase()));
   const missing = BRANCHES.filter(
@@ -120,6 +132,7 @@ function reconcileSeeds(stored: Branch[]): Branch[] {
 
 /** Every branch, closed ones included. Filter on `archived` to offer choices. */
 export function getBranches(): Branch[] {
+  ensureEstate();
   if (typeof window === 'undefined') return BRANCHES;
   try {
     const raw = localStorage.getItem(KEY);
