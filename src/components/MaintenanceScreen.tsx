@@ -257,14 +257,34 @@ export const MaintenanceScreen: React.FC = () => {
         ? byBranch
         : byBranch.filter((job) => jobKindOf(job) === kindFilter);
 
+    /*
+     * Newest first, by the clock.
+     *
+     * Work that is finished goes below work that is not, and each half is
+     * ordered by when it last mattered: a completed job by when it was
+     * completed, an open one by when it was reported. So the thing that just
+     * happened is the thing at the top, which is what somebody opening the
+     * board is looking for.
+     *
+     * Priority no longer decides position. It used to lead, with the longest
+     * waiting first inside each band — which reads as a triage queue, and left
+     * a fault reported this morning below one from last week. The badge is
+     * still on every row and the count of urgent work still sits above the
+     * list, so how bad a job is has not stopped being visible; it has stopped
+     * deciding what you see first.
+     */
     return byKind.filter(matchesQuery).sort((a, b) => {
       const aDone = !!a.completedAt;
       const bDone = !!b.completedAt;
       if (aDone !== bDone) return aDone ? 1 : -1;
       if (aDone && bDone) return (b.completedAt ?? '').localeCompare(a.completedAt ?? '');
-      const rank: Record<Severity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-      if (rank[a.priority] !== rank[b.priority]) return rank[a.priority] - rank[b.priority];
-      return a.reportedAt.localeCompare(b.reportedAt);
+      /*
+       * Ties broken by id rather than left to the sort's own hand: two jobs
+       * raised in the same minute would otherwise swap places between renders,
+       * and a list that reorders itself while being read is worse than either
+       * order.
+       */
+      return b.reportedAt.localeCompare(a.reportedAt) || a.id.localeCompare(b.id);
     });
   }, [jobs, view, branchFilter, kindFilter, matchesQuery]);
 
