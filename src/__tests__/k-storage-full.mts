@@ -92,18 +92,24 @@ note('records held', getInspections().length);
 (globalThis as any).localStorage.setItem = realSetItem;
 note('keys in the store', store.size);
 
-section('the demo doors are shut unless a build asked for them');
+section('the demo doors close when a build says so');
 /*
  * Two ways in without a password — the role switcher and the 123/123
- * shorthand — both landing on the main admin. Wanted while showing the system,
- * fatal once it holds an estate's records: anyone who can open the URL would
- * have full control of it. Off unless NEXT_PUBLIC_DEMO_SIGN_IN=true was set
- * when the app was built, which it is not here and must not be in production.
+ * shorthand — both landing on the main admin. They are ON by default, because
+ * what this is deployed as today is a demonstration and one nobody can get
+ * into is not one.
+ *
+ * Which makes this the test that matters: the one switch standing between that
+ * and an estate's real records has to actually shut them. Set before the module
+ * is imported, because the flag is read once when it loads — which is also how
+ * `next build` inlines it.
  */
+process.env.NEXT_PUBLIC_DEMO_SIGN_IN = 'false';
+
 const { DEMO_SIGN_IN_ENABLED, signIn, signInAs } = await import('../services/session.ts');
 const { getUsers } = await import('../services/userStore.ts');
 
-check('the flag is off by default', DEMO_SIGN_IN_ENABLED, false);
+check('the flag reads as off', DEMO_SIGN_IN_ENABLED, false);
 
 const adminAccount = getUsers().find((u) => u.role === 'admin')!;
 const impersonated = signInAs(adminAccount.id);

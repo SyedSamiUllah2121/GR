@@ -47,24 +47,33 @@ if (typeof window !== 'undefined') {
 /**
  * Whether the two password-free ways in are open.
  *
- * Off unless `NEXT_PUBLIC_DEMO_SIGN_IN=true` was set when the app was built.
+ * On unless `NEXT_PUBLIC_DEMO_SIGN_IN=false` was set when the app was built.
+ *
  * Both of them — the `123` shorthand and the role switcher — sign somebody in
- * as the main admin without a password, which is exactly what you want while
- * showing the system and exactly what must not exist once it is holding a real
- * estate's records: anyone who can open the URL would have full control of it.
+ * as the main admin without a password. The default is on because what this
+ * is deployed as today is a demonstration, and a demonstration nobody can get
+ * into is not one: the switcher is how the system is shown as each role in
+ * turn without a list of passwords to hand.
+ *
+ * ────────────────────────────────────────────────────────────────────────
+ * THIS IS THE WHOLE OF THE SIGN-IN SECURITY. While it is on, anyone who can
+ * open the URL is one click from the main admin's account — every branch,
+ * every record, every account. Before this holds an estate's real records,
+ * build with NEXT_PUBLIC_DEMO_SIGN_IN=false.
+ * ────────────────────────────────────────────────────────────────────────
  *
  * A build-time flag rather than a runtime setting on purpose: a setting would
  * live in the same browser store the accounts do, so whoever could switch it
- * on is already past the door it guards. Inlined at build time, both doors are
- * refused by code that cannot be reached back through the UI.
+ * on is already past the door it guards. Turning it off therefore takes a
+ * rebuild, not a saved variable.
  *
- * It closes the doors, it does not strip them: the switcher's markup is still
- * in the bundle as dead code, because the constant crosses a module boundary
- * and the minifier will not fold it that far. That costs a few hundred bytes
- * and nothing else — `signInAs` refuses before it looks anything up, so there
- * is no path back to it from a page that no longer draws the button.
+ * Note that off closes the doors rather than stripping them: the switcher's
+ * markup stays in the bundle as dead code, because the constant crosses a
+ * module boundary and the minifier will not fold it that far. `signInAs`
+ * refuses before it looks anything up, so there is no path back to it from a
+ * page that no longer draws the button.
  */
-export const DEMO_SIGN_IN_ENABLED = process.env.NEXT_PUBLIC_DEMO_SIGN_IN === 'true';
+export const DEMO_SIGN_IN_ENABLED = process.env.NEXT_PUBLIC_DEMO_SIGN_IN !== 'false';
 
 /**
  * The demo shorthand.
