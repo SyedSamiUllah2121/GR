@@ -9,11 +9,28 @@ export function freshBrowser() {
     key: (i: number) => [...store.keys()][i] ?? null,
     get length() { return store.size; },
   };
+  /*
+   * Signing in writes to sessionStorage, not localStorage — being signed in is
+   * a session rather than saved data. Without a shim for it every sign-in in a
+   * test fails with "storage is unavailable", which reads as an app bug.
+   * Separate backing map, because the two are separate stores.
+   */
+  const sessionMap = new Map<string, string>();
+  const ss = {
+    getItem: (k: string) => sessionMap.get(k) ?? null,
+    setItem: (k: string, v: string) => { sessionMap.set(k, v); },
+    removeItem: (k: string) => { sessionMap.delete(k); },
+    clear: () => sessionMap.clear(),
+    key: (i: number) => [...sessionMap.keys()][i] ?? null,
+    get length() { return sessionMap.size; },
+  };
+
   (globalThis as any).window = {
-    localStorage: ls, dispatchEvent: () => true,
+    localStorage: ls, sessionStorage: ss, dispatchEvent: () => true,
     addEventListener: () => {}, removeEventListener: () => {},
   };
   (globalThis as any).localStorage = ls;
+  (globalThis as any).sessionStorage = ss;
   return store;
 }
 

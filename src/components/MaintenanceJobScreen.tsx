@@ -137,7 +137,7 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
         </h2>
         <p className="text-sm text-[#6B6F76] mt-2 leading-relaxed">
           {mayOpenBoard
-            ? 'It was raised at another branch. You can see the repairs raised at your own, and report anything new you find there.'
+            ? 'It was raised at a branch outside your own. You can see the repairs raised at the branches you cover, and report anything new you find there.'
             : 'Maintenance jobs are not part of what this account covers.'}
         </p>
         <Link

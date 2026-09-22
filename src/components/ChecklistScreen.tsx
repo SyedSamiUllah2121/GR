@@ -8,6 +8,7 @@ import {
   Check,
   ChevronRight,
   Lock,
+  Minus,
   X,
   Trash2,
   CheckCircle2,
@@ -81,6 +82,8 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
   );
   const [validationError, setValidationError] = useState<string | null>(null);
   const [invalidItemIds, setInvalidItemIds] = useState<Set<number>>(new Set());
+  /** True once an answer could not be written, until one can be again. */
+  const [saveFailed, setSaveFailed] = useState(false);
   /*
    * The board, live. Subscribed rather than read once, so a job closed while
    * the round is being walked releases its check without the inspector having
@@ -244,7 +247,14 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
    * return is a hook that does not run on every render. Both lists it reads
    * are already in state, so this costs a pass over them and nothing else.
    */
-  const held = heldChecks(inspection.branchName, allItems, inspection.answers, jobs, equipment);
+  const held = heldChecks(
+    inspection.branchName,
+    allItems,
+    inspection.answers,
+    jobs,
+    equipment,
+    inspection.id
+  );
 
   /*
    * A held check counts as done. It has no answer and never will — the
@@ -272,10 +282,16 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
     // Only a draft belongs in the draft slot. Writing a submitted record there
     // left a stale copy that getInspectionById would then prefer over the real
     // one, and made a finished inspection look like work in progress.
-    if (updatedInspection.status === 'draft') {
-      saveActiveDraft(updatedInspection);
-    }
-    saveInspection(updatedInspection);
+    const draftWritten =
+      updatedInspection.status === 'draft' ? saveActiveDraft(updatedInspection) : true;
+    const recordWritten = saveInspection(updatedInspection);
+    /*
+     * A banner rather than a toast, and one that stays until a save succeeds.
+     * The store filling up is silent otherwise: the answers keep going on
+     * screen, none of them reach disk, and the round is lost at the end of it
+     * — which is the one failure this app must never have.
+     */
+    setSaveFailed(!(draftWritten && recordWritten));
   };
 
   // Drop an item's error highlight once its answer satisfies every rule the
@@ -330,6 +346,74 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
     if (invalidItemIds.has(itemId)) {
       const nextInvalid = new Set(invalidItemIds);
       nextInvalid.delete(itemId);
+      setInvalidItemIds(nextInvalid);
+      if (nextInvalid.size === 0) setValidationError(null);
+    }
+
+    updateAnswers(updatedAnswers);
+  };
+
+  /**
+   * The checks in a section that this inspector still has to answer for.
+   *
+   * Held checks are not among them: their buttons are locked because the
+   * fault is already with maintenance, and a box that claimed to answer them
+   * would be claiming to answer something the screen refuses to let anyone
+   * answer by hand.
+   */
+  const answerableIn = (sectionIdx: number) =>
+    sections[sectionIdx].items.filter((item) => !held.has(item.id));
+
+  /**
+   * Marks a whole section Yes, or takes that back.
+   *
+   * Most sections pass outright, and tapping Yes down a list of nine is how a
+   * round stops being read and starts being clicked through — which is the
+   * failure this is meant to prevent, not cause. So it is deliberately not a
+   * blunt "set everything to Yes":
+   *
+   *   • A check already marked No keeps its answer, its reason, its photo and
+   *     its note. A box in a heading must never be able to erase a recorded
+   *     failure, and someone tidying up a section is not withdrawing one.
+   *   • Unticking clears only the Yeses, leaving those same failures alone,
+   *     so the box undoes exactly what it did.
+   *
+   * The box therefore reads as part-done whenever a No sits in the section:
+   * honest, since not everything here is Yes, and the count beside it says
+   * the section is answered.
+   */
+  const toggleSectionAllYes = (sectionIdx: number) => {
+    const items = answerableIn(sectionIdx);
+    if (items.length === 0) return;
+
+    const allYes = items.every((item) => inspection.answers[item.id]?.status === 'yes');
+    const updatedAnswers: Record<number, Answer> = { ...inspection.answers };
+
+    items.forEach((item) => {
+      if (allYes) {
+        if (updatedAnswers[item.id]?.status === 'yes') delete updatedAnswers[item.id];
+        return;
+      }
+      if (updatedAnswers[item.id]?.status === 'no') return;
+      updatedAnswers[item.id] = {
+        status: 'yes',
+        reason: null,
+        otherReason: null,
+        note: null,
+        photo: null,
+      };
+    });
+
+    /*
+     * A failed submit highlights every unanswered check, and these are no
+     * longer unanswered. Cleared here rather than left for the next click,
+     * because the point of the box is that there is no next click.
+     */
+    if (invalidItemIds.size > 0 && !allYes) {
+      const nextInvalid = new Set(invalidItemIds);
+      items.forEach((item) => {
+        if (updatedAnswers[item.id]?.status === 'yes') nextInvalid.delete(item.id);
+      });
       setInvalidItemIds(nextInvalid);
       if (nextInvalid.size === 0) setValidationError(null);
     }
@@ -693,11 +777,34 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
       </div>
 
 
+      {/*
+        Answers are not reaching the browser store. Said here, at the top of
+        the screen and permanently, because every second spent answering after
+        this point is work that will not be there at the end.
+      */}
+      {saveFailed && (
+        <div
+          role="alert"
+          className="mb-5 px-4 py-3 rounded-md bg-[#FDECEE] border border-[#C8202D]/40 flex items-start gap-3"
+        >
+          <AlertCircle className="w-5 h-5 text-[#C8202D] shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-[#17181D]">Your answers are not being saved</p>
+            <p className="text-xs text-[#6B6F76] mt-0.5 leading-relaxed">
+              This browser&rsquo;s storage is full. Submit or delete an older inspection to make
+              room, then answer one more item to check it has cleared — anything answered
+              while this is showing will be lost.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Quick guide hint */}
       <div className="mb-5 px-3.5 py-2 bg-[#FAFAFA] border border-[#E6E7EB] rounded-md text-xs text-[#6B6F76]">
         Tap <strong className="text-[#17181D]">Yes</strong> or <strong className="text-[#17181D]">No</strong> on
-        every line. Marking <strong className="text-[#17181D]">No</strong> opens a reason box. Your
-        answers save as you go.
+        every line. Marking <strong className="text-[#17181D]">No</strong> opens a reason box. Where a
+        whole section passes, <strong className="text-[#17181D]">All yes</strong> in its heading answers
+        it in one — anything already marked No is left as it is. Your answers save as you go.
       </div>
 
       {/* One scrolling list, headed by category. Padded at the foot so the
@@ -707,6 +814,12 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
           const answered = answeredInSection(sectionIdx);
           const total = section.items.length;
           const done = answered === total;
+          const answerable = answerableIn(sectionIdx);
+          const yesHere = answerable.filter(
+            (item) => inspection.answers[item.id]?.status === 'yes'
+          ).length;
+          const allYes = answerable.length > 0 && yesHere === answerable.length;
+          const someYes = yesHere > 0 && !allYes;
           const startsNewList =
             sectionIdx === 0 || sections[sectionIdx - 1].listKey !== section.listKey;
 
@@ -720,14 +833,61 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
 
               <div className="flex items-center justify-between gap-3 mb-2">
                 <h2 className="text-base font-bold text-[#17181D]">{section.title}</h2>
-                <span
-                  className={`inline-flex items-center gap-1.5 text-xs font-bold tabular-nums shrink-0 ${
-                    done ? 'text-[#157F4B]' : 'text-[#6B6F76]'
-                  }`}
-                >
-                  {done && <CheckCircle2 className="w-3.5 h-3.5" />}
-                  {answered}/{total}
-                </span>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  {/*
+                    Every check in the section at once, for the sections that
+                    simply pass. A tri-state box rather than a "mark all"
+                    button: it has to be able to say that the section is
+                    part-answered, which is what it is the moment one check is
+                    marked No — and it has to be able to take itself back.
+                  */}
+                  {answerable.length > 0 && (
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={allYes ? true : someYes ? 'mixed' : false}
+                      id={`section-all-yes-${section.listKey}-${section.key}`}
+                      onClick={() => toggleSectionAllYes(sectionIdx)}
+                      title={
+                        allYes
+                          ? `Clear the Yes answers in ${section.title}`
+                          : `Mark every unanswered check in ${section.title} Yes. Anything already marked No keeps its answer.`
+                      }
+                      className={`inline-flex items-center gap-1.5 text-[11px] font-bold rounded-md px-1.5 py-1 -mr-1 transition-colors cursor-pointer ${
+                        allYes
+                          ? 'text-[#157F4B] hover:bg-[#EAF6EF]'
+                          : 'text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8]'
+                      }`}
+                    >
+                      <span
+                        className={`w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors ${
+                          allYes
+                            ? 'bg-[#157F4B] border-[#157F4B] text-white'
+                            : someYes
+                              ? 'bg-white border-[#157F4B] text-[#157F4B]'
+                              : 'bg-white border-[#C9CCD2]'
+                        }`}
+                      >
+                        {allYes ? (
+                          <Check className="w-3 h-3" strokeWidth={3} />
+                        ) : someYes ? (
+                          <Minus className="w-3 h-3" strokeWidth={3} />
+                        ) : null}
+                      </span>
+                      All yes
+                    </button>
+                  )}
+
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-xs font-bold tabular-nums ${
+                      done ? 'text-[#157F4B]' : 'text-[#6B6F76]'
+                    }`}
+                  >
+                    {done && <CheckCircle2 className="w-3.5 h-3.5" />}
+                    {answered}/{total}
+                  </span>
+                </div>
               </div>
 
               <div className="bg-white border border-[#E6E7EB] rounded-md divide-y divide-[#E6E7EB] overflow-hidden shadow-xs">

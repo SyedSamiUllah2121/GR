@@ -272,10 +272,23 @@ export function heldChecks(
   items: Item[],
   answers: Record<number, Answer>,
   jobs: MaintenanceJob[] = getJobs(),
-  equipment: Equipment[] = activeEquipment()
+  equipment: Equipment[] = activeEquipment(),
+  /**
+   * The visit being filled in or amended, whose own jobs do not hold it up.
+   *
+   * Without this, re-opening a submitted record found every failure on it held
+   * by the job that failure raised: the answer could not be changed, and
+   * submitting again dropped the finding — which withdrew the job, which
+   * unheld the check, which raised it again on the next submit. A record has
+   * to go on asserting what it found.
+   */
+  ownInspectionId?: string
 ): Map<number, HeldCheck> {
   const open = jobs.filter(
-    (job) => job.branchName === branchName && statusOf(job) !== 'completed'
+    (job) =>
+      job.branchName === branchName &&
+      statusOf(job) !== 'completed' &&
+      !(ownInspectionId !== undefined && job.sourceInspectionId === ownInspectionId)
   );
   if (open.length === 0) return new Map();
 

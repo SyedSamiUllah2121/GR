@@ -96,19 +96,19 @@ const NAV: NavEntry[] = [
     group: 'work',
     /*
      * Two standings reach this section, and they are not the same size. The
-     * admin and the maintenance manager hold all of it. A branch manager holds the
-     * job board alone, to raise their branch's repairs on the day they find
-     * them and to follow what becomes of them — so for them the section is a
-     * single page, and the row leads straight to it.
+     * admin and the maintenance manager hold all of it, and may act on it. A
+     * branch manager and an inspector read all of it and may raise a problem
+     * on it, for their own branches — every page here is narrowed to those
+     * before it counts a figure or renders a row.
      */
-    needs: ['maintenance.view', 'maintenance.reportOwnBranch', 'equipment.manage'],
+    needs: ['maintenance.view', 'maintenance.report', 'equipment.manage'],
     children: [
       {
         id: 'sidebar-nav-maintenance-overview',
         href: '/maintenance',
         label: 'Overview',
         isActive: (p) => p === '/maintenance',
-        needs: 'maintenance.view',
+        needs: ['maintenance.view', 'maintenance.report'],
       },
       {
         id: 'sidebar-nav-maintenance-jobs',
@@ -123,7 +123,7 @@ const NAV: NavEntry[] = [
         isActive: (p) =>
           p === '/maintenance/jobs' ||
           /^\/maintenance\/(?!report$|equipment$)[^/]+$/.test(p),
-        needs: ['maintenance.view', 'maintenance.reportOwnBranch'],
+        needs: ['maintenance.view', 'maintenance.report'],
       },
       {
         id: 'sidebar-nav-maintenance-equipment',
@@ -131,7 +131,7 @@ const NAV: NavEntry[] = [
         label: 'Appliances',
         isActive: (p) => p === '/maintenance/equipment',
         // A branch sees its own register; changing it is a separate right
-        needs: ['maintenance.view', 'maintenance.reportOwnBranch'],
+        needs: ['maintenance.view', 'maintenance.report'],
       },
       /*
        * No Schedule row. The servicing schedule is what puts half the board
@@ -143,7 +143,7 @@ const NAV: NavEntry[] = [
         href: '/maintenance/report',
         label: 'Month-end report',
         isActive: (p) => p === '/maintenance/report',
-        needs: 'maintenance.view',
+        needs: ['maintenance.view', 'maintenance.report'],
       },
     ],
   },
@@ -196,9 +196,10 @@ export const Sidebar: React.FC = () => {
    * A section's pages are narrowed by the same rule, and the row is then
    * pointed at the first one left rather than at a fixed page: a section
    * whose usual landing page is out of reach still has to lead somewhere the
-   * account can go. Maintenance is where that earns its keep — the admin
-   * lands on the overview, a branch manager on the job board, which is the
-   * only page of it that is theirs.
+   * account can go. Maintenance no longer needs that — every role that
+   * reaches the section reaches its overview — but the Schedule tab and the
+   * rows above still turn on what an account holds, and a page put out of
+   * reach later should not strand the row pointing at it.
    */
   const entries: ResolvedEntry[] = NAV.filter((entry) => holds(user, entry.needs)).map(
     (entry) => {

@@ -307,6 +307,14 @@ export interface Inspection {
    */
   assignedToUserId?: string;
   assignedByUserId?: string;
+  /**
+   * Raised by the rotation rather than by a person, so there is no admin to
+   * name as having handed it over. Absent on every visit anyone raised by
+   * hand — which is why it is a flag of its own and not inferred from
+   * `assignedByUserId` being missing: the records made before assignments
+   * carried an admin id are missing it too, and they were not automatic.
+   */
+  autoRaised?: boolean;
   /** ISO timestamp the assignment was raised. */
   assignedAt?: string;
   /**
@@ -336,6 +344,23 @@ export interface Inspection {
    * late however far into it the inspector arrives.
    */
   scheduledUntil?: string;
+  /**
+   * The checks this visit was not able to answer because the fault was
+   * already with maintenance.
+   *
+   * Written on submit, from what the board said at that moment. It has to be
+   * on the record rather than worked out again when the report is opened: the
+   * job will be finished one day, and the question this answers is what the
+   * inspector found on the day, not what is outstanding now.
+   *
+   * They are still in `itemIds` — the visit covered them, and the report
+   * prints them — but they count towards neither the score nor the pass rate,
+   * because an inspector cannot pass or fail a unit that is out of service.
+   * Scoring them as failures would punish a branch twice for one fault, and
+   * scoring them as passes would put a tick against something nobody looked
+   * at.
+   */
+  heldItemIds?: number[];
   /** ISO timestamp the visit was started, which the duration is measured from. */
   startedAt?: string;
   /** ISO timestamp the report was signed and submitted. */

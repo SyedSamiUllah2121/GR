@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -35,13 +35,20 @@ import { useBranches } from '../hooks/useBranches';
 import { useUsers } from '../hooks/useUsers';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useSettings } from '../hooks/useSettings';
-import { isRandomAssignmentOn, saveSetting } from '../services/settings';
+import {
+  MAX_AUTO_SURPRISE_DAYS,
+  isRandomAssignmentOn,
+  saveSetting,
+} from '../services/settings';
 import { fromLocalInputValue, toLocalInputValue } from '../services/localDateTime';
 import { activeBranches, addBranch, branchUsage, removeBranch } from '../services/branchStore';
 import { inspectors as inspectorAccounts } from '../services/userStore';
-import { can, fixedBranchFor } from '../services/permissions';
+import { can, canDiscardDraft, fixedBranchFor } from '../services/permissions';
 import {
   createSurpriseVisit,
+  nextAutoSurpriseDue,
+  outstandingVisitAt,
+  outstandingVisitFor,
   randomBranch,
   randomInspector,
   scheduleLabel,
@@ -109,6 +116,9 @@ export const NewInspectionScreen: React.FC = () => {
    */
   const settings = useSettings();
   const randomOn = settings.randomAssignment;
+  /** 0 while the system raises nothing of its own accord. */
+  const autoDays = settings.autoSurpriseDays;
+
 
   /** Who a surprise visit goes to; RANDOM lets the system draw one. */
   const [assignTo, setAssignTo] = useState<string>(RANDOM);
@@ -140,6 +150,47 @@ export const NewInspectionScreen: React.FC = () => {
   const [scheduledUntil, setScheduledUntil] = useState<string>('');
   const [assignError, setAssignError] = useState<string | null>(null);
   const [assignDone, setAssignDone] = useState<string | null>(null);
+
+  /*
+   * Who and where is already spoken for. One unfinished surprise visit per
+   * branch and per inspector, so the two lists below say which of each are not
+   * available rather than letting somebody choose one and be refused — the
+   * point of the rule is that nobody sets a second one up by mistake, and an
+   * error after the fact is a mistake that has already been made.
+   *
+   * Re-read when a visit is raised from this form, which is the one thing that
+   * changes it without leaving the screen.
+   */
+  const busyBranches = useMemo(() => {
+    const map = new Map<string, string>();
+    branches.forEach((b) => {
+      const visit = outstandingVisitAt(b.name);
+      if (visit) map.set(b.name, visit.status === 'assigned' ? 'visit waiting' : 'visit under way');
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branches, assignDone]);
+
+  const busyInspectors = useMemo(() => {
+    const map = new Map<string, string>();
+    availableInspectors.forEach((account) => {
+      const visit = outstandingVisitFor(account.id);
+      if (visit) map.set(account.id, visit.branchName);
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableInspectors, assignDone]);
+  /*
+   * When the next automatic visit falls due, for the line under the field.
+   * Re-read whenever the interval changes or a visit is raised from this
+   * form, both of which move it — an interval the admin cannot see the
+   * consequence of is a number they have to take on trust.
+   */
+  const autoDue = useMemo(
+    () => nextAutoSurpriseDue(randomOn ? autoDays : 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [randomOn, autoDays, assignDone]
+  );
 
   // Adding a branch without leaving the form you came here to fill in
   const [addingBranch, setAddingBranch] = useState(false);
@@ -340,13 +391,25 @@ export const NewInspectionScreen: React.FC = () => {
     setNameError(null);
 
     if (existingDraft && existingDraft.status === 'draft') {
+      /*
+       * There is one draft slot and it is the browser's, not the account's —
+       * so on a shared tablet the draft in the way can belong to somebody
+       * else. A surprise visit is an instruction the admin raised, and
+       * starting a Monday round is not grounds for deleting it: the slot is
+       * freed and the visit is left where it is, still in the inspector's
+       * list. Only a draft this account could have discarded outright is.
+       */
+      const mayDelete = canDiscardDraft(user, existingDraft);
       const proceed = await confirm({
-        title: 'Replace the unfinished draft?',
-        body: `Starting a new inspection discards the draft already open for ${existingDraft.branchName}.`,
-        confirmLabel: 'Replace draft',
+        title: mayDelete ? 'Replace the unfinished draft?' : 'Set the other visit aside?',
+        body: mayDelete
+          ? `Starting a new inspection discards the draft already open for ${existingDraft.branchName}.`
+          : `The unfinished visit to ${existingDraft.branchName} is not yours to discard. It is kept, and stays in the list of whoever it was assigned to.`,
+        confirmLabel: mayDelete ? 'Replace draft' : 'Set it aside',
+        destructive: mayDelete,
       });
       if (!proceed) return;
-      deleteInspection(existingDraft.id);
+      if (mayDelete) deleteInspection(existingDraft.id);
       clearActiveDraft();
     }
 
@@ -381,22 +444,38 @@ export const NewInspectionScreen: React.FC = () => {
     }
   };
 
+  /*
+   * Throwing the draft away, or just putting it down — decided by whose it is.
+   * Asked here as well as where the button is worded, because this one deletes
+   * a record and the screen can sit open while the answer changes underneath.
+   */
   const handleDiscardDraft = async () => {
     if (!existingDraft) return;
+    const mayDelete = canDiscardDraft(user, existingDraft);
     const ok = await confirm({
-      title: 'Discard this unfinished draft?',
-      body: 'The answers recorded on it so far are deleted.',
-      confirmLabel: 'Discard draft',
+      title: mayDelete ? 'Discard this unfinished draft?' : 'Set this visit aside?',
+      body: mayDelete
+        ? 'The answers recorded on it so far are deleted.'
+        : `The visit to ${existingDraft.branchName} was assigned by the admin, so it is kept. The answers so far stay on it.`,
+      confirmLabel: mayDelete ? 'Discard draft' : 'Set it aside',
+      destructive: mayDelete,
     });
     if (!ok) return;
     // Also drop the row the draft left in the records store as it was answered
-    deleteInspection(existingDraft.id);
+    if (mayDelete) deleteInspection(existingDraft.id);
     clearActiveDraft();
     setExistingDraft(null);
   };
 
+  /*
+   * Wider than the reading column the rest of the app uses, because this is a
+   * form rather than something to read: at 42rem every field sat on a line of
+   * its own and the whole of a surprise visit could not be seen at once, which
+   * is exactly when someone books the wrong branch for the wrong inspector.
+   * The fields pair up from `md` and the page stops scrolling.
+   */
   return (
-    <div className="p-4 md:p-8 max-w-2xl mx-auto w-full">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto w-full">
       {/* Back link */}
       <button
         type="button"
@@ -481,15 +560,29 @@ export const NewInspectionScreen: React.FC = () => {
               <PlayCircle className="w-3.5 h-3.5" />
               <span>Resume</span>
             </button>
-            <button
-              id="existing-draft-discard-btn"
-              type="button"
-              onClick={handleDiscardDraft}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#C8202D] border border-[#C8202D]/30 rounded-md hover:bg-[#FDECEE] transition-colors cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Discard</span>
-            </button>
+            {/* Deleting a record, or freeing the slot — never the same button */}
+            {canDiscardDraft(user, existingDraft) ? (
+              <button
+                id="existing-draft-discard-btn"
+                type="button"
+                onClick={handleDiscardDraft}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#C8202D] border border-[#C8202D]/30 rounded-md hover:bg-[#FDECEE] transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Discard</span>
+              </button>
+            ) : (
+              <button
+                id="existing-draft-set-aside-btn"
+                type="button"
+                onClick={handleDiscardDraft}
+                title="Keeps the visit and the answers on it"
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#6B6F76] border border-[#E6E7EB] rounded-md hover:bg-[#F6F6F8] hover:text-[#17181D] transition-colors cursor-pointer"
+              >
+                <CalendarClock className="w-3.5 h-3.5" />
+                <span>Set aside</span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -763,9 +856,73 @@ export const NewInspectionScreen: React.FC = () => {
                       which is what the rotation is for.
                     </p>
                   )}
+
+                  {/*
+                    How often the system raises one without being asked.
+                    Under the switch rather than beside it because it is the
+                    same decision taken further: the switch says the draw may
+                    be used, this says it is used on a clock. Hidden with the
+                    switch off, when there is no draw for a clock to run.
+                  */}
+                  {randomOn && (
+                    <div className="mt-3 pt-3 border-t border-[#E6E7EB] flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <label
+                          htmlFor="auto-surprise-days"
+                          className="text-xs font-bold text-[#17181D] flex items-center gap-1.5"
+                        >
+                          <CalendarClock className="w-3.5 h-3.5 text-[#C8202D] shrink-0" />
+                          Raise one automatically
+                        </label>
+                        <p className="text-[11px] text-[#6B6F76] mt-1">
+                          {autoDays > 0 ? (
+                            <>
+                              Every {autoDays} day{autoDays === 1 ? '' : 's'} a visit is drawn
+                              and handed out on its own, to a branch the rotation has not been
+                              to this round.
+                              {autoDue && (
+                                <span className="block mt-0.5">
+                                  Next one due {formatDate(autoDue)}.
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            'Off — surprise visits happen only when someone raises one here. Set a number of days to have the system keep them coming.'
+                          )}
+                        </p>
+                      </div>
+
+                      <span className="shrink-0 flex items-center gap-1.5">
+                        <input
+                          id="auto-surprise-days"
+                          type="number"
+                          min={0}
+                          max={MAX_AUTO_SURPRISE_DAYS}
+                          step={1}
+                          value={autoDays}
+                          onChange={(e) => {
+                            /*
+                             * Empty reads as 0, which is off — clearing the
+                             * field to type a new number must not be taken as
+                             * a schedule of every zero days.
+                             */
+                            const days = Math.min(
+                              Math.max(Math.round(Number(e.target.value) || 0), 0),
+                              MAX_AUTO_SURPRISE_DAYS
+                            );
+                            saveSetting('autoSurpriseDays', days);
+                          }}
+                          className="w-16 px-2 py-1.5 bg-white border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D] text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                        />
+                        <span className="text-[11px] font-semibold text-[#6B6F76]">days</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
+              {/* Where, and who — the two halves of one decision, read together */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
                 <label
                   htmlFor="surprise-branch-select"
@@ -788,12 +945,16 @@ export const NewInspectionScreen: React.FC = () => {
                   ) : (
                     <option value="">Choose a branch</option>
                   )}
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.name}>
-                      {b.name}
-                      {b.location ? ` — ${b.location}` : ''}
-                    </option>
-                  ))}
+                  {branches.map((b) => {
+                    const busy = busyBranches.get(b.name);
+                    return (
+                      <option key={b.id} value={b.name} disabled={!!busy}>
+                        {b.name}
+                        {b.location ? ` — ${b.location}` : ''}
+                        {busy ? ` (${busy})` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 {surpriseBranch === RANDOM && (
                   <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
@@ -826,11 +987,15 @@ export const NewInspectionScreen: React.FC = () => {
                   ) : (
                     <option value="">Choose an inspector</option>
                   )}
-                  {availableInspectors.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
+                  {availableInspectors.map((account) => {
+                    const at = busyInspectors.get(account.id);
+                    return (
+                      <option key={account.id} value={account.id} disabled={!!at}>
+                        {account.name}
+                        {at ? ` (already at ${at})` : ''}
+                      </option>
+                    );
+                  })}
                 </select>
                 {assignTo === RANDOM ? (
                   <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
@@ -848,6 +1013,7 @@ export const NewInspectionScreen: React.FC = () => {
                   </p>
                 )}
               </div>
+              </div>
 
               {/*
                 When it is due. Optional, and empty by default, because an
@@ -857,78 +1023,43 @@ export const NewInspectionScreen: React.FC = () => {
                 pile.
               */}
               <div>
-                <label
-                  htmlFor="surprise-when-input"
-                  className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-                >
-                  When <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
-                </label>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    id="surprise-when-input"
-                    type="datetime-local"
-                    value={scheduledAt}
-                    /*
-                      Stops the picker offering a time that has already gone.
-                      The service checks again, because a `min` on an input is
-                      a courtesy rather than a rule.
-                    */
-                    min={toLocalInputValue(new Date().toISOString())}
-                    onChange={(e) => {
-                      setScheduledAt(e.target.value);
-                      setAssignError(null);
-                      setAssignDone(null);
-                    }}
-                    className="flex-1 min-w-[13rem] px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
-                  />
-                  {scheduledAt && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // The end goes with the start: an end on its own is
-                        // a window with no opening, which is refused anyway
-                        setScheduledAt('');
-                        setScheduledUntil('');
-                        setAssignError(null);
-                        setAssignDone(null);
-                      }}
-                      className="px-3 py-2.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] border border-[#E6E7EB] rounded-md hover:bg-[#FAFAFA] transition-colors cursor-pointer whitespace-nowrap"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
                 {/*
-                  The far end of the window, offered only once there is a
-                  start for it to run from — an end on its own is refused, so
-                  showing the field before then only invites the error.
+                  The two ends of the window on one line, so a booking reads
+                  left to right as the sentence it is.
                 */}
-                {scheduledAt && (
-                  <div className="mt-2.5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
                     <label
-                      htmlFor="surprise-until-input"
+                      htmlFor="surprise-when-input"
                       className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
                     >
-                      Until <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+                      When <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
                     </label>
                     <div className="flex flex-wrap items-center gap-2">
                       <input
-                        id="surprise-until-input"
+                        id="surprise-when-input"
                         type="datetime-local"
-                        value={scheduledUntil}
-                        // Never before the start it runs from
-                        min={scheduledAt}
+                        value={scheduledAt}
+                        /*
+                          Stops the picker offering a time that has already
+                          gone. The service checks again, because a `min` on an
+                          input is a courtesy rather than a rule.
+                        */
+                        min={toLocalInputValue(new Date().toISOString())}
                         onChange={(e) => {
-                          setScheduledUntil(e.target.value);
+                          setScheduledAt(e.target.value);
                           setAssignError(null);
                           setAssignDone(null);
                         }}
-                        className="flex-1 min-w-[13rem] px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                        className="flex-1 min-w-[11rem] px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
                       />
-                      {scheduledUntil && (
+                      {scheduledAt && (
                         <button
                           type="button"
                           onClick={() => {
+                            // The end goes with the start: an end on its own
+                            // is a window with no opening, refused anyway
+                            setScheduledAt('');
                             setScheduledUntil('');
                             setAssignError(null);
                             setAssignDone(null);
@@ -940,7 +1071,51 @@ export const NewInspectionScreen: React.FC = () => {
                       )}
                     </div>
                   </div>
-                )}
+
+                  {/*
+                    The far end of the window, offered only once there is a
+                    start for it to run from — an end on its own is refused, so
+                    showing the field before then only invites the error.
+                  */}
+                  {scheduledAt && (
+                    <div>
+                      <label
+                        htmlFor="surprise-until-input"
+                        className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
+                      >
+                        Until <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          id="surprise-until-input"
+                          type="datetime-local"
+                          value={scheduledUntil}
+                          // Never before the start it runs from
+                          min={scheduledAt}
+                          onChange={(e) => {
+                            setScheduledUntil(e.target.value);
+                            setAssignError(null);
+                            setAssignDone(null);
+                          }}
+                          className="flex-1 min-w-[11rem] px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                        />
+                        {scheduledUntil && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setScheduledUntil('');
+                              setAssignError(null);
+                              setAssignDone(null);
+                            }}
+                            className="px-3 py-2.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] border border-[#E6E7EB] rounded-md hover:bg-[#FAFAFA] transition-colors cursor-pointer whitespace-nowrap"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
                   <CalendarClock className="w-3 h-3 mt-0.5 shrink-0" />

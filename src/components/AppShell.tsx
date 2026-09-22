@@ -8,6 +8,7 @@ import {ToastProvider} from './ToastProvider';
 import {ConfirmProvider} from './ConfirmProvider';
 import {getInspections} from '../services/storage';
 import {sweepSchedule} from '../services/maintenanceSchedule';
+import {sweepSurpriseVisits} from '../services/assignments';
 import {ensureGeneralPlans} from '../services/maintenancePlanStore';
 import {getCategories} from '../services/categoryStore';
 import {canAccessPath, homePathFor} from '../services/permissions';
@@ -78,6 +79,26 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
     if (failed > 0) {
       console.error(
         `Maintenance schedule: ${failed} due job(s) could not be stored — the browser store is full`
+      );
+    }
+
+    /*
+     * The same idea for inspections: an unannounced visit that fell due while
+     * nobody was signed in is raised the next time somebody is. Off unless
+     * the admin has set an interval, and silent when nothing is due — but a
+     * schedule that is on and cannot find an inspector to send is worth a
+     * line in the console, since it looks identical to one that is working.
+     */
+    const visit = sweepSurpriseVisits();
+    if (visit.raised) {
+      console.info(
+        `Surprise rotation: raised a visit to ${visit.raised.branchName} for ${visit.raised.inspectorName}`
+      );
+    } else if (visit.reason === 'no-inspector' || visit.reason === 'no-branch') {
+      console.error(
+        `Surprise rotation: a visit was due on ${visit.dueOn} but there is no ${
+          visit.reason === 'no-inspector' ? 'inspector to send' : 'open branch to visit'
+        }`
       );
     }
   }, [user]);

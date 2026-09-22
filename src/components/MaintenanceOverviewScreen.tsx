@@ -6,10 +6,11 @@ import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowRight,
+  CheckCircle2,
   ChevronRight,
-  Clock,
   FileText,
   Hourglass,
+  Inbox,
   MapPin,
   Repeat,
   Wallet,
@@ -23,6 +24,8 @@ import {
   formatTurnaround,
 } from '../services/maintenanceReport';
 import { formatDateTime } from '../services/reportModel';
+import { visibleJobs } from '../services/permissions';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { PriorityBadge } from './PriorityBadge';
 import { StatusPill } from './MaintenanceStatusPill';
 
@@ -42,13 +45,23 @@ const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low'];
  */
 export const MaintenanceOverviewScreen: React.FC = () => {
   const router = useRouter();
-  const [jobs, setJobs] = useState<MaintenanceJob[]>(() => getJobs());
+  const user = useCurrentUser();
+  const [allJobs, setAllJobs] = useState<MaintenanceJob[]>(() => getJobs());
 
   useEffect(() => {
-    const refresh = () => setJobs(getJobs());
+    const refresh = () => setAllJobs(getJobs());
     refresh();
     return subscribeToMaintenance(refresh);
   }, []);
+
+  /*
+   * Narrowed to the account before a single figure is counted, the same way
+   * the board narrows its rows. Every number on this screen is a sum over
+   * `jobs`, so scoping once here is what keeps a branch manager's overview
+   * about their own branch — rather than asking each panel to remember, which
+   * is how an estate-wide total appears on a screen that should not have one.
+   */
+  const jobs = useMemo(() => visibleJobs(user, allJobs), [user, allJobs]);
 
   const model = useMemo(() => buildMaintenanceOverview(jobs), [jobs]);
 
@@ -82,11 +95,15 @@ export const MaintenanceOverviewScreen: React.FC = () => {
         } still open`}
       />
 
-      {/* The four figures worth acting on */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {/*
+        The five figures worth acting on, read left to right as the life of a
+        job: what is open, what nobody has picked up, what is finished — then
+        the two that say how well that is going.
+      */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <Kpi
           icon={Wrench}
-          label="Open Jobs"
+          label="Open jobs"
           value={model.open}
           tone={model.urgentOpen > 0 ? 'bad' : model.open > 0 ? 'warn' : 'good'}
           href="/maintenance/jobs"
@@ -104,8 +121,48 @@ export const MaintenanceOverviewScreen: React.FC = () => {
           fillTitle={`${model.open} of ${model.total} jobs are still open`}
         />
         <Kpi
+          icon={Inbox}
+          label="Jobs not started"
+          value={model.notStarted}
+          /*
+           * Amber while some of the open work is still untouched, red once
+           * none of it has been picked up at all — an estate with jobs waiting
+           * and nobody on any of them is the state worth seeing from across
+           * the room.
+           */
+          tone={
+            model.notStarted === 0 ? 'good' : model.inProgress > 0 ? 'warn' : 'bad'
+          }
+          href="/maintenance/jobs"
+          caption={
+            model.open === 0 ? 'Nothing waiting' : `${model.inProgress} underway`
+          }
+          fill={model.open > 0 ? model.notStarted / model.open : 0}
+          fillTitle={`${model.notStarted} of ${model.open} open jobs have not been started`}
+        />
+        <Kpi
+          icon={CheckCircle2}
+          label="Completed jobs"
+          value={model.completed}
+          /*
+           * Green whatever the number. This is a tally of work finished, not a
+           * state to worry about — an estate with nothing completed yet is a
+           * new estate, and the Open and Not Started cards beside it already
+           * say whether anything is going wrong.
+           */
+          tone="good"
+          href="/maintenance/jobs"
+          caption={
+            model.total === 0
+              ? 'Nothing on record yet'
+              : `${model.completionRate}% of all jobs finished`
+          }
+          fill={model.completionRate / 100}
+          fillTitle={`${model.completed} of ${model.total} jobs have been completed`}
+        />
+        <Kpi
           icon={Hourglass}
-          label="Waiting Longest"
+          label="Waiting longest"
           value={model.oldestOpenDays}
           suffix="d"
           tone={model.oldestOpenDays >= AGEING_DAYS ? 'bad' : 'good'}
@@ -117,24 +174,6 @@ export const MaintenanceOverviewScreen: React.FC = () => {
           // Against a month, which is when a waiting job stops being a delay
           fill={Math.min(model.oldestOpenDays / 30, 1)}
           fillTitle={`Oldest open job has waited ${model.oldestOpenDays} days`}
-        />
-        <Kpi
-          icon={Clock}
-          label="Avg Turnaround"
-          value={model.averageTurnaroundHours ?? 0}
-          suffix="h"
-          tone={
-            model.averageTurnaroundHours === null
-              ? 'good'
-              : model.averageTurnaroundHours <= 24
-                ? 'good'
-                : model.averageTurnaroundHours <= 72
-                  ? 'warn'
-                  : 'bad'
-          }
-          caption={`${model.completionRate}% of all jobs finished`}
-          fill={model.completionRate / 100}
-          fillTitle={`${model.completed} of ${model.total} jobs completed`}
         />
         <Kpi
           icon={Wallet}
@@ -426,12 +465,21 @@ const Heading: React.FC<{ caption?: string }> = ({ caption }) => (
 );
 
 const TONE_TEXT = { good: GOOD, warn: WARN, bad: BAD } as const;
-const TONE_TILE = {
-  good: 'bg-[#E6F4EC] text-[#157F4B]',
-  warn: 'bg-[#FDF3E2] text-[#B4740A]',
-  bad: 'bg-[#FDECEE] text-[#C8202D]',
-} as const;
 
+/**
+ * One figure, and what it is doing.
+ *
+ * Colour is the quietest thing on this card, deliberately. Run against a
+ * colour-vision check, the amber and the green of the status palette separate
+ * by only ΔE 5.7 under protanopia — so a row of five cards distinguished by
+ * the colour of their numbers is a row that several readers cannot tell apart
+ * at all. Every card therefore says its state in words in the caption, and
+ * hue is left to two small marks that repeat what the words already said.
+ *
+ * Which is also why it looks better: five differently coloured display numbers
+ * is a rainbow, and the eye reads the biggest thing first whatever its hue.
+ * The figure is the information, so the figure is the only loud thing.
+ */
 const Kpi: React.FC<{
   icon: React.ComponentType<{ className?: string }>;
   label: string;
@@ -444,29 +492,44 @@ const Kpi: React.FC<{
   fillTitle: string;
   href?: string;
 }> = ({ icon: Icon, label, value, suffix = '', caption, tone, fill, fillTitle, href }) => {
+  const accent = TONE_TEXT[tone];
+
   const body = (
     <>
-      <div className="flex items-center gap-2.5">
-        <span
-          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${TONE_TILE[tone]}`}
-        >
-          <Icon className="w-[18px] h-[18px]" />
+      <div className="flex items-center gap-2">
+        {/* The colour rides a wrapper: lucide icons paint from currentColor */}
+        <span className="shrink-0 flex items-center" style={{ color: accent }}>
+          <Icon className="w-3.5 h-3.5" />
         </span>
-        <span className="text-[13px] font-bold text-[#17181D] flex-1 min-w-0">{label}</span>
+        <span className="flex-1 min-w-0 text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B6F76] truncate">
+          {label}
+        </span>
         {href && (
-          <ChevronRight className="w-4 h-4 text-[#C9CCD2] group-hover:text-[#17181D] shrink-0 transition-colors" />
+          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-[#D8DAE0] group-hover:text-[#6B6F76] transition-colors" />
         )}
       </div>
-      <p
-        className="text-[34px] leading-none font-bold tabular-nums mt-4"
-        style={{ color: TONE_TEXT[tone] }}
-      >
+
+      {/*
+        Proportional figures, not tabular: `tabular-nums` gives every digit the
+        width of a zero, which at display size leaves a number like 121 looking
+        gappy. Tabular belongs in the columns further down the page, where
+        figures have to line up vertically.
+      */}
+      <p className="mt-3 text-[30px] leading-none font-semibold text-[#17181D]">
         {value.toLocaleString()}
-        {suffix}
+        {suffix && <span className="text-[17px] font-semibold text-[#9CA1A9]">{suffix}</span>}
       </p>
-      <p className="text-[11px] text-[#6B6F76] mt-2 leading-snug">{caption}</p>
+
+      <p className="mt-1.5 text-[11px] leading-snug text-[#6B6F76]">{caption}</p>
+
+      {/*
+        The unfilled part of the meter is a wash of the fill's own colour
+        rather than a neutral grey, so the state reads across the whole bar
+        instead of only across the part that happens to be filled.
+      */}
       <div
-        className="mt-4 h-1 rounded-full bg-[#EFEFF2] overflow-hidden"
+        className="mt-3.5 h-1 rounded-full overflow-hidden"
+        style={{ backgroundColor: `${accent}1F` }}
         title={fillTitle}
         role="img"
         aria-label={fillTitle}
@@ -475,16 +538,22 @@ const Kpi: React.FC<{
           className="h-full rounded-full transition-[width] duration-500"
           style={{
             width: `${Math.round(Math.min(Math.max(fill, 0), 1) * 100)}%`,
-            backgroundColor: TONE_TEXT[tone],
+            backgroundColor: accent,
           }}
         />
       </div>
     </>
   );
 
-  const shell = 'bg-white border border-[#E6E7EB] rounded-xl p-4 shadow-sm block transition-shadow';
+  /*
+   * The same border and lift as the panels below — the page sits on #F6F6F8,
+   * and a card a shade lighter than everything around it reads as switched
+   * off rather than as restrained.
+   */
+  const shell =
+    'bg-white border border-[#E6E7EB] rounded-xl p-4 shadow-sm block transition-[border-color,box-shadow]';
   return href ? (
-    <Link href={href} className={`${shell} group hover:shadow-md`}>
+    <Link href={href} className={`${shell} group hover:border-[#C9CCD2] hover:shadow-md`}>
       {body}
     </Link>
   ) : (

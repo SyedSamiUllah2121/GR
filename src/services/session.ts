@@ -45,11 +45,33 @@ if (typeof window !== 'undefined') {
 }
 
 /**
+ * Whether the two password-free ways in are open.
+ *
+ * Off unless `NEXT_PUBLIC_DEMO_SIGN_IN=true` was set when the app was built.
+ * Both of them — the `123` shorthand and the role switcher — sign somebody in
+ * as the main admin without a password, which is exactly what you want while
+ * showing the system and exactly what must not exist once it is holding a real
+ * estate's records: anyone who can open the URL would have full control of it.
+ *
+ * A build-time flag rather than a runtime setting on purpose: a setting would
+ * live in the same browser store the accounts do, so whoever could switch it
+ * on is already past the door it guards. Inlined at build time, both doors are
+ * refused by code that cannot be reached back through the UI.
+ *
+ * It closes the doors, it does not strip them: the switcher's markup is still
+ * in the bundle as dead code, because the constant crosses a module boundary
+ * and the minifier will not fold it that far. That costs a few hundred bytes
+ * and nothing else — `signInAs` refuses before it looks anything up, so there
+ * is no path back to it from a page that no longer draws the button.
+ */
+export const DEMO_SIGN_IN_ENABLED = process.env.NEXT_PUBLIC_DEMO_SIGN_IN === 'true';
+
+/**
  * The demo shorthand.
  *
- * `123` / `123` signs in as the main admin. It predates accounts and is kept
- * deliberately: it is what everyone who has been shown this app already
- * types. The real addresses in the user store work alongside it.
+ * `123` / `123` signs in as the main admin. It predates accounts and is what
+ * everyone who has been shown this app already types — so it is kept, behind
+ * `DEMO_SIGN_IN_ENABLED`. The real addresses in the user store work either way.
  */
 const SHORTHAND = '123';
 
@@ -86,7 +108,8 @@ export interface SignInResult {
 }
 
 export function signIn(email: string, password: string): SignInResult {
-  const isShorthand = email.trim() === SHORTHAND && password.trim() === SHORTHAND;
+  const isShorthand =
+    DEMO_SIGN_IN_ENABLED && email.trim() === SHORTHAND && password.trim() === SHORTHAND;
   const user = isShorthand
     ? getUsers().find((u) => u.id === DEMO_SHORTHAND_USER_ID && u.active) ?? null
     : authenticate(email, password);
@@ -122,6 +145,15 @@ export function signOut(): void {
  * is the one thing in this file a backend would not have an equivalent of.
  */
 export function signInAs(userId: string): SignInResult {
+  /*
+   * Refused outright rather than left to the screen to hide. The button is
+   * gone in a production build, but a function that signs anybody in as the
+   * admin should not be one call away from anything that can reach the module.
+   */
+  if (!DEMO_SIGN_IN_ENABLED) {
+    return { ok: false, error: 'Sign in with your email address and password' };
+  }
+
   const user = getUserById(userId);
   if (!user || !user.active) return { ok: false, error: 'That account is not available' };
 

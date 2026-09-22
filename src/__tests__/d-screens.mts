@@ -8,7 +8,8 @@ const { getJobs } = await import('../services/maintenanceStore.ts');
 const { sweepSchedule } = await import('../services/maintenanceSchedule.ts');
 const { buildBoard, buildMonthlyReport, availableMonths, buildRepeats, buildMaintenanceOverview } =
   await import('../services/maintenanceReport.ts');
-const { canAccessPath, homePathFor } = await import('../services/permissions.ts');
+const { canAccessPath, homePathFor, canManageJobs, maintenanceBranchesFor, visibleJobs } =
+  await import('../services/permissions.ts');
 const { generalMaintenanceState } = await import('../services/generalMaintenance.ts');
 const { activePlans } = await import('../services/maintenancePlanStore.ts');
 
@@ -78,7 +79,32 @@ ok('branch manager reaches the register', canAccessPath(bm, '/maintenance/equipm
 ok('branch manager blocked from users', !canAccessPath(bm, '/users'));
 ok('maintenance manager reaches the board', canAccessPath(jm, '/maintenance/jobs'));
 ok('maintenance manager blocked from inspections', !canAccessPath(jm, '/inspections'));
-ok('inspector blocked from the board', !canAccessPath(insp, '/maintenance/jobs'));
+/*
+ * The board reads for the branch, and moves for maintenance. A branch manager
+ * and an inspector reach every page of the module — they raise the faults on
+ * it — and none of the buttons that mark work done.
+ */
+ok('inspector reaches the board', canAccessPath(insp, '/maintenance/jobs'));
+ok('inspector reaches the overview', canAccessPath(insp, '/maintenance'));
+ok('branch manager reaches the month-end report', canAccessPath(bm, '/maintenance/report'));
+ok('inspector cannot move a job along', !canManageJobs(insp));
+ok('branch manager cannot move a job along', !canManageJobs(bm));
+ok('maintenance manager can', canManageJobs(jm));
+
+/* And each of them reads their own branches on it, not the estate. */
+check('branch manager sees one branch', maintenanceBranchesFor(bm)?.length, 1);
+ok('maintenance manager sees every branch', maintenanceBranchesFor(jm) === null);
+ok(
+  "inspector sees only branches they were sent to",
+  visibleJobs(insp, laterJobs).every((j: { branchName: string }) =>
+    (maintenanceBranchesFor(insp) ?? []).includes(j.branchName)
+  )
+);
+check(
+  'a branch manager\'s board is their own branch',
+  visibleJobs(bm, laterJobs).every((j: { branchName: string }) => j.branchName === bm.branchName),
+  true
+);
 ok('admin reaches everything', ['/users','/maintenance/jobs','/inspections','/checklist']
   .every(p => canAccessPath(admin, p)));
 ok('every branch manager has a home', users.filter(u=>u.role==='branch-manager')

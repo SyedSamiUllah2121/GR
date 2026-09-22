@@ -26,17 +26,24 @@ import {
   Users,
   Wrench,
 } from 'lucide-react';
-import { Inspection, ReasonGroup, Severity } from '../types';
+import { Inspection, MaintenanceJob, ReasonGroup, Severity } from '../types';
 import { useChecklist } from '../hooks/useChecklist';
 import { useBranches } from '../hooks/useBranches';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { can, visibleInspections } from '../services/permissions';
+import {
+  can,
+  canOpenJobBoard,
+  visibleInspections,
+  visibleJobs,
+} from '../services/permissions';
 import { mondayStatusFor } from '../services/mondaySchedule';
 import { getInspections, subscribeToStorage } from '../services/storage';
+import { daysOpen, getJobs, statusOf, subscribeToMaintenance } from '../services/maintenanceStore';
 import { SEVERITY_LABEL } from '../services/priority';
 import { formatDate } from '../services/reportModel';
 import { BranchSnapshot, buildDashboardModel } from '../services/dashboardModel';
 import { PriorityBadge } from './PriorityBadge';
+import { StatusPill } from './MaintenanceStatusPill';
 import { ScoreRing } from './ScoreRing';
 
 /** Status palette, the same steps the report and the rings use. */
@@ -71,11 +78,23 @@ export const DashboardScreen: React.FC = () => {
   const user = useCurrentUser();
   const allBranches = useBranches();
   const [allInspections, setInspections] = useState<Inspection[]>(() => getInspections());
+  const [allJobs, setJobs] = useState<MaintenanceJob[]>(() => getJobs());
 
   useEffect(() => {
     const refresh = () => setInspections(getInspections());
     refresh();
     return subscribeToStorage(refresh);
+  }, []);
+
+  /*
+   * The repairs are their own store with its own subscription — a job started
+   * on the board should show as started here without a reload, and nothing
+   * about an inspection changes when it is.
+   */
+  useEffect(() => {
+    const refresh = () => setJobs(getJobs());
+    refresh();
+    return subscribeToMaintenance(refresh);
   }, []);
 
   /*
@@ -103,6 +122,41 @@ export const DashboardScreen: React.FC = () => {
     () => buildDashboardModel(inspections, checklist, branches),
     [inspections, checklist, branches]
   );
+
+  /*
+   * The repairs still outstanding, newest first.
+   *
+   * Narrowed by `visibleJobs` for the same reason the inspections are: a
+   * branch manager's dashboard is their branch's, and a repair raised at
+   * another one is not theirs to be told about. Newest first rather than
+   * worst first, which is what the maintenance overview ranks by — this panel
+   * answers "what has come in", and the board itself is one click away for
+   * anyone who wants it ordered by how bad it is.
+   */
+  const openJobs = useMemo(
+    () =>
+      visibleJobs(user, allJobs)
+        .filter((job) => statusOf(job) !== 'completed')
+        .sort((a, b) => b.reportedAt.localeCompare(a.reportedAt)),
+    [user, allJobs]
+  );
+
+  /*
+   * The board in three figures, over the same branches. Counted from the whole
+   * of `visibleJobs` rather than from `openJobs` above, because one of the
+   * three is the work that is no longer open — which that list, by
+   * definition, does not hold.
+   */
+  const jobCounts = useMemo(() => {
+    const mine = visibleJobs(user, allJobs);
+    const completed = mine.filter((job) => statusOf(job) === 'completed').length;
+    return {
+      total: mine.length,
+      open: mine.length - completed,
+      notStarted: mine.filter((job) => statusOf(job) === 'reported').length,
+      completed,
+    };
+  }, [user, allJobs]);
 
   /** This week's round, for the manager whose branch this dashboard is. */
   const monday = useMemo(
@@ -197,7 +251,7 @@ export const DashboardScreen: React.FC = () => {
             Offered to the role that reports into maintenance without running
             it — the admin and the maintenance manager live on that board already.
           */}
-          {can(user, 'maintenance.reportOwnBranch') && (
+          {can(user, 'maintenance.report') && (
             <Link
               id="dashboard-report-repair-link"
               href="/maintenance/jobs"
@@ -228,8 +282,8 @@ export const DashboardScreen: React.FC = () => {
         </div>
       ) : (
         <>
-          {/* Four figures a manager acts on */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {/* The figures a manager acts on — the round, then the repairs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             <Kpi
               icon={ClipboardCheck}
               label="Needs Action"
@@ -296,6 +350,25 @@ export const DashboardScreen: React.FC = () => {
               }
               fillTitle={`${model.repeatIssues.length} checks have been flagged more than once`}
             />
+
+            {/*
+              The repairs, in the row of figures rather than only in the list
+              further down: what is outstanding on the board is a number a
+              manager acts on the same way they act on overdue visits, and a
+              list of five rows does not answer "how many".
+
+              Three readings in one card because they are one subject, and
+              because three cards of one number each would have made the row
+              about maintenance rather than about the branch.
+            */}
+            {canOpenJobBoard(user) && (
+              <MaintenanceKpi
+                open={jobCounts.open}
+                notStarted={jobCounts.notStarted}
+                completed={jobCounts.completed}
+                total={jobCounts.total}
+              />
+            )}
           </div>
 
           {/* Things that need doing. Absent entirely when there are none. */}
@@ -340,6 +413,47 @@ export const DashboardScreen: React.FC = () => {
               ))}
             </div>
           </section>
+
+          {/*
+            What is broken right now, next to what the inspections found.
+            Absent entirely when nothing is outstanding — the header already
+            carries a way onto the board, so an empty panel would be a row of
+            furniture saying "nothing here".
+          */}
+          {openJobs.length > 0 && (
+            <Panel
+              icon={Wrench}
+              title="Open maintenance jobs"
+              caption={`${openJobs.length} still open, most recently reported first`}
+              action={{ href: '/maintenance/jobs', label: 'Job board' }}
+            >
+              <ul className="divide-y divide-[#EFEFF2] -my-1">
+                {openJobs.slice(0, 5).map((job) => (
+                  <li key={job.id}>
+                    <Link
+                      href={`/maintenance/${job.id}`}
+                      className="py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 group"
+                    >
+                      <span className="flex-1 min-w-[12rem]">
+                        <span className="block text-[13px] font-semibold text-[#17181D] truncate">
+                          {job.title}
+                        </span>
+                        <span className="block text-[11px] text-[#6B6F76] truncate">
+                          {/* The branch only where this dashboard covers more than one */}
+                          {everyBranch && `${job.branchName} • `}
+                          {job.equipment && `${job.equipment} • `}
+                          waiting {daysOpen(job)} day{daysOpen(job) === 1 ? '' : 's'}
+                        </span>
+                      </span>
+                      <PriorityBadge severity={job.priority} size="sm" />
+                      <StatusPill status={statusOf(job)} />
+                      <ChevronRight className="w-4 h-4 text-[#9CA1A9] group-hover:text-[#17181D] shrink-0" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
 
           {/*
             No `items-start` here: letting the two panels stretch to the taller
@@ -576,12 +690,21 @@ const AttentionStrip: React.FC<{
 };
 
 const TONE_TEXT = { good: GOOD, warn: WARN, bad: BAD } as const;
-const TONE_TILE = {
-  good: 'bg-[#E6F4EC] text-[#157F4B]',
-  warn: 'bg-[#FDF3E2] text-[#B4740A]',
-  bad: 'bg-[#FDECEE] text-[#C8202D]',
-} as const;
 
+/**
+ * One figure, and what it is doing.
+ *
+ * Colour is the quietest thing on this card, deliberately. Checked against a
+ * colour-vision model, the amber and the green of this palette separate by
+ * only ΔE 5.7 under protanopia — so a row of cards told apart by the colour of
+ * their numbers is a row several readers cannot tell apart at all. Every card
+ * says its state in words in the caption instead, and hue is left to two small
+ * marks that repeat what the words already said.
+ *
+ * Which is also why it reads better: five differently coloured display numbers
+ * is a rainbow, and the eye goes to the biggest thing first whatever its hue.
+ * The figure is the information, so the figure is the only loud thing.
+ */
 const Kpi: React.FC<{
   icon: React.ComponentType<{ className?: string }>;
   label: string;
@@ -594,31 +717,44 @@ const Kpi: React.FC<{
   fillTitle: string;
   href?: string;
 }> = ({ icon: Icon, label, value, suffix = '', caption, tone, fill, fillTitle, href }) => {
+  const accent = TONE_TEXT[tone];
+
   const body = (
     <>
-      <div className="flex items-center gap-2.5">
-        <span
-          className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${TONE_TILE[tone]}`}
-        >
-          <Icon className="w-[18px] h-[18px]" />
+      <div className="flex items-center gap-2">
+        {/* The colour rides a wrapper: lucide icons paint from currentColor */}
+        <span className="shrink-0 flex items-center" style={{ color: accent }}>
+          <Icon className="w-3.5 h-3.5" />
         </span>
-        <span className="text-[13px] font-bold text-[#17181D] flex-1 min-w-0">{label}</span>
+        <span className="flex-1 min-w-0 text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B6F76] truncate">
+          {label}
+        </span>
         {href && (
-          <ChevronRight className="w-4 h-4 text-[#C9CCD2] group-hover:text-[#17181D] shrink-0 transition-colors" />
+          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-[#D8DAE0] group-hover:text-[#6B6F76] transition-colors" />
         )}
       </div>
 
-      <p
-        className="text-[34px] leading-none font-bold tabular-nums mt-4"
-        style={{ color: TONE_TEXT[tone] }}
-      >
-        {value}
-        {suffix}
+      {/*
+        Proportional figures, not tabular: `tabular-nums` gives every digit the
+        width of a zero, which at display size leaves a number like 121 looking
+        gappy. Tabular belongs in the branch table below, where figures have to
+        line up down a column.
+      */}
+      <p className="mt-3 text-[30px] leading-none font-semibold text-[#17181D]">
+        {value.toLocaleString()}
+        {suffix && <span className="text-[17px] font-semibold text-[#9CA1A9]">{suffix}</span>}
       </p>
-      <p className="text-[11px] text-[#6B6F76] mt-2 leading-snug">{caption}</p>
 
+      <p className="mt-1.5 text-[11px] leading-snug text-[#6B6F76]">{caption}</p>
+
+      {/*
+        The unfilled part of the meter is a wash of the fill's own colour
+        rather than a neutral grey, so the state reads across the whole bar
+        instead of only across the part that happens to be filled.
+      */}
       <div
-        className="mt-4 h-1 rounded-full bg-[#EFEFF2] overflow-hidden"
+        className="mt-3.5 h-1 rounded-full overflow-hidden"
+        style={{ backgroundColor: `${accent}1F` }}
         title={fillTitle}
         role="img"
         aria-label={fillTitle}
@@ -627,7 +763,7 @@ const Kpi: React.FC<{
           className="h-full rounded-full transition-[width] duration-500"
           style={{
             width: `${Math.round(Math.min(Math.max(fill, 0), 1) * 100)}%`,
-            backgroundColor: TONE_TEXT[tone],
+            backgroundColor: accent,
           }}
         />
       </div>
@@ -635,10 +771,10 @@ const Kpi: React.FC<{
   );
 
   const shell =
-    'bg-white border border-[#E6E7EB] rounded-xl p-4 shadow-sm block transition-shadow';
+    'bg-white border border-[#E6E7EB] rounded-xl p-4 shadow-sm block transition-[border-color,box-shadow]';
 
   return href ? (
-    <Link href={href} className={`${shell} group hover:shadow-md`}>
+    <Link href={href} className={`${shell} group hover:border-[#C9CCD2] hover:shadow-md`}>
       {body}
     </Link>
   ) : (
@@ -646,23 +782,115 @@ const Kpi: React.FC<{
   );
 };
 
+/**
+ * The maintenance board, as three counts on one card.
+ *
+ * Deliberately not three cards. They are one subject read three ways, and the
+ * reader's question is the relationship between them — how much of the board
+ * is untouched, how much of it is behind us — which is a comparison you can
+ * only make when the figures sit together.
+ *
+ * The counts are in ink, not in status colours. Five differently coloured
+ * numbers in a row is a rainbow, and — checked against a colour-vision model —
+ * the amber and green of this palette are barely separable to a protanope, so
+ * the names beside the figures are what tell them apart.
+ */
+const MaintenanceKpi: React.FC<{
+  open: number;
+  notStarted: number;
+  completed: number;
+  total: number;
+}> = ({ open, notStarted, completed, total }) => {
+  const share = total > 0 ? completed / total : 0;
+  const tone = open === 0 ? GOOD : notStarted > 0 ? BAD : WARN;
+
+  return (
+    <Link
+      href="/maintenance/jobs"
+      className="bg-white border border-[#E6E7EB] rounded-xl p-4 shadow-sm block transition-[border-color,box-shadow] group hover:border-[#C9CCD2] hover:shadow-md"
+    >
+      <div className="flex items-center gap-2">
+        {/* The colour rides a wrapper: lucide icons paint from currentColor */}
+        <span className="shrink-0 flex items-center" style={{ color: tone }}>
+          <Wrench className="w-3.5 h-3.5" />
+        </span>
+        <span className="flex-1 min-w-0 text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B6F76] truncate">
+          Maintenance
+        </span>
+        <ChevronRight className="w-3.5 h-3.5 shrink-0 text-[#D8DAE0] group-hover:text-[#6B6F76] transition-colors" />
+      </div>
+
+      {/*
+        Name over figure, so the three read left to right as a sentence rather
+        than as three numbers you then have to match to three labels.
+
+        The names are sentence case at a plain weight, not the tracked capitals
+        the card's own label wears. Two levels of shouting inside one card is
+        one too many, and — the reason it was changed — "NOT STARTED" in tracked
+        capitals does not fit a third of this card, so it truncated to "NOT
+        STA…", which is not a label at all.
+      */}
+      <dl className="mt-3.5 grid grid-cols-3 gap-2">
+        {[
+          { name: 'Open', value: open },
+          { name: 'Not started', value: notStarted },
+          { name: 'Completed', value: completed },
+        ].map((figure) => (
+          <div key={figure.name} className="min-w-0">
+            <dt className="text-[10px] leading-tight text-[#6B6F76]">{figure.name}</dt>
+            <dd className="mt-1 text-[24px] leading-none font-semibold text-[#17181D]">
+              {figure.value.toLocaleString()}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      <div
+        className="mt-3.5 h-1 rounded-full overflow-hidden"
+        style={{ backgroundColor: `${tone}1F` }}
+        title={`${completed} of ${total} job${total === 1 ? '' : 's'} completed`}
+        role="img"
+        aria-label={`${completed} of ${total} job${total === 1 ? '' : 's'} completed`}
+      >
+        <div
+          className="h-full rounded-full transition-[width] duration-500"
+          style={{ width: `${Math.round(share * 100)}%`, backgroundColor: tone }}
+        />
+      </div>
+    </Link>
+  );
+};
+
 const Panel: React.FC<{
   icon?: React.ComponentType<{ className?: string }>;
   title: string;
   caption?: string;
+  /** Where the whole of this panel's subject lives, when it lives elsewhere. */
+  action?: { href: string; label: string };
   children: React.ReactNode;
-}> = ({ icon: Icon, title, caption, children }) => (
+}> = ({ icon: Icon, title, caption, action, children }) => (
   <section className="bg-white border border-[#E6E7EB] rounded-xl shadow-sm">
-    <div className="px-5 py-4 border-b border-[#EFEFF2] flex items-center gap-2.5">
-      {Icon && (
-        <span className="w-8 h-8 rounded-lg bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
-          <Icon className="w-[18px] h-[18px]" />
-        </span>
-      )}
-      <div className="min-w-0">
-        <h2 className="text-[15px] font-bold text-[#17181D]">{title}</h2>
-        {caption && <p className="text-xs text-[#6B6F76] mt-0.5">{caption}</p>}
+    <div className="px-5 py-4 border-b border-[#EFEFF2] flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2.5 min-w-0">
+        {Icon && (
+          <span className="w-8 h-8 rounded-lg bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
+            <Icon className="w-[18px] h-[18px]" />
+          </span>
+        )}
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-bold text-[#17181D]">{title}</h2>
+          {caption && <p className="text-xs text-[#6B6F76] mt-0.5">{caption}</p>}
+        </div>
       </div>
+      {action && (
+        <Link
+          href={action.href}
+          className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#C8202D] hover:underline shrink-0"
+        >
+          {action.label}
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      )}
     </div>
     <div className="p-5">{children}</div>
   </section>

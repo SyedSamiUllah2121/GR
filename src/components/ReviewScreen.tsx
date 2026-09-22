@@ -37,10 +37,13 @@ import { useRouter } from 'next/navigation';
 import { useToast } from './ToastProvider';
 import { useConfirm } from './ConfirmProvider';
 import {
+  heldChecks,
   maintenanceIssues,
   raiseMaintenanceJobs,
   suggestCategory,
 } from '../services/maintenanceIntake';
+import { getJobs } from '../services/maintenanceStore';
+import { activeEquipment } from '../services/equipmentStore';
 import { currentUser } from '../services/session';
 import { canEditInspection, canViewInspection } from '../services/permissions';
 import { AccessNotice, NOT_YOURS } from './AccessNotice';
@@ -276,12 +279,36 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
   const totalItemsCount = allItems.length;
   const displayNumber = numberingFor(allItems.map((i) => i.id));
 
-  // Gather flagged (No) items, and anything still unanswered
+  /*
+   * The checks maintenance already holds.
+   *
+   * Asked here as well as on the checklist screen, and deliberately of the
+   * same function: that screen locks their buttons, so a check it holds is one
+   * this screen can never be given an answer for. Without this, every such
+   * check was counted as unanswered, submit refused, and the checklist offered
+   * nothing to fix — an inspection that could be filled in completely and then
+   * never handed in.
+   */
+  const held = heldChecks(
+    inspection.branchName,
+    allItems,
+    inspection.answers,
+    getJobs(),
+    activeEquipment(),
+    inspection.id
+  );
+
+  // Gather flagged (No) items, anything still unanswered, and what was held
   const unrankedIssues: RankedIssue[] = [];
   const unansweredItems: Item[] = [];
+  const heldItems: Item[] = [];
   let yesCount = 0;
 
   allItems.forEach((item) => {
+    if (held.has(item.id)) {
+      heldItems.push(item);
+      return;
+    }
     const ans = inspection.answers[item.id];
     if (ans?.status === 'yes') {
       yesCount++;
@@ -307,8 +334,15 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
   // can never disagree
   const repairIds = new Set(repairItems.map(({ item }) => item.id));
 
+  /*
+   * Scored out of what this visit could actually judge. A held check is not a
+   * failure — the fault is already booked in, and counting it as one would
+   * mark the branch down twice for a single fault, every round, until the
+   * repair was done.
+   */
+  const scoredItemsCount = totalItemsCount - heldItems.length;
   const calculatedScore =
-    totalItemsCount > 0 ? Math.round((yesCount / totalItemsCount) * 100) : 0;
+    scoredItemsCount > 0 ? Math.round((yesCount / scoredItemsCount) * 100) : 0;
 
   // Items this record covered that the checklist no longer defines. Re-submitting
   // would drop them from itemIds for good, so the manager is asked first.
@@ -403,6 +437,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       // Freeze what was inspected, so later checklist edits cannot rewrite
       // this record's contents, numbering or score
       itemIds: allItems.map((item) => item.id),
+      /*
+       * Kept on the record because the board moves on: these jobs will be
+       * finished, and a report opened next year has to say what was held on
+       * the day rather than what is outstanding when it is read.
+       */
+      heldItemIds: heldItems.map((item) => item.id),
       // Closes the duration the report shows against startedAt
       submittedAt: now,
       submittedByUserId: user?.id,
@@ -417,7 +457,22 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       edits,
     };
 
-    saveInspection(submittedInspection);
+    /*
+     * The one place a failed write must never be passed over. Below this line
+     * the draft is cleared, jobs are raised against the record and the screen
+     * says "Inspection saved" — so if the store refused it, all of that is said
+     * about a record that does not exist, and the visit is gone with a success
+     * message on top of it.
+     *
+     * Nothing is cleared and nothing is raised: the draft stays exactly where
+     * it is, so making room and pressing submit again finishes the job.
+     */
+    if (!saveInspection(submittedInspection)) {
+      showToast(
+        'Could not save — this browser\u2019s storage is full. Free some space and submit again; your answers are still here.'
+      );
+      return;
+    }
     clearActiveDraft();
 
     /*
@@ -602,6 +657,36 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
               >
                 Return to checklist
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/*
+        Checks that were with maintenance. Not a warning — nothing is wrong and
+        nothing is blocked — but the score is out of fewer items than the
+        checklist has, and a number that quietly disagrees with the one above
+        it is how a report stops being trusted.
+      */}
+      {heldItems.length > 0 && (
+        <div
+          id="review-held-banner"
+          className="mb-6 p-4 rounded-md bg-white border border-[#E6E7EB] shadow-xs"
+        >
+          <div className="flex items-start gap-3">
+            <Wrench className="w-5 h-5 text-[#B4740A] shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-[#17181D]">
+                {heldItems.length} check{heldItems.length === 1 ? '' : 's'} already with
+                maintenance
+              </p>
+              <p className="text-xs text-[#6B6F76] mt-0.5">
+                Item{heldItems.length === 1 ? '' : 's'}{' '}
+                {heldItems.map((item) => displayNumber(item.id)).join(', ')} could not be
+                answered, because the fault is already on the board. They are scored out — this
+                visit is marked out of {scoredItemsCount} rather than {totalItemsCount} — and the
+                report says so.
+              </p>
             </div>
           </div>
         </div>

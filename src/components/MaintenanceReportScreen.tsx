@@ -25,6 +25,8 @@ import {
   monthLabel,
 } from '../services/maintenanceReport';
 import { formatDate, formatDateTime } from '../services/reportModel';
+import { visibleJobs } from '../services/permissions';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { PriorityBadge } from './PriorityBadge';
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low'];
@@ -35,14 +37,23 @@ function currentMonth(): string {
 }
 
 export const MaintenanceReportScreen: React.FC = () => {
-  const [jobs, setJobs] = useState<MaintenanceJob[]>(() => getJobs());
+  const user = useCurrentUser();
+  const [allJobs, setAllJobs] = useState<MaintenanceJob[]>(() => getJobs());
   const [month, setMonth] = useState<string>(() => currentMonth());
 
   useEffect(() => {
-    const refresh = () => setJobs(getJobs());
+    const refresh = () => setAllJobs(getJobs());
     refresh();
     return subscribeToMaintenance(refresh);
   }, []);
+
+  /*
+   * Narrowed to the account before the month is built, so a branch reading
+   * the month-end report reads their own month. The months on offer come from
+   * the narrowed list too — a month with nothing of theirs in it is not a
+   * month they have a report for.
+   */
+  const jobs = useMemo(() => visibleJobs(user, allJobs), [user, allJobs]);
 
   const months = useMemo(() => {
     const found = availableMonths(jobs);

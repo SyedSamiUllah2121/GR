@@ -84,6 +84,8 @@ const OUTCOME_COLOR: Record<Outcome, string> = {
   passed: '#157F4B',
   failed: '#D9542B',
   unanswered: '#7A8288',
+  // The amber the board uses for work in hand, since that is what this is
+  held: '#B4740A',
 };
 
 type TabKey = 'checklist' | 'findings' | 'maintenance' | 'notes' | 'history';
@@ -349,7 +351,11 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                 */}
                 {kind === 'surprise' && (
                   <span className="block text-[11px] font-normal text-[#6B6F76] mt-0.5">
-                    {assignedBy ? `Assigned by ${assignedBy.name}` : 'Assigned by the admin'}
+                    {inspection.autoRaised
+                      ? 'Raised automatically by the rotation'
+                      : assignedBy
+                        ? `Assigned by ${assignedBy.name}`
+                        : 'Assigned by the admin'}
                   </span>
                 )}
               </MetaField>
@@ -942,6 +948,19 @@ const OutcomePill: React.FC<{ outcome: Outcome }> = ({ outcome }) => {
       </span>
     );
   }
+  /*
+   * Not a gap in the round. The fault was already booked in, so there was
+   * nothing for the inspector to judge — and the report has to say that rather
+   * than leave a blank that reads as a check nobody bothered with.
+   */
+  if (outcome === 'held') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FDF3E2] text-[#B4740A]">
+        <Wrench className="w-3.5 h-3.5" />
+        With maintenance
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F6F6F8] text-[#6B6F76] border border-[#E6E7EB]">
       <Minus className="w-3.5 h-3.5" />
@@ -1475,7 +1494,13 @@ function downloadCsv(model: ReportModel): void {
           section.title,
           row.item.text,
           effectiveReasonGroup(row.item, row.answer),
-          row.outcome === 'passed' ? 'Yes' : row.outcome === 'failed' ? 'No' : 'Not answered',
+          row.outcome === 'passed'
+            ? 'Yes'
+            : row.outcome === 'failed'
+              ? 'No'
+              : row.outcome === 'held'
+                ? 'With maintenance'
+                : 'Not answered',
           row.priority ? SEVERITY_LABEL[row.priority.severity] : '',
           SEVERITY_LABEL[row.item.severity as Severity],
           row.priority ? row.priority.repeatCount : '',

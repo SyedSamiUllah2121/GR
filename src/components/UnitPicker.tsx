@@ -59,7 +59,7 @@ export function describeAsset(asset: Equipment): string {
 }
 
 /** The branch's assets, in trade order, each trade sorted by asset number. */
-function groupByTrade(assets: Equipment[]): [string, Equipment[]][] {
+function assetsByTrade(assets: Equipment[]): [string, Equipment[]][] {
   const groups = new Map<string, Equipment[]>();
   for (const asset of assets) {
     const label = categoryLabel(asset.category);
@@ -120,7 +120,7 @@ export const UnitPicker: React.FC<{
           assets say rather than from a fixed list, so a trade added later
           appears here without this component knowing about it.
         */}
-        {groupByTrade(assets).map(([trade, inTrade]) => (
+        {assetsByTrade(assets).map(([trade, inTrade]) => (
           <optgroup key={trade} label={trade}>
             {inTrade.map((asset) => (
               <option key={asset.id} value={asset.id}>

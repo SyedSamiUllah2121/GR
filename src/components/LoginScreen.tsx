@@ -15,7 +15,7 @@ import {
 import { BrandLogo } from './BrandLogo';
 import { ORGANISATION } from '../data/user';
 import { USER_ROLE_BLURB, USER_ROLE_KEYS, USER_ROLE_LABEL, User } from '../types';
-import { signIn, signInAs } from '../services/session';
+import { DEMO_SIGN_IN_ENABLED, signIn, signInAs } from '../services/session';
 import { homePathFor } from '../services/permissions';
 import { activeUsers } from '../services/userStore';
 import { useUsers } from '../hooks/useUsers';
@@ -190,9 +190,11 @@ export const LoginScreen: React.FC = () => {
    * Withdrawn accounts are skipped — offering a button that the sign-in it
    * calls will refuse is worse than offering nothing.
    */
-  const demoAccounts = USER_ROLE_KEYS.map((role) =>
-    users.find((u) => u.role === role && u.active)
-  ).filter((u): u is User => !!u);
+  const demoAccounts = DEMO_SIGN_IN_ENABLED
+    ? USER_ROLE_KEYS.map((role) => users.find((u) => u.role === role && u.active)).filter(
+        (u): u is User => !!u
+      )
+    : [];
 
   const enterAs = (userId: string) => {
     const result = signInAs(userId);
@@ -341,6 +343,13 @@ export const LoginScreen: React.FC = () => {
             the way to understand them is to sign in as each — which is what
             these do. Real addresses and passwords work in the form above.
           */}
+          {/*
+            The whole demo half of this screen, present only in a build that
+            asked for it. Hiding the buttons but leaving the heading and the
+            "Use 123 / 123" shortcut would advertise a door that is locked, and
+            the shortcut itself is one of the two doors.
+          */}
+          {DEMO_SIGN_IN_ENABLED && (
           <div className="mt-7 pt-6 border-t border-[#EFEFF2]">
             <div className="flex items-baseline justify-between gap-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76]">
@@ -404,6 +413,7 @@ export const LoginScreen: React.FC = () => {
               ))}
             </div>
           </div>
+          )}
 
           <p className="mt-7 text-center text-[11px] text-[#9CA1A9]">
             Internal weekly restaurant inspection system

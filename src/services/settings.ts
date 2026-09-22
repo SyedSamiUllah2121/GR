@@ -27,11 +27,46 @@ export interface Settings {
    * inspector on every visit and the draw is never consulted.
    */
   randomAssignment: boolean;
+  /**
+   * How often the system raises a surprise visit of its own accord, in days.
+   * Zero is off, which is the default: an estate that has never been asked
+   * should not start booking its own inspections.
+   *
+   * The interval is the gap between unannounced visits to the *estate*, not
+   * to each branch — which branch it lands on is the rotation's business, and
+   * `randomBranch` answers that the same way it answers for one raised by
+   * hand. Set to 3, somewhere is visited unannounced every third day.
+   *
+   * Only meaningful while `randomAssignment` is on, since an automatic visit
+   * is by definition one nobody chose: turning the draw off turns this off
+   * with it, rather than leaving the system picking branches under a switch
+   * that says it may not.
+   */
+  autoSurpriseDays: number;
 }
+
+/** The longest interval worth offering: beyond a year it is not a schedule. */
+export const MAX_AUTO_SURPRISE_DAYS = 365;
 
 export const DEFAULT_SETTINGS: Settings = {
   randomAssignment: true,
+  autoSurpriseDays: 0,
 };
+
+/**
+ * The interval, made safe to act on.
+ *
+ * Clamped and rounded rather than rejected, because this number decides how
+ * often the app writes records by itself: a stored `2.5`, `-1` or `1e9` from
+ * a hand-edited store should land on something sane, not stop the sweep or
+ * let it run away.
+ */
+function readDays(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_SETTINGS.autoSurpriseDays;
+  }
+  return Math.min(Math.max(Math.round(value), 0), MAX_AUTO_SURPRISE_DAYS);
+}
 
 function notify(): void {
   window.dispatchEvent(new Event(EVENT));
@@ -57,6 +92,7 @@ export function getSettings(): Settings {
         typeof parsed.randomAssignment === 'boolean'
           ? parsed.randomAssignment
           : DEFAULT_SETTINGS.randomAssignment,
+      autoSurpriseDays: readDays(parsed.autoSurpriseDays),
     };
   } catch (err) {
     console.error('Failed to read settings:', err);
@@ -88,6 +124,18 @@ export function saveSetting<K extends keyof Settings>(key: K, value: Settings[K]
  */
 export function isRandomAssignmentOn(): boolean {
   return getSettings().randomAssignment;
+}
+
+/**
+ * How many days apart the system raises surprise visits, or 0 for never.
+ *
+ * Reads the draw's switch as well as the number, so there is one answer to
+ * "is the system raising visits" rather than two that have to be checked
+ * together at every call site.
+ */
+export function autoSurpriseIntervalDays(): number {
+  const settings = getSettings();
+  return settings.randomAssignment ? settings.autoSurpriseDays : 0;
 }
 
 export function subscribeToSettings(callback: () => void): () => void {

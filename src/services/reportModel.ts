@@ -37,7 +37,13 @@ export interface ReportRow {
   priority: RankedIssue['priority'] | undefined;
 }
 
-export type Outcome = 'passed' | 'failed' | 'unanswered';
+/**
+ * `held` is not a fourth kind of answer — it is the absence of one, for a
+ * reason the record can name. See `Inspection.heldItemIds`. It is kept apart
+ * from `unanswered` because unanswered is an inspection that is not finished,
+ * and this one is.
+ */
+export type Outcome = 'passed' | 'failed' | 'unanswered' | 'held';
 
 export interface ReportSection extends FullSection {
   /** 1-based position across the whole report, for the "3." section prefix. */
@@ -46,8 +52,11 @@ export interface ReportSection extends FullSection {
   passed: number;
   failed: number;
   unanswered: number;
+  /** Checks that were with maintenance, so neither passed nor failed. */
+  held: number;
+  /** Items the section was scored out of — its rows, less the held ones. */
   total: number;
-  /** Percentage of the section's items that passed (0-100). */
+  /** Percentage of the section's scored items that passed (0-100). */
   rate: number;
 }
 
@@ -64,10 +73,13 @@ export interface ReportModel {
   inspection: Inspection;
   sections: ReportSection[];
   rows: ReportRow[];
+  /** What the visit was scored out of: every row, less the held ones. */
   total: number;
   passed: number;
   failed: number;
   unanswered: number;
+  /** Checks that were with maintenance, so neither passed nor failed. */
+  held: number;
   /** The score this report is presented with — signed value, or live for a draft. */
   score: number;
   /** Recomputed from what is on screen now, which can drift from the signed score. */
@@ -199,11 +211,23 @@ export function buildReportModel(
     })
   );
 
+  /*
+   * What the visit could not answer because maintenance already had it. Read
+   * off the record rather than off today's board: the job may well have been
+   * finished since, and this report is what was found on the day.
+   */
+  const heldIds = new Set(inspection.heldItemIds ?? []);
+
   const sections: ReportSection[] = rawSections.map((section, index) => {
     const rows: ReportRow[] = section.items.map((item, itemIndex) => {
       const answer = inspection.answers[item.id];
-      const outcome: Outcome =
-        answer?.status === 'yes' ? 'passed' : answer?.status === 'no' ? 'failed' : 'unanswered';
+      const outcome: Outcome = heldIds.has(item.id)
+        ? 'held'
+        : answer?.status === 'yes'
+          ? 'passed'
+          : answer?.status === 'no'
+            ? 'failed'
+            : 'unanswered';
       return {
         item,
         answer,
@@ -215,22 +239,29 @@ export function buildReportModel(
 
     const passed = rows.filter((r) => r.outcome === 'passed').length;
     const failed = rows.filter((r) => r.outcome === 'failed').length;
+    const held = rows.filter((r) => r.outcome === 'held').length;
+    // Held checks leave the denominator: a section of four whose only fault is
+    // already booked in scores out of three, not three out of four
+    const scored = rows.length - held;
     return {
       ...section,
       index: index + 1,
       rows,
       passed,
       failed,
-      unanswered: rows.length - passed - failed,
-      total: rows.length,
-      rate: rows.length > 0 ? Math.round((passed / rows.length) * 100) : 100,
+      held,
+      unanswered: scored - passed - failed,
+      total: scored,
+      rate: scored > 0 ? Math.round((passed / scored) * 100) : 100,
     };
   });
 
   const rows = sections.flatMap((section) => section.rows);
   const passed = rows.filter((r) => r.outcome === 'passed').length;
   const failed = rows.filter((r) => r.outcome === 'failed').length;
-  const total = rows.length;
+  const held = rows.filter((r) => r.outcome === 'held').length;
+  // As above, and for the same reason: what the visit was scored out of
+  const total = rows.length - held;
 
   const ranked = sortByPriority(issues);
 
@@ -272,6 +303,7 @@ export function buildReportModel(
     passed,
     failed,
     unanswered: total - passed - failed,
+    held,
     score,
     liveScore,
     frozenTotal,

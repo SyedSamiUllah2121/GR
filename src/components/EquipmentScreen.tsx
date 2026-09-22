@@ -8,7 +8,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Hash,
+  History,
   MapPin,
   Pencil,
   Plus,
@@ -79,7 +79,6 @@ import {
   generalPlanIdFor,
   getPlans,
   intervalProblem,
-  isGeneralPlan,
   setPlanActive,
   subscribeToPlans,
   updatePlan,
@@ -90,14 +89,18 @@ import {
   intervalText,
   overrideOf,
   toIsoDay,
-  upcomingServices,
 } from '../services/maintenanceSchedule';
 import {
   GeneralMaintenanceState,
   generalMaintenanceState,
   recordGeneralMaintenance,
 } from '../services/generalMaintenance';
-import { canManageEquipment, fixedBranchFor, visibleEquipment } from '../services/permissions';
+import {
+  canManageEquipment,
+  fixedBranchFor,
+  soleMaintenanceBranch,
+  visibleEquipment,
+} from '../services/permissions';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useBranches } from '../hooks/useBranches';
 import { activeBranches } from '../services/branchStore';
@@ -214,7 +217,9 @@ export const EquipmentScreen: React.FC = () => {
    */
   const mine = useMemo(() => visibleEquipment(user, all), [user, all]);
   const mayManage = canManageEquipment(user);
-  const scopedTo = fixedBranchFor(user);
+  // Named in the heading, so a register covering one branch never reads as the
+  // estate. Null where it genuinely covers more than one.
+  const scopedTo = useMemo(() => soleMaintenanceBranch(user), [user]);
 
   const today = toIsoDay(new Date());
 
@@ -235,23 +240,6 @@ export const EquipmentScreen: React.FC = () => {
     });
     return map;
   }, [mine, today, plans, jobs]);
-
-  /** When each asset is next due one of its category's named services. */
-  const nextDue = useMemo(() => {
-    const map = new Map<string, { dueOn: string; task: string; overdue: boolean }>();
-    upcomingServices(today, plans, mine, jobs).forEach((service) => {
-      if (isGeneralPlan(service.plan)) return;
-      const existing = map.get(service.equipment.id);
-      if (!existing || service.dueOn < existing.dueOn) {
-        map.set(service.equipment.id, {
-          dueOn: service.dueOn,
-          task: service.plan.task,
-          overdue: service.daysOverdue >= 0,
-        });
-      }
-    });
-    return map;
-  }, [plans, mine, jobs, today]);
 
   /** Which categories anything still names, so withdrawing archives rather than deletes. */
   const categoriesInUse = useMemo(() => {
@@ -410,6 +398,36 @@ export const EquipmentScreen: React.FC = () => {
   };
 
   /**
+   * Sets what a whole category is serviced on, from the top of its own list.
+   *
+   * The same write the category manager makes, and deliberately the same one:
+   * two ways to reach a decision is fine, two places that each keep their own
+   * version of it is not. Nothing is scheduled here — the sweep reads the plan
+   * and works the next date out from it, so changing the number is the whole
+   * of the change.
+   */
+  const saveCadence = (category: MaintenanceCategory, interval: Interval) => {
+    const id = generalPlanIdFor(category);
+    const plan = allPlans.find((p) => p.id === id);
+    if (!plan) {
+      showToast('This category has no general maintenance plan to change');
+      return;
+    }
+    const result = updatePlan(id, {
+      category: plan.category,
+      task: plan.task,
+      interval,
+      priority: plan.priority,
+      instructions: plan.instructions,
+    });
+    showToast(
+      result.ok
+        ? `Serviced ${intervalText(interval)} from now on`
+        : result.error ?? 'Could not save that'
+    );
+  };
+
+  /**
    * One appliance, wherever it is being listed from.
    *
    * A function rather than two copies of the same JSX: the category list and
@@ -420,7 +438,6 @@ export const EquipmentScreen: React.FC = () => {
     <AssetRow
       key={item.id}
       item={item}
-      due={nextDue.get(item.id)}
       gm={general.get(item.id)}
       ownInterval={overrideOf(item, generalPlanIdFor(item.category))}
       categoryLabelText={categoryLabel(item.category, categories)}
@@ -440,13 +457,35 @@ export const EquipmentScreen: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col min-w-0">
       <header className="min-h-[5rem] bg-white border-b border-[#E6E7EB] flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between px-6 md:px-10 shrink-0 gap-4 py-4 sm:py-4">
+        {/*
+          Inside a category the heading is that category, with "Appliances"
+          above it as the way back. A screen showing one trade's appliances
+          under the word "Appliances" says nothing about where you are — and
+          where you are is the whole of what a heading is for.
+        */}
         <div className="min-w-0">
-          <h2 className="text-xl font-bold text-[#17181D]">Appliances</h2>
-          <p className="text-[#6B6F76] text-xs mt-0.5">
-            {scopedTo && <span className="font-semibold text-[#17181D]">{scopedTo} • </span>}
-            {mine.filter((e) => e.active).length} asset
-            {mine.filter((e) => e.active).length === 1 ? '' : 's'} on record
-          </p>
+          {openGroup && !searching ? (
+            <>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[#9CA1A9]">
+                Appliances
+              </p>
+              <h2 className="text-xl font-bold text-[#17181D] truncate">{openGroup.label}</h2>
+              <p className="text-[#6B6F76] text-xs mt-0.5">
+                {scopedTo && <span className="font-semibold text-[#17181D]">{scopedTo} • </span>}
+                {openGroup.items.length} appliance
+                {openGroup.items.length === 1 ? '' : 's'} in this category
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold text-[#17181D]">Appliances</h2>
+              <p className="text-[#6B6F76] text-xs mt-0.5">
+                {scopedTo && <span className="font-semibold text-[#17181D]">{scopedTo} • </span>}
+                {mine.filter((e) => e.active).length} asset
+                {mine.filter((e) => e.active).length === 1 ? '' : 's'} on record
+              </p>
+            </>
+          )}
         </div>
 
         {mayManage && (
@@ -636,8 +675,11 @@ export const EquipmentScreen: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs divide-y divide-[#EFEFF2] overflow-hidden">
-              {matches.map((item) => renderRow(item, true))}
+            <div className="@container bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden">
+              <AssetColumns showCategory />
+              <div className="divide-y divide-[#EFEFF2]">
+                {matches.map((item) => renderRow(item, true))}
+              </div>
             </div>
           )
         ) : grouped.length === 0 ? (
@@ -660,49 +702,36 @@ export const EquipmentScreen: React.FC = () => {
               return (
                 <section
                   key={group.id}
-                  className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden"
+                  className="@container bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden"
                 >
                   {/*
-                    The heading carries the cadence as well as the name, because
-                    the two are one fact: what this category IS, as far as the
-                    register is concerned, is the thing its appliances are
-                    serviced on.
+                    The cadence sits at the top of the list it governs, and is
+                    set there. It is the one fact that applies to every row
+                    below — what this category IS, as far as the register is
+                    concerned, is the thing its appliances are serviced on — so
+                    burying it in a settings dialog meant opening one screen to
+                    understand another.
                   */}
-                  <div className="px-5 py-3 bg-[#FAFAFA] border-b border-[#E6E7EB] flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <h3 className="text-sm font-bold text-[#17181D]">{group.label}</h3>
-                      <span className="text-[11px] text-[#6B6F76] tabular-nums">
-                        {group.items.length} appliance{group.items.length === 1 ? '' : 's'}
-                      </span>
-                      {cadence ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] text-[#6B6F76]">
-                          <CalendarClock className="w-3 h-3" />
-                          general maintenance {intervalText(cadence)}
-                          {plan && !plan.active ? ' — turned off' : ''}
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-[#6B6F76]">
-                          no general maintenance set
-                        </span>
-                      )}
-                    </div>
-
-                    {/*
-                      Nothing on the right of the heading. Adding an appliance
-                      and changing the category are both in the page header
-                      above, and a second copy of either here would be two
-                      buttons doing one thing.
-                    */}
-                  </div>
+                  <CategoryCadenceBar
+                    label={group.label}
+                    count={group.items.length}
+                    plan={plan ?? null}
+                    cadence={cadence}
+                    mayManage={mayManage}
+                    onSave={(next) => saveCadence(group.id, next)}
+                  />
 
                   {group.items.length === 0 ? (
                     <p className="px-5 py-6 text-xs text-[#6B6F76] text-center">
                       Nothing filed under this yet.
                     </p>
                   ) : (
-                  <div className="divide-y divide-[#EFEFF2]">
-                    {group.items.map((item) => renderRow(item, false))}
-                  </div>
+                  <>
+                    <AssetColumns showCategory={false} />
+                    <div className="divide-y divide-[#EFEFF2]">
+                      {group.items.map((item) => renderRow(item, false))}
+                    </div>
+                  </>
                   )}
                 </section>
               );
@@ -2227,9 +2256,163 @@ const MarkGeneralDoneDialog: React.FC<{
  * read differently depending on which list it was in would be two answers to
  * one question.
  */
+/**
+ * What a category is serviced on, at the top of the list it governs.
+ *
+ * Editable in place rather than behind a dialog, because the number is the
+ * heading: somebody looking at ninety-one appliances and wondering why they
+ * are all due in November is asking about this field, and sending them to a
+ * settings screen to find it is sending them away from the answer.
+ *
+ * Held in local state until Save, not written on every keystroke — typing
+ * "45" passes through 4, and a register that rescheduled the whole estate to
+ * every four days on the way to every forty-five would be obeying a number
+ * nobody meant.
+ */
+const CategoryCadenceBar: React.FC<{
+  label: string;
+  count: number;
+  plan: MaintenancePlan | null;
+  cadence: Interval | null;
+  mayManage: boolean;
+  onSave: (interval: Interval) => void;
+}> = ({ label, count, plan, cadence, mayManage, onSave }) => {
+  const [draft, setDraft] = useState<Interval | null>(cadence);
+
+  // Follows the stored cadence when it changes underneath — another tab, or
+  // the category manager — rather than sitting on a number that is no longer so
+  useEffect(() => {
+    setDraft(cadence);
+  }, [cadence?.every, cadence?.unit]);
+
+  const dirty =
+    !!draft && !!cadence && (draft.every !== cadence.every || draft.unit !== cadence.unit);
+  const problem = draft ? intervalProblem(draft) : null;
+
+  return (
+    <div className="px-5 py-3 bg-[#FAFAFA] border-b border-[#E6E7EB] flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 min-w-0">
+        <h3 className="text-sm font-bold text-[#17181D]">{label}</h3>
+        <span className="text-[11px] text-[#6B6F76] tabular-nums">
+          {count} appliance{count === 1 ? '' : 's'}
+        </span>
+        {plan && !plan.active && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F1F1F4] text-[#6B6F76]">
+            Turned off
+          </span>
+        )}
+      </div>
+
+      {!cadence ? (
+        <span className="text-[11px] text-[#6B6F76]">No general maintenance set</span>
+      ) : mayManage && draft ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            htmlFor={`cadence-${plan?.id ?? label}`}
+            className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] inline-flex items-center gap-1.5"
+          >
+            <CalendarClock className="w-3.5 h-3.5 text-[#C8202D]" />
+            General maintenance every
+          </label>
+          <input
+            id={`cadence-${plan?.id ?? label}`}
+            type="number"
+            min={1}
+            step={1}
+            value={draft.every}
+            onChange={(e) => setDraft({ ...draft, every: Number(e.target.value) })}
+            aria-label={`How often ${label} is serviced`}
+            className="w-16 px-2 py-1.5 bg-white border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D] text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+          />
+          <select
+            value={draft.unit}
+            onChange={(e) => setDraft({ ...draft, unit: e.target.value as IntervalUnit })}
+            aria-label={`Days or months for ${label}`}
+            className="px-2 py-1.5 bg-white border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+          >
+            <option value="days">days</option>
+            <option value="months">months</option>
+          </select>
+          {/*
+            Only once something has actually changed. A Save sitting there
+            permanently reads as work outstanding on a screen where there is
+            none, and invites a click that does nothing.
+          */}
+          {dirty && (
+            <button
+              type="button"
+              onClick={() => draft && !problem && onSave(draft)}
+              disabled={!!problem}
+              title={problem ?? `Every appliance under ${label} follows this`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#C8202D] hover:bg-[#A81823] disabled:bg-[#C9CCD2] disabled:cursor-not-allowed text-white text-[11px] font-bold rounded-md transition-colors cursor-pointer"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Save
+            </button>
+          )}
+          {problem && (
+            <span className="text-[11px] font-semibold text-[#C8202D]">{problem}</span>
+          )}
+        </div>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 text-[11px] text-[#6B6F76]">
+          <CalendarClock className="w-3.5 h-3.5" />
+          General maintenance {intervalText(cadence)}
+        </span>
+      )}
+    </div>
+  );
+};
+
+/**
+ * The column grid every appliance row and the heading above them share.
+ *
+ * One string, declared once, because a heading that drifts from its rows is
+ * worse than no heading at all — it puts a label over the wrong column and
+ * nothing looks broken. Measured against the panel rather than the window, so
+ * the rail opening and closing moves the breakpoint with it.
+ *
+ * Not one column of it is sized by its content, and that is the whole point.
+ * The headings are one grid and the rows are another — they only look like a
+ * table — so a single `auto` column resolves to one width over "Actions" and
+ * another over a Done button and three icons, which leaves every flexible
+ * column beside it a different width in the two grids and slides the labels
+ * off their columns. Fixed widths and fractions resolve identically whatever
+ * is in them. Every cell below also carries `min-w-0`, so a long branch name
+ * cannot push its column wider than its share either.
+ */
+const ASSET_GRID =
+  'grid grid-cols-1 @min-[60rem]:grid-cols-[7.5rem_minmax(9.5rem,1.6fr)_minmax(7rem,1fr)_8.5rem_13rem_7.5rem] gap-x-5 gap-y-2 @min-[60rem]:items-center';
+
+/** The heading strip. Hidden where the rows stack and the labels would lie. */
+const AssetColumns: React.FC<{ showCategory: boolean }> = ({ showCategory }) => (
+  <div
+    className={`hidden @min-[60rem]:grid ${ASSET_GRID} px-5 py-2 bg-[#FBFBFC] border-b border-[#EFEFF2] text-[9px] font-bold uppercase tracking-[0.14em] text-[#9CA1A9]`}
+  >
+    <span className="min-w-0 truncate">Asset no</span>
+    <span className="min-w-0 truncate">
+      {showCategory ? 'Appliance & category' : 'Appliance'}
+    </span>
+    <span className="min-w-0 truncate">Where</span>
+    <span className="min-w-0 truncate">Status</span>
+    <span className="min-w-0 truncate">General maintenance</span>
+    <span className="min-w-0 text-center">Actions</span>
+  </div>
+);
+
+/**
+ * One appliance, on the grid its heading declares.
+ *
+ * A table rather than a paragraph per asset. Ninety-one rows of prose is not
+ * a register — nothing lines up, so nothing can be compared, and finding the
+ * one unit that is overdue means reading all of them. In columns the same
+ * ninety-one answer at a glance.
+ *
+ * Below the breakpoint the grid collapses and each cell carries its own label,
+ * because a bare date under a bare name says nothing once the heading is gone.
+ */
 const AssetRow: React.FC<{
   item: Equipment;
-  due: { dueOn: string; task: string; overdue: boolean } | undefined;
   gm: GeneralMaintenanceState | undefined;
   ownInterval: Interval | null | undefined;
   categoryLabelText: string;
@@ -2243,7 +2426,6 @@ const AssetRow: React.FC<{
   onRestore: () => void;
 }> = ({
   item,
-  due,
   gm,
   ownInterval,
   categoryLabelText,
@@ -2254,152 +2436,164 @@ const AssetRow: React.FC<{
   onEdit,
   onWithdraw,
   onRestore,
-}) => (
-  <div
-      className="px-5 py-4 flex flex-wrap items-start gap-x-5 gap-y-3 hover:bg-[#FAFAFA] transition-colors"
-    >
-      <div className="flex-1 min-w-[14rem]">
-        <div className="flex flex-wrap items-center gap-2">
-          {/*
-            The number leads, in a monospaced face so a column of them lines up
-            and a transposed digit is visible. On this estate the name alone is
-            often not an identification at all — eleven rows here say "Fan".
-          */}
-          {item.assetNo && (
-            <span className="font-mono text-[11px] font-bold tracking-wide text-[#C8202D] bg-[#FDECEE] px-1.5 py-0.5 rounded">
-              {item.assetNo}
-            </span>
-          )}
-          <span className="text-sm font-bold text-[#17181D]">{item.name}</span>
-          {item.capacity && (
-            <span className="text-[11px] font-semibold text-[#6B6F76]">{item.capacity}</span>
-          )}
-          <ServiceStatusPill status={item.serviceStatus ?? 'inventory'} />
-          {/* Redundant inside a category's own list, where every row is that category */}
-              {showCategory && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F1F1F4] text-[#6B6F76]">
-                  {categoryLabelText}
-                </span>
-              )}
-          {/*
-            An asset that departs from what its category says is
-            worth seeing without opening it — a fridge quietly
-            exempted two years ago is how something stops being
-            serviced and nobody notices.
-          */}
-          {ownInterval === null && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F1F1F4] text-[#6B6F76]">
-              Not on general maintenance
-            </span>
-          )}
-          {ownInterval && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FDECEE] text-[#C8202D]">
-              {intervalText(ownInterval)}
-            </span>
-          )}
-          {!item.active && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F1F1F4] text-[#6B6F76]">
-              <Archive className="w-3 h-3" />
-              Archived
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-[#6B6F76] mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="font-semibold text-[#17181D]">{item.branchName}</span>
-          {item.location && (
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="w-3 h-3" />
-              {item.location}
-            </span>
-          )}
-          {item.serialNumber && (
-            <span className="inline-flex items-center gap-1">
-              <Hash className="w-3 h-3" />
-              {item.serialNumber}
-            </span>
-          )}
-          {(item.make || item.model) && (
-            <span>{[item.make, item.model].filter(Boolean).join(' ')}</span>
-          )}
-          {/*
-            Shown only when it says something the pill does not. "SERVICE DUE"
-            beside a pill reading Service due is noise; "Unit 1 of 2" and
-            "Fresh lassi / shakes" are the only thing distinguishing two
-            otherwise identical rows.
-          */}
-          {item.statusNote &&
-            item.statusNote.toLowerCase() !==
-              SERVICE_STATUS_LABELS[item.serviceStatus ?? 'inventory'].toLowerCase() && (
-              <span className="italic">{item.statusNote}</span>
-            )}
-        </p>
-        <div className="mt-1 space-y-0.5">
-          {gm && (
-            <p
-              className={`text-[11px] flex items-center gap-1.5 font-semibold ${
-                gm.due ? 'text-[#C8202D]' : 'text-[#6B6F76]'
-              }`}
-            >
-              <CalendarClock className="w-3 h-3 shrink-0" />
-              General maintenance{' '}
-              {gm.daysOverdue === 0
-                ? 'due today'
-                : `${gm.due ? 'was due' : 'due'} ${gm.dueOn}`}
-              <span className="font-normal text-[#6B6F76]">
-                · {intervalText(ownInterval ?? intervalOf(gm.plan))}
-              </span>
-            </p>
-          )}
-          {due && (
-            <p
-              className={`text-[11px] flex items-center gap-1.5 font-semibold ${
-                due.overdue ? 'text-[#C8202D]' : 'text-[#6B6F76]'
-              }`}
-            >
-              <CalendarClock className="w-3 h-3 shrink-0" />
-              {due.task} {due.overdue ? 'was due' : 'due'} {due.dueOn}
-            </p>
-          )}
-        </div>
+}) => {
+  const makeModel = [item.make, item.model].filter(Boolean).join(' ');
+  /*
+   * Shown only when it says something the pill does not. "SERVICE DUE" beside
+   * a pill reading Service due is noise; "Unit 1 of 2" is the only thing
+   * telling two otherwise identical rows apart.
+   */
+  const note =
+    item.statusNote &&
+    item.statusNote.toLowerCase() !==
+      SERVICE_STATUS_LABELS[item.serviceStatus ?? 'inventory'].toLowerCase()
+      ? item.statusNote
+      : null;
+
+  return (
+    <div className={`${ASSET_GRID} px-5 py-3.5 hover:bg-[#FAFAFA] transition-colors`}>
+      {/*
+        The number leads, in a monospaced face so a column of them lines up and
+        a transposed digit is visible. On this estate the name alone is often
+        not an identification at all — eleven rows here say "Fan".
+      */}
+      <div className="min-w-0">
+        {item.assetNo ? (
+          <span className="font-mono text-[11px] font-bold tracking-wide text-[#C8202D] bg-[#FDECEE] px-1.5 py-0.5 rounded">
+            {item.assetNo}
+          </span>
+        ) : (
+          <span className="text-[11px] text-[#9CA1A9]">—</span>
+        )}
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0">
-        {/*
-          Offered whenever the asset is on a general-maintenance
-          cadence at all, not only once it has fallen due. The whole
-          case for it is the work done in between: somebody servicing
-          the fridge in week three because they were there anyway has
-          nothing on the board telling them to, and no way to say so.
-          Red once it is due, so a row that needs attention reads as
-          one from across the screen.
-        */}
-        {gm && item.active && (
-          <button
-            type="button"
-            onClick={() => onRecord()}
-            title={
-              gm.openJob
-                ? 'Records the work and closes the job standing on the board'
-                : `Next due ${gm.dueOn}`
-            }
-            className={
-              gm.due
-                ? 'inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer'
-                : 'inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer'
-            }
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>General maintenance done</span>
-          </button>
+      <div className="min-w-0">
+        <p className="text-[13px] font-bold text-[#17181D] truncate">
+          {item.name}
+          {item.capacity && (
+            <span className="ml-2 text-[11px] font-semibold text-[#6B6F76]">{item.capacity}</span>
+          )}
+        </p>
+        {/* Absent rather than a dash: a column of em-dashes is furniture */}
+        {(makeModel || item.serialNumber) && (
+          <p className="text-[11px] text-[#6B6F76] truncate">
+            {[makeModel, item.serialNumber].filter(Boolean).join(' · ')}
+          </p>
         )}
+        {(showCategory || !item.active || ownInterval !== undefined) && (
+          <p className="flex flex-wrap items-center gap-1.5 mt-1">
+            {showCategory && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F1F1F4] text-[#6B6F76]">
+                {categoryLabelText}
+              </span>
+            )}
+            {/*
+              An asset that departs from what its category says is worth seeing
+              without opening it — a fridge quietly exempted two years ago is
+              how something stops being serviced and nobody notices.
+            */}
+            {ownInterval === null && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F1F1F4] text-[#6B6F76]">
+                Off general maintenance
+              </span>
+            )}
+            {ownInterval && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FDECEE] text-[#C8202D]">
+                Own cadence · {intervalText(ownInterval)}
+              </span>
+            )}
+            {!item.active && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F1F1F4] text-[#6B6F76]">
+                <Archive className="w-3 h-3" />
+                Archived
+              </span>
+            )}
+          </p>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <p className="text-[12px] font-semibold text-[#17181D] truncate">{item.branchName}</p>
+        {item.location && (
+          <p className="text-[11px] text-[#6B6F76] truncate inline-flex items-center gap-1">
+            <MapPin className="w-3 h-3 shrink-0" />
+            {item.location}
+          </p>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <ServiceStatusPill status={item.serviceStatus ?? 'inventory'} />
+        {note && <p className="text-[11px] text-[#6B6F76] italic truncate mt-1">{note}</p>}
+      </div>
+
+      {/*
+        The date and the button that moves it on, in one cell. Recording the
+        work IS this column — marking it done is what changes the date beside
+        it — so parking the button over in Actions put a stride of white space
+        between a figure and the control that sets it.
+      */}
+      <div className="min-w-0 flex items-center gap-3">
+        {gm ? (
+          <>
+            <span className="min-w-0 flex-1">
+              <span
+                className={`block text-[12px] font-semibold tabular-nums ${
+                  gm.due ? 'text-[#C8202D]' : 'text-[#17181D]'
+                }`}
+              >
+                {gm.daysOverdue === 0 ? 'Due today' : gm.dueOn}
+              </span>
+              <span className="block text-[11px] text-[#6B6F76]">
+                {gm.due && gm.daysOverdue > 0
+                  ? `${gm.daysOverdue} day${gm.daysOverdue === 1 ? '' : 's'} overdue`
+                  : intervalText(ownInterval ?? intervalOf(gm.plan))}
+              </span>
+            </span>
+            {/*
+              Offered whenever the asset is on a general-maintenance cadence at
+              all, not only once it has fallen due. The whole case for it is the
+              work done in between: somebody servicing the fridge in week three
+              because they were there anyway has nothing on the board telling
+              them to, and no way to say so. Red once it is due, so a row that
+              needs attention reads as one from across the screen.
+            */}
+            {item.active && (
+              <button
+                type="button"
+                onClick={() => onRecord()}
+                title={
+                  gm.openJob
+                    ? 'Records the work and closes the job standing on the board'
+                    : `Next due ${gm.dueOn}`
+                }
+                aria-label={`Record general maintenance on ${item.name}`}
+                className={
+                  gm.due
+                    ? 'shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-[11px] font-bold rounded-md transition-colors shadow-xs cursor-pointer whitespace-nowrap'
+                    : 'shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-[11px] font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer whitespace-nowrap'
+                }
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Done</span>
+              </button>
+            )}
+          </>
+        ) : (
+          <span className="text-[11px] text-[#9CA1A9]">Not scheduled</span>
+        )}
+      </div>
+
+      {/* Whatever you do TO the record itself, centred under its heading */}
+      <div className="min-w-0 flex items-center justify-center gap-1">
         <button
           type="button"
           onClick={() => onHistory()}
           title="Jobs raised against this asset"
-          className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F1F1F4] rounded-md transition-colors cursor-pointer"
+          aria-label={`History for ${item.name}`}
+          className="p-1.5 text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F1F1F4] rounded-md transition-colors cursor-pointer"
         >
-          <span>History</span>
-          <ChevronRight className="w-3.5 h-3.5" />
+          <History className="w-3.5 h-3.5" />
         </button>
         {mayManage &&
           (item.active ? (
@@ -2408,7 +2602,8 @@ const AssetRow: React.FC<{
                 type="button"
                 onClick={() => onEdit()}
                 aria-label={`Edit ${item.name}`}
-                className="p-2 text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F1F1F4] rounded-md transition-colors cursor-pointer"
+                title="Edit"
+                className="p-1.5 text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F1F1F4] rounded-md transition-colors cursor-pointer"
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
@@ -2416,7 +2611,8 @@ const AssetRow: React.FC<{
                 type="button"
                 onClick={() => onWithdraw()}
                 aria-label={`Withdraw ${item.name}`}
-                className="p-2 text-[#C8202D] hover:bg-[#FDECEE] rounded-md transition-colors cursor-pointer"
+                title="Withdraw"
+                className="p-1.5 text-[#C8202D] hover:bg-[#FDECEE] rounded-md transition-colors cursor-pointer"
               >
                 <Archive className="w-3.5 h-3.5" />
               </button>
@@ -2425,7 +2621,7 @@ const AssetRow: React.FC<{
             <button
               type="button"
               onClick={() => onRestore()}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#157F4B] hover:bg-[#E6F4EC] rounded-md transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-[#157F4B] hover:bg-[#E6F4EC] rounded-md transition-colors cursor-pointer whitespace-nowrap"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Restore</span>
@@ -2433,7 +2629,8 @@ const AssetRow: React.FC<{
           ))}
       </div>
     </div>
-);
+  );
+};
 
 // ---------------------------------------------------------------------------
 // A new trade

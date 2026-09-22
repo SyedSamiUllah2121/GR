@@ -59,7 +59,16 @@ export function getInspectionById(id: string): Inspection | null {
   return all.find((i) => i.id === id) || null;
 }
 
-export function saveInspection(inspection: Inspection): void {
+/**
+ * Writes a record, and says whether it got there.
+ *
+ * `false` means the browser store refused it — almost always the quota, which
+ * a round carrying photographs can reach. Returned rather than swallowed
+ * because the caller is about to tell somebody their inspection is saved, and
+ * a console line they will never see is not the place to disagree. The same
+ * shape `saveJob` already uses.
+ */
+export function saveInspection(inspection: Inspection): boolean {
   try {
     const all = getInspections();
     const idx = all.findIndex((i) => i.id === inspection.id);
@@ -73,8 +82,10 @@ export function saveInspection(inspection: Inspection): void {
     }
     localStorage.setItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify(updated));
     notifyStorageChange();
+    return true;
   } catch (err) {
     console.error('Failed to save inspection:', err);
+    return false;
   }
 }
 
@@ -101,12 +112,15 @@ export function getActiveDraft(): Inspection | null {
   }
 }
 
-export function saveActiveDraft(draft: Inspection): void {
+/** As `saveInspection`: `false` means the draft slot could not be written. */
+export function saveActiveDraft(draft: Inspection): boolean {
   try {
     localStorage.setItem(STORAGE_KEYS.ACTIVE_DRAFT, JSON.stringify(draft));
     notifyStorageChange();
+    return true;
   } catch (err) {
     console.error('Failed to save active draft:', err);
+    return false;
   }
 }
 

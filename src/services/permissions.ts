@@ -7,6 +7,7 @@ import {
   inspectionKindOf,
 } from '../types';
 import { getJobs } from './maintenanceStore';
+import { getInspections } from './storage';
 
 /**
  * Who may do what.
@@ -58,20 +59,23 @@ export type Capability =
    */
   | 'maintenance.view'
   /**
-   * Put a problem on the maintenance board for your own branch, the day it is
-   * found, and follow what happens to it afterwards.
+   * Put a problem on the maintenance board the day it is found, and follow
+   * what happens to it afterwards — at the branches this person works at,
+   * which `maintenanceBranchesFor` decides and which is not the same question
+   * for the two roles that hold this.
    *
    * Separate from `maintenance.view` rather than a slice of it, because it is
-   * a different standing and not a smaller one: reporting a fault is what a
-   * branch does, carrying it out is what maintenance does. So this grants the
-   * board — narrowed to their own branch by `visibleJobs` — and the form on
-   * it, and nothing that moves a job along. See `canManageJobs`.
+   * a different standing and not a smaller one: reporting a fault is what the
+   * people at a branch do, carrying it out is what maintenance does. So this
+   * grants the module read-only — the overview, the board, the register and
+   * the month-end report, each narrowed to those branches — and the report
+   * form, and nothing that moves a job along. See `canManageJobs`.
    *
    * Until this existed the only route onto the board was a Monday round, so a
    * chiller that failed on a Tuesday waited until the following week to be
    * written down anywhere.
    */
-  | 'maintenance.reportOwnBranch'
+  | 'maintenance.report'
   /**
    * The equipment register and the servicing schedule: adding an asset,
    * correcting its serial, importing the operator's appliance list, and
@@ -141,7 +145,7 @@ const GRANTS: Record<UserRole, Capability[]> = {
     'dashboard.viewOwnBranch',
     'inspections.browse',
     'monday.perform',
-    'maintenance.reportOwnBranch',
+    'maintenance.report',
   ],
 
   /*
@@ -157,10 +161,20 @@ const GRANTS: Record<UserRole, Capability[]> = {
    */
   'job-manager': ['maintenance.view', 'equipment.manage'],
 
-  // "The Inspector can only complete the inspection assigned to them."
-  // No dashboard at all — the spec puts the admin dashboard out of reach,
-  // and a branch dashboard would be meaningless for someone with no branch.
-  inspector: ['inspections.browse'],
+  /*
+   * "The Inspector can only complete the inspection assigned to them."
+   * No dashboard at all — the spec puts the admin dashboard out of reach,
+   * and a branch dashboard would be meaningless for someone with no branch.
+   *
+   * The maintenance module read-only, and the report form, on the same terms
+   * as a branch manager: an inspector is the person standing in front of the
+   * broken chiller when it is found, and until this they could record it as a
+   * failed check and nothing else — with no way of telling afterwards whether
+   * anyone had picked it up. They hold no branch, so the branches they may
+   * report at are the ones they have been sent to; see
+   * `maintenanceBranchesFor`.
+   */
+  inspector: ['inspections.browse', 'maintenance.report'],
 };
 
 export function can(user: User | null, capability: Capability): boolean {
@@ -264,34 +278,111 @@ export function canEditInspection(user: User | null, inspection: Inspection): bo
   return canPerformInspection(user, inspection);
 }
 
+/**
+ * Whether this person may throw an unfinished visit away for good.
+ *
+ * Not the same question as whether they may fill it in, and the difference is
+ * the whole of this rule. Starting an assigned surprise visit turns the
+ * assignment into a draft *in place* — same record, same id — so "discard the
+ * draft" and "delete the visit the admin raised" were one action. An inspector
+ * pressing it destroyed the instruction they had been given, and the admin's
+ * outstanding-visits list lost a row with nothing to say where it went.
+ *
+ * So: a visit somebody else raised is theirs to withdraw. An inspector may
+ * carry it out or leave it for later, and that is all. A Monday round is the
+ * branch's own and whoever may carry it out may also abandon it — nobody
+ * handed it to them, so there is no instruction to destroy.
+ *
+ * `canPerformInspection` first, because you cannot throw away what you were
+ * never able to fill in, and a submitted record is not a draft at all.
+ */
+export function canDiscardDraft(user: User | null, inspection: Inspection): boolean {
+  if (!user || !user.active) return false;
+  if (inspection.status !== 'draft') return false;
+  if (!canPerformInspection(user, inspection)) return false;
+  if (inspectionKindOf(inspection) === 'surprise') return can(user, 'surprise.create');
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Maintenance jobs
 // ---------------------------------------------------------------------------
 
 /**
+ * The branches a person's maintenance is about: whose jobs they see, whose
+ * assets they see, and where they may raise a problem. `null` means every
+ * branch there is, and is not the same answer as a list that happens to hold
+ * all of them — a new branch opening joins `null` and does not join a list.
+ *
+ * Three answers, because the three standings reach the estate differently:
+ *
+ *   maintenance.view   null — every branch, because a repair is not a
+ *                      branch's private business: the same contractor and the
+ *                      same budget cover all of them.
+ *   branch-manager     their own branch, which is the whole of their access.
+ *   inspector          the branches they have been sent to. They hold no
+ *                      branch of their own, so there is nothing to read off
+ *                      the account; what gives them standing at a branch is
+ *                      having been asked to walk it. A visit they have been
+ *                      assigned counts before they carry it out — the point is
+ *                      to be able to file the fault they find while standing
+ *                      there, which would be too late if it waited on the
+ *                      record being submitted.
+ *
+ * Reads the inspections rather than the account, for the inspector, exactly
+ * as `raisedMaintenanceWork` reads the jobs: the question is genuinely about
+ * data, and a server enforcing this list would do the same join.
+ */
+export function maintenanceBranchesFor(user: User | null): string[] | null {
+  if (!user || !user.active) return [];
+  if (can(user, 'maintenance.view')) return null;
+  if (!can(user, 'maintenance.report')) return [];
+
+  if (user.role === 'inspector') {
+    const seen = new Set<string>();
+    getInspections().forEach((inspection) => {
+      if (inspection.assignedToUserId === user.id) seen.add(inspection.branchName);
+    });
+    return [...seen].sort((a, b) => a.localeCompare(b));
+  }
+
+  return user.branchName ? [user.branchName] : [];
+}
+
+/**
+ * The one branch this person's maintenance covers, or `null` when it is more
+ * than one — including "all of them".
+ *
+ * What a screen asks when it is deciding between naming the branch and
+ * offering a choice of them: a heading that says whose board this is, or a
+ * locked field on the report form instead of a dropdown holding one option,
+ * which would imply there was an alternative.
+ */
+export function soleMaintenanceBranch(user: User | null): string | null {
+  const branches = maintenanceBranchesFor(user);
+  return branches !== null && branches.length === 1 ? branches[0] : null;
+}
+
+/**
  * Whether this person may see a maintenance job at all.
  *
- * The module's holders see every job, at every branch, because a repair is
- * not a branch's private business — the same contractor and the same budget
- * cover all four.
- *
- * A branch manager sees the jobs at their own branch and no others: the ones
- * they raised themselves and the ones their inspections raised. Withholding
- * them would have made reporting a fault a write into the dark, with no way
- * of telling whether anyone had picked it up.
+ * One rule, asked of `maintenanceBranchesFor`: you see the jobs at the
+ * branches your maintenance is about. Withholding them would have made
+ * reporting a fault a write into the dark, with no way of telling whether
+ * anyone had picked it up.
  */
 export function canViewJob(user: User | null, job: MaintenanceJob): boolean {
   if (!user || !user.active) return false;
-  if (can(user, 'maintenance.view')) return true;
-  if (can(user, 'maintenance.reportOwnBranch')) return job.branchName === user.branchName;
-  return false;
+  const branches = maintenanceBranchesFor(user);
+  return branches === null ? true : branches.includes(job.branchName);
 }
 
 /** The jobs a person may see, in the order they were given. */
 export function visibleJobs(user: User | null, all: MaintenanceJob[]): MaintenanceJob[] {
   if (!user || !user.active) return [];
-  if (can(user, 'maintenance.view')) return all;
-  return all.filter((job) => canViewJob(user, job));
+  const branches = maintenanceBranchesFor(user);
+  if (branches === null) return all;
+  return all.filter((job) => branches.includes(job.branchName));
 }
 
 /**
@@ -304,7 +395,7 @@ export function visibleJobs(user: User | null, all: MaintenanceJob[]): Maintenan
  * by `visibleJobs`.
  */
 export function canOpenJobBoard(user: User | null): boolean {
-  return can(user, 'maintenance.view') || can(user, 'maintenance.reportOwnBranch');
+  return can(user, 'maintenance.view') || can(user, 'maintenance.report');
 }
 
 /**
@@ -317,16 +408,16 @@ export function canOpenJobBoard(user: User | null): boolean {
  */
 export function canViewEquipment(user: User | null, item: Equipment): boolean {
   if (!user || !user.active) return false;
-  if (can(user, 'maintenance.view')) return true;
-  if (can(user, 'maintenance.reportOwnBranch')) return item.branchName === user.branchName;
-  return false;
+  const branches = maintenanceBranchesFor(user);
+  return branches === null ? true : branches.includes(item.branchName);
 }
 
 /** The assets a person may see, in the order they were given. */
 export function visibleEquipment(user: User | null, all: Equipment[]): Equipment[] {
   if (!user || !user.active) return [];
-  if (can(user, 'maintenance.view')) return all;
-  return all.filter((item) => canViewEquipment(user, item));
+  const branches = maintenanceBranchesFor(user);
+  if (branches === null) return all;
+  return all.filter((item) => branches.includes(item.branchName));
 }
 
 /** Whether they may add, correct, import or withdraw assets and edit plans. */
@@ -338,10 +429,11 @@ export function canManageEquipment(user: User | null): boolean {
  * Whether they may move a job along: start it, end it, correct its times,
  * reopen it or delete it.
  *
- * Maintenance's work, not the reporting branch's. A branch manager who could
- * close their own jobs could mark a repair done that nobody carried out —
- * which is the one thing the board exists to make impossible to hide. So they
- * report and they watch, and the board is moved by the people who run it.
+ * Maintenance's work, not the reporting branch's. Anyone who could close
+ * their own jobs could mark a repair done that nobody carried out — which is
+ * the one thing the board exists to make impossible to hide. So a branch
+ * manager and an inspector report and they watch, and the board is moved by
+ * the people who run it.
  */
 export function canManageJobs(user: User | null): boolean {
   return can(user, 'maintenance.view');
@@ -381,31 +473,33 @@ export function fixedBranchFor(user: User | null): string | null {
 const ROUTE_RULES: { prefix: string; anyOf: Capability[]; exact?: boolean }[] = [
   { prefix: '/dashboard', anyOf: ['dashboard.viewOwnBranch'] },
   /*
-   * The overview and the month-end report are the whole estate at a glance,
-   * so they stay with the module's holders. `exact` on the section root is
-   * what leaves a single job's URL to fall through to no rule at all — the
-   * same arrangement, and for the same reason, as a record's URL under
+   * The overview and the month-end report, read by everyone the module
+   * reaches — each narrowed to the reader's own branches by `visibleJobs`
+   * before a figure is counted, so the estate at a glance is only ever the
+   * estate the reader already holds. `exact` on the section root is what
+   * leaves a single job's URL to fall through to no rule at all — the same
+   * arrangement, and for the same reason, as a record's URL under
    * /inspections: whether you may open one job depends on its branch, which
    * is a finer question than a prefix can put, so MaintenanceJobScreen asks
    * `canViewJob` about the job in front of it.
    */
-  { prefix: '/maintenance', anyOf: ['maintenance.view'], exact: true },
-  { prefix: '/maintenance/report', anyOf: ['maintenance.view'] },
+  { prefix: '/maintenance', anyOf: ['maintenance.view', 'maintenance.report'], exact: true },
+  { prefix: '/maintenance/report', anyOf: ['maintenance.view', 'maintenance.report'] },
   /*
-   * The board is the one maintenance screen a branch manager reaches, because
-   * it is where a problem is raised and where they follow what became of it.
-   * They do not find the estate on it: `visibleJobs` narrows it to their own
-   * branch before the screen renders a row.
+   * The board: where a problem is raised and where the branch that raised it
+   * follows what became of it. Nobody finds the estate on it who does not
+   * already hold the estate — `visibleJobs` narrows it to the reader's own
+   * branches before the screen renders a row.
    */
-  { prefix: '/maintenance/jobs', anyOf: ['maintenance.view', 'maintenance.reportOwnBranch'] },
+  { prefix: '/maintenance/jobs', anyOf: ['maintenance.view', 'maintenance.report'] },
   /*
-   * The register, narrowed to their own branch for a branch manager by
+   * The register, narrowed to the reader's own branches by
    * `visibleEquipment` exactly as the board is. Reading what equipment a
    * branch has and when it is next serviced is part of running it; changing
    * the register or the intervals is `equipment.manage`, which the screen
    * asks for itself rather than the route asking on its behalf.
    */
-  { prefix: '/maintenance/equipment', anyOf: ['maintenance.view', 'maintenance.reportOwnBranch'] },
+  { prefix: '/maintenance/equipment', anyOf: ['maintenance.view', 'maintenance.report'] },
   /*
    * No rule for the servicing schedule, which is no longer a route: it is a
    * tab on the board, and the board withholds the tab from anyone without

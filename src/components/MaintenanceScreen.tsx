@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   CalendarClock,
@@ -11,6 +11,7 @@ import {
   ChevronRight,
   Clock,
   Lock,
+  MapPin,
   Play,
   Repeat,
   Plus,
@@ -52,11 +53,14 @@ import { useCategories } from '../hooks/useCategories';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { activeBranches } from '../services/branchStore';
 import { activeCategories, categoryLabel, defaultCategory } from '../services/categoryStore';
+import { activeEquipment, getEquipmentById } from '../services/equipmentStore';
+import { describeAsset } from './UnitPicker';
 import {
   can,
   canManageEquipment,
   canManageJobs,
-  fixedBranchFor,
+  maintenanceBranchesFor,
+  soleMaintenanceBranch,
   visibleJobs,
 } from '../services/permissions';
 import {
@@ -111,7 +115,30 @@ export const MaintenanceScreen: React.FC = () => {
    * here is what holds a branch manager's board to their own branch — rather
    * than asking each of those to remember, which is how a branch leaks.
    */
-  const jobs = useMemo(() => visibleJobs(user, allJobs), [user, allJobs]);
+  const scoped = useMemo(() => visibleJobs(user, allJobs), [user, allJobs]);
+
+  /*
+   * One appliance's jobs, when the board was opened from its History button.
+   *
+   * Read from the URL rather than held in state so the link is a real link —
+   * it survives a reload, it can be sent to somebody, and the back button
+   * returns to the whole board. Applied after `visibleJobs`, never instead of
+   * it: a URL is typed by anyone, and it must not become a way to read another
+   * branch's work.
+   */
+  const equipmentFilter = useSearchParams().get('equipment');
+  const filteredAsset = useMemo(
+    () => (equipmentFilter ? getEquipmentById(equipmentFilter) : null),
+    [equipmentFilter]
+  );
+
+  const jobs = useMemo(
+    () =>
+      equipmentFilter
+        ? scoped.filter((job) => job.equipmentId === equipmentFilter)
+        : scoped,
+    [scoped, equipmentFilter]
+  );
 
   /*
    * Starting, ending and re-timing work belong to the people who run the
@@ -123,11 +150,12 @@ export const MaintenanceScreen: React.FC = () => {
 
   /*
    * The one branch this board covers, when it covers one. Asked of the same
-   * capability the report form asks, rather than of `mayManage`, so the
-   * heading and the branch field can never disagree about whose board this
-   * is — they are one fact, not two that happen to line up.
+   * helper the report form asks, rather than of `mayManage`, so the heading
+   * and the branch field can never disagree about whose board this is — they
+   * are one fact, not two that happen to line up. Null for an inspector sent
+   * to more than one branch, whose board is genuinely several.
    */
-  const scopedTo = can(user, 'maintenance.view') ? null : fixedBranchFor(user);
+  const scopedTo = useMemo(() => soleMaintenanceBranch(user), [user]);
 
   /*
    * Setting the intervals is estate-wide configuration — what every branch's
@@ -137,6 +165,20 @@ export const MaintenanceScreen: React.FC = () => {
   const mayPlan = canManageEquipment(user);
 
   const board = useMemo(() => buildBoard(jobs), [jobs]);
+
+  /*
+   * Which tab to land on when following an appliance's history. Its open work
+   * is the interesting part when it has any, and "nothing open" reads as an
+   * empty board rather than as an answer — so with none, the whole history is
+   * shown instead.
+   */
+  useEffect(() => {
+    if (!equipmentFilter) return;
+    setFilter(board.openCount > 0 ? 'open' : 'all');
+    // Only when the appliance changes: re-running on every board rebuild would
+    // drag the reader back off whichever tab they went on to choose
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [equipmentFilter]);
 
   /*
    * Handed the unnarrowed list deliberately: the schedule covers the estate,
@@ -232,11 +274,40 @@ export const MaintenanceScreen: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col min-w-0">
       <header className="min-h-[5rem] bg-white border-b border-[#E6E7EB] flex flex-col sm:flex-row sm:items-center justify-between px-6 md:px-10 shrink-0 gap-4 py-4 sm:py-0">
-        <div>
-          <h2 className="text-xl font-bold text-[#17181D]">Maintenance</h2>
+        <div className="min-w-0">
+          {/*
+            Arrived from an appliance's History button, the board is that
+            appliance's history — so it says so, and says how to get back to the
+            whole of it. A filtered list that looks like the unfiltered one is
+            how somebody concludes there is no other work on the board.
+          */}
+          {equipmentFilter && (
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#9CA1A9]">
+              History
+            </p>
+          )}
+          <h2 className="text-xl font-bold text-[#17181D] truncate">
+            {filteredAsset
+              ? [filteredAsset.assetNo, filteredAsset.name].filter(Boolean).join(' — ')
+              : 'Maintenance'}
+          </h2>
           <p className="text-[#6B6F76] text-xs mt-0.5">
             {/* Named, so a board covering one branch never reads as the estate */}
             {scopedTo && <span className="font-semibold text-[#17181D]">{scopedTo} • </span>}
+            {equipmentFilter && (
+              <>
+                {filteredAsset?.location ? `${filteredAsset.location} • ` : ''}
+                {jobs.length} job{jobs.length === 1 ? '' : 's'} ever raised •{' '}
+                <button
+                  type="button"
+                  onClick={() => router.push('/maintenance/jobs')}
+                  className="font-semibold text-[#C8202D] hover:underline cursor-pointer"
+                >
+                  Show the whole board
+                </button>
+                {' • '}
+              </>
+            )}
             {view === 'schedule' ? (
               <>
                 {schedule.activeCount} plan{schedule.activeCount === 1 ? '' : 's'} running
@@ -288,6 +359,21 @@ export const MaintenanceScreen: React.FC = () => {
       </header>
 
       <div className="p-6 md:p-10 flex-1 space-y-6">
+        {/*
+          A link to an appliance that has since been deleted: the board would
+          otherwise be silently empty, which reads as "no work here" rather
+          than "that is not a thing any more".
+        */}
+        {equipmentFilter && !filteredAsset && (
+          <p
+            role="alert"
+            className="text-xs font-semibold text-[#B4740A] bg-[#FDF3E2] border border-[#B4740A]/30 rounded-md px-3.5 py-3"
+          >
+            That appliance is no longer on the register. Its jobs are still on the board —
+            clear the filter above to see everything.
+          </p>
+        )}
+
         {board.urgentCount > 0 && (
           <div className="bg-[#FDECEE] border border-[#C8202D]/30 rounded-lg px-5 py-3.5 flex items-center gap-3">
             <AlertTriangle className="w-4 h-4 text-[#C8202D] shrink-0" />
@@ -691,28 +777,42 @@ const ReportProblemDialog: React.FC<{
   onSaved: (job: MaintenanceJob, started: boolean) => void;
 }> = ({ onClose, onSaved }) => {
   const user = useCurrentUser();
-  const branches = activeBranches(useBranches());
+  const allBranches = activeBranches(useBranches());
   const mayManage = canManageJobs(user);
 
   /*
-   * Who may file against a branch other than their own. Asked for by name
-   * rather than read off `fixedBranchFor` returning nothing — that function
-   * also returns nothing for a maintenance manager, who may choose, and for an
-   * inspector, who may not, so the two questions only look alike. The
-   * inspection form asks its version of this the same way, and for the same
-   * reason: a rule enforced by coincidence is one that quietly stops being
-   * enforced.
+   * The branches this account may file against. Whoever holds the estate gets
+   * the open branches; everyone else gets theirs, which for a branch manager
+   * is one and for an inspector is wherever they have been sent. Derived from
+   * the account rather than held in state, so it stays right even if their
+   * branch changes while the form is open.
    */
-  const mayPickBranch = can(user, 'maintenance.view');
+  const mine = useMemo(() => maintenanceBranchesFor(user), [user]);
+  const choices = useMemo(
+    () =>
+      allBranches
+        .map((b) => b.name)
+        .filter((name) => mine === null || mine.includes(name)),
+    [mine, allBranches]
+  );
 
   /*
-   * A branch manager reports against their own branch and no other. Read from
-   * the account rather than held in state, so it stays right even if their
-   * branch is changed while the form is open.
+   * A choice is only a choice where there is more than one to make. Someone
+   * with a single branch to their name gets it and a padlock rather than a
+   * dropdown holding one option, which would imply there was an alternative.
    */
-  const ownBranch = fixedBranchFor(user);
-  const [selectedBranch, setSelectedBranch] = useState(() => branches[0]?.name ?? '');
-  const branchName = mayPickBranch ? selectedBranch : ownBranch ?? '';
+  const mayPickBranch = choices.length > 1;
+  const [selectedBranch, setSelectedBranch] = useState(() => choices[0] ?? '');
+  const branchName = mayPickBranch ? selectedBranch : choices[0] ?? '';
+
+  /*
+   * Whether they are filing on a branch's behalf rather than as it, which is
+   * a different question from whether they may choose one — a maintenance
+   * manager on an estate of one branch still files on its behalf. Asked for by
+   * name rather than read off the size of `choices`: a rule enforced by
+   * coincidence is one that quietly stops being enforced.
+   */
+  const filingForOthers = can(user, 'maintenance.view');
 
   const [title, setTitle] = useState('');
   const [priority, setPriority] = useState<Severity>('medium');
@@ -724,14 +824,74 @@ const ReportProblemDialog: React.FC<{
    * remembered name is the better guess. Editable either way.
    */
   const [reportedBy, setReportedBy] = useState(
-    () => (mayPickBranch ? getLastPerson() || user?.name : user?.name || getLastPerson()) ?? ''
+    () => (filingForOthers ? getLastPerson() || user?.name : user?.name || getLastPerson()) ?? ''
   );
 
   const [showMore, setShowMore] = useState(false);
-  const [equipment, setEquipment] = useState('');
   const [details, setDetails] = useState('');
   const categories = useCategories();
   const [category, setCategory] = useState<MaintenanceCategory>(() => defaultCategory());
+
+  /*
+   * The register, read once when the dialog opens. It does not subscribe: an
+   * appliance added in another tab while this form is half filled in is not
+   * worth repainting a list somebody is choosing from.
+   */
+  const [register] = useState(() => activeEquipment());
+
+  /** The branch's register, whatever trade it falls under. */
+  const atBranch = useMemo(
+    () => register.filter((asset) => asset.branchName === branchName),
+    [register, branchName]
+  );
+
+  /**
+   * How many appliances each trade has at this branch.
+   *
+   * Shown in the category dropdown, and the reason picking a category can no
+   * longer be a dead end: "Other (0)" says before you choose it that there
+   * will be nothing to pick, so the empty unit list underneath is the answer
+   * you asked for rather than the form appearing to be broken.
+   */
+  const countByCategory = useMemo(() => {
+    const counts = new Map<MaintenanceCategory, number>();
+    atBranch.forEach((asset) => {
+      counts.set(asset.category, (counts.get(asset.category) ?? 0) + 1);
+    });
+    return counts;
+  }, [atBranch]);
+
+  /**
+   * The appliances this report could be about: the chosen trade's, at the
+   * chosen branch, in asset-number order.
+   *
+   * The numbers run in the order the register walks the building — juice area,
+   * then bakery, then kitchen — so a numeric sort puts the machines in roughly
+   * the order somebody standing in it would come across them.
+   */
+  const units = useMemo(
+    () =>
+      atBranch
+        .filter((asset) => asset.category === category)
+        .sort((a, b) => (a.assetNo ?? a.name).localeCompare(b.assetNo ?? b.name)),
+    [atBranch, category]
+  );
+
+  const [unitId, setUnitId] = useState('');
+  /** Where no unit is named: a room, a run of pipework, the car park. */
+  const [area, setArea] = useState('');
+
+  /*
+   * A unit belongs to one branch and one trade, so changing either can leave
+   * the chosen one off the list in front of the reporter. Left selected it
+   * would file the job against an appliance that is not at that branch — which
+   * is worse than asking the question again.
+   */
+  useEffect(() => {
+    if (unitId && !units.some((asset) => asset.id === unitId)) setUnitId('');
+  }, [units, unitId]);
+
+  const unit = units.find((asset) => asset.id === unitId) ?? null;
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -746,7 +906,10 @@ const ReportProblemDialog: React.FC<{
      * nowhere is worse than a message saying so.
      */
     if (!branchName) {
-      next.branch = 'No branch is set on your account — ask the admin to set one';
+      next.branch =
+        user?.role === 'inspector'
+          ? 'You report at the branches you have been sent to, and you have not been sent to one yet'
+          : 'No branch is set on your account — ask the admin to set one';
     }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
@@ -759,7 +922,14 @@ const ReportProblemDialog: React.FC<{
       branchName,
       title: title.trim(),
       details: details.trim(),
-      equipment: equipment.trim(),
+      /*
+       * The unit as the register words it, and its id beside it. The id is
+       * what lets the board tell that this fault is one it already has
+       * somebody working on, and what puts the job into that appliance's own
+       * history — neither of which a typed "AC 2" could ever do.
+       */
+      equipment: unit ? describeAsset(unit) : area.trim(),
+      ...(unit ? { equipmentId: unit.id } : {}),
       category,
       priority,
       reportedBy: reportedBy.trim(),
@@ -786,7 +956,13 @@ const ReportProblemDialog: React.FC<{
       aria-labelledby="maintenancescreen-dialog-1-title"
       className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
     >
-      <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-lg my-8">
+      {/*
+        Wider than a dialog usually wants to be, because this one is a form and
+        every field on it was sitting on a line of its own: the whole report
+        could not be seen at once, which is when somebody files a fault against
+        the wrong branch. Paired up below, it fits without scrolling.
+      */}
+      <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-3xl my-8">
         <div className="px-6 py-4 border-b border-[#E6E7EB]">
           <h3 id="maintenancescreen-dialog-1-title" className="text-base font-bold text-[#17181D]">Report a problem</h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
@@ -802,50 +978,175 @@ const ReportProblemDialog: React.FC<{
           className="p-6 space-y-5"
         >
           {/*
-            The unit first, then the fault. Somebody reporting a problem is
-            standing in front of the thing — naming it is the easier half and
-            the half that decides who the job goes to, so it is asked before
-            they have to put the fault into words.
+            The trade, then the unit, then the fault. Somebody reporting a
+            problem is standing in front of the thing — naming it is the easier
+            half and the half that decides who the job goes to, so it is asked
+            before they have to put the fault into words.
+
+            The trade comes first because it is what narrows the list beside it
+            from the branch's whole register to the handful this report could
+            be about. One branch runs to seventy-odd assets, and somebody
+            looking for a fridge should not scroll past forty fans and ovens to
+            reach it.
           */}
-          <div>
-            <label htmlFor="mnt-equipment" className={labelClass}>
-              Which unit or area{' '}
-              <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
-            </label>
-            <input
-              id="mnt-equipment"
-              type="text"
-              value={equipment}
-              onChange={(e) => setEquipment(e.target.value)}
-              autoFocus
-              placeholder="e.g. Split AC 2 — dining area"
-              className={inputClass}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.6fr] gap-4 items-start">
+            <div>
+              <label htmlFor="mnt-category" className={labelClass}>
+                Appliance category
+              </label>
+              <select
+                id="mnt-category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as MaintenanceCategory)}
+                autoFocus
+                className={inputClass}
+              >
+                {activeCategories(categories).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label} ({countByCategory.get(c.id) ?? 0})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="mnt-unit" className={labelClass}>
+                Which unit{' '}
+                <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+              </label>
+              <select
+                id="mnt-unit"
+                value={unitId}
+                onChange={(e) => setUnitId(e.target.value)}
+                disabled={units.length === 0}
+                className={`${inputClass} disabled:bg-[#F6F6F8] disabled:text-[#6B6F76]`}
+              >
+                <option value="">
+                  {units.length === 0
+                    ? `Nothing under ${categoryLabel(category, categories)} here`
+                    : 'Not a particular unit'}
+                </option>
+                {units.map((asset) => (
+                  <option key={asset.id} value={asset.id}>
+                    {describeAsset(asset)}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+                {units.length === 0
+                  ? 'Nothing on the register under this category at this branch — say where the problem is below.'
+                  : `${units.length} on the register here. Change the category to see another trade’s.`}
+              </p>
+            </div>
           </div>
 
-          <div>
-            <label htmlFor="mnt-title" className={labelClass}>
-              What is wrong?
-            </label>
-            <input
-              id="mnt-title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Dining area AC not cooling"
-              className={inputClass}
-            />
-            {errors.title && (
-              <p className="text-xs font-semibold text-[#C8202D] mt-1">{errors.title}</p>
-            )}
+          {/*
+            What the register knows about the unit, spelled out rather than
+            left inside an <option> the reporter can no longer see once the
+            list closes. It is also the check that they picked the right one of
+            nine Refrigerators.
+          */}
+          {unit ? (
+            <div className="rounded-md border border-[#E6E7EB] bg-[#FBFBFC] px-3.5 py-3">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                {unit.assetNo && (
+                  <span className="font-mono text-[11px] font-bold tracking-wide text-[#C8202D] bg-[#FDECEE] px-1.5 py-0.5 rounded">
+                    {unit.assetNo}
+                  </span>
+                )}
+                <span className="text-sm font-bold text-[#17181D]">{unit.name}</span>
+                {unit.capacity && (
+                  <span className="text-[11px] font-semibold text-[#6B6F76]">
+                    {unit.capacity}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-[11px] text-[#6B6F76] flex flex-wrap items-center gap-x-3 gap-y-1">
+                {unit.location && (
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    {unit.location}
+                  </span>
+                )}
+                {[unit.make, unit.model].filter(Boolean).length > 0 && (
+                  <span>{[unit.make, unit.model].filter(Boolean).join(' ')}</span>
+                )}
+                {unit.serialNumber && <span>Serial {unit.serialNumber}</span>}
+              </p>
+              <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+                Carried onto the job, so whoever goes out knows which one — and so this
+                appliance&rsquo;s own history has the fault on it.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="mnt-area" className={labelClass}>
+                Where is it{' '}
+                <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+              </label>
+              <input
+                id="mnt-area"
+                type="text"
+                value={area}
+                onChange={(e) => setArea(e.target.value)}
+                placeholder="e.g. Dining area — ceiling by the window"
+                className={inputClass}
+              />
+              <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+                For anything that is not one of the appliances above — a room, a drain, a
+                stretch of wall.
+              </p>
+            </div>
+          )}
+
+          {/* The fault, and how badly it is wanted — one line, read together */}
+          <div className="grid grid-cols-1 sm:grid-cols-[1.4fr_1fr] gap-4 items-start">
+            <div>
+              <label htmlFor="mnt-title" className={labelClass}>
+                What is wrong?
+              </label>
+              <input
+                id="mnt-title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Dining area AC not cooling"
+                className={inputClass}
+              />
+              {errors.title && (
+                <p className="text-xs font-semibold text-[#C8202D] mt-1">{errors.title}</p>
+              )}
+            </div>
+
+            <div>
+              <span className={labelClass}>How urgent?</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[...SEVERITY_KEYS].reverse().map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setPriority(s)}
+                    aria-pressed={priority === s}
+                    className={`px-3 py-2 rounded-md border text-[11px] font-bold transition-colors cursor-pointer ${
+                      priority === s
+                        ? 'border-[#C8202D] bg-[#FDECEE] text-[#C8202D]'
+                        : 'border-[#E6E7EB] bg-white text-[#6B6F76] hover:bg-[#F6F6F8]'
+                    }`}
+                  >
+                    {SEVERITY_LABEL[s]}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               {/*
-                A branch manager has no choice to make here, so they get the
-                name and a padlock rather than a dropdown holding one option —
-                which would imply there was an alternative.
+                Someone with one branch to their name has no choice to make
+                here, so they get the name and a padlock rather than a
+                dropdown holding one option — which would imply there was an
+                alternative.
               */}
               {mayPickBranch ? (
                 <>
@@ -858,12 +1159,17 @@ const ReportProblemDialog: React.FC<{
                     onChange={(e) => setSelectedBranch(e.target.value)}
                     className={inputClass}
                   >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.name}>
-                        {b.name}
+                    {choices.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
                       </option>
                     ))}
                   </select>
+                  {!filingForOthers && (
+                    <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+                      The branches you have been sent to.
+                    </p>
+                  )}
                 </>
               ) : (
                 <>
@@ -873,7 +1179,7 @@ const ReportProblemDialog: React.FC<{
                     className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D]"
                   >
                     <Store className="w-4 h-4 text-[#6B6F76] shrink-0" />
-                    <span className="truncate">{ownBranch ?? 'No branch set'}</span>
+                    <span className="truncate">{branchName || 'No branch set'}</span>
                     <Lock className="w-3.5 h-3.5 text-[#9CA1A9] ml-auto shrink-0" />
                   </p>
                   <p className="mt-1.5 text-[11px] text-[#6B6F76]">
@@ -903,27 +1209,6 @@ const ReportProblemDialog: React.FC<{
             </div>
           </div>
 
-          <div>
-            <span className={labelClass}>How urgent?</span>
-            <div className="flex flex-wrap gap-1.5">
-              {[...SEVERITY_KEYS].reverse().map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setPriority(s)}
-                  aria-pressed={priority === s}
-                  className={`px-3 py-2 rounded-md border text-[11px] font-bold transition-colors cursor-pointer ${
-                    priority === s
-                      ? 'border-[#C8202D] bg-[#FDECEE] text-[#C8202D]'
-                      : 'border-[#E6E7EB] bg-white text-[#6B6F76] hover:bg-[#F6F6F8]'
-                  }`}
-                >
-                  {SEVERITY_LABEL[s]}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Optional extras stay out of the way until wanted */}
           <div className="border-t border-[#EFEFF2] pt-4">
             <button
@@ -940,23 +1225,6 @@ const ReportProblemDialog: React.FC<{
 
             {showMore && (
               <div className="mt-4 space-y-4">
-                <div>
-                  <label htmlFor="mnt-category" className={labelClass}>
-                    Category
-                  </label>
-                  <select
-                    id="mnt-category"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as MaintenanceCategory)}
-                    className={inputClass}
-                  >
-                    {activeCategories(categories).map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <div>
                   <label htmlFor="mnt-details" className={labelClass}>
                     Details

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   AlertCircle,
   CalendarCheck,
+  Clock,
   Edit3,
   FileText,
   LayoutList,
@@ -26,6 +27,7 @@ import {
 } from '../services/storage';
 import {
   can,
+  canDiscardDraft,
   canEditInspection,
   canPerformInspection,
   visibleInspections,
@@ -145,6 +147,13 @@ export const RecordsListScreen: React.FC = () => {
 
   const handleDiscardDraft = async () => {
     if (!activeDraft) return;
+    /*
+     * Asked again here, not only where the button is offered. This one deletes
+     * a record outright, and the button can sit on screen while the answer
+     * changes underneath it — an admin's assignment arriving, a role edited in
+     * another tab.
+     */
+    if (!canDiscardDraft(user, activeDraft)) return;
     const ok = await confirm({
       title: 'Discard the unfinished draft?',
       body: 'The answers recorded on it so far are deleted.',
@@ -154,6 +163,28 @@ export const RecordsListScreen: React.FC = () => {
     // A draft is written to the records store as it is answered, so clearing
     // the draft slot alone would leave the half-finished row behind
     deleteInspection(activeDraft.id);
+    clearActiveDraft();
+    setActiveDraft(null);
+  };
+
+  /**
+   * Puts a started visit down without throwing it away.
+   *
+   * What an inspector gets instead of Discard. There is one draft slot, so a
+   * half-finished visit in it blocks the next assignment from being started —
+   * and if they may not discard it either, they are stuck. This clears the
+   * slot and leaves the record alone: the visit stays in their list at the
+   * point they left it, and the admin's instruction still stands.
+   */
+  const handleSetAsideDraft = async () => {
+    if (!activeDraft) return;
+    const ok = await confirm({
+      title: 'Leave this visit for later?',
+      body: `The answers so far are kept. ${activeDraft.branchName} stays in your list, and you can pick it up where you left off.`,
+      confirmLabel: 'Leave it for now',
+      destructive: false,
+    });
+    if (!ok) return;
     clearActiveDraft();
     setActiveDraft(null);
   };
@@ -475,14 +506,34 @@ export const RecordsListScreen: React.FC = () => {
                 <PlayCircle className="w-3.5 h-3.5" />
                 <span>Resume</span>
               </button>
-              <button
-                id="discard-draft-btn"
-                onClick={handleDiscardDraft}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#C8202D] hover:bg-[#FDECEE] border border-[#C8202D]/30 rounded-md transition-colors cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Discard</span>
-              </button>
+              {/*
+                Throwing the visit away, or just putting it down. Which one is
+                offered is not a matter of taste: a surprise visit is an
+                instruction somebody else raised, and this record IS that
+                instruction — starting it turned the assignment into this draft
+                in place. Deleting it would delete what the inspector was asked
+                to do.
+              */}
+              {canDiscardDraft(user, activeDraft) ? (
+                <button
+                  id="discard-draft-btn"
+                  onClick={handleDiscardDraft}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#C8202D] hover:bg-[#FDECEE] border border-[#C8202D]/30 rounded-md transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Discard</span>
+                </button>
+              ) : (
+                <button
+                  id="set-aside-draft-btn"
+                  onClick={handleSetAsideDraft}
+                  title="Keeps your answers and leaves the visit in your list"
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] border border-[#E6E7EB] rounded-md transition-colors cursor-pointer"
+                >
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>Later</span>
+                </button>
+              )}
             </div>
           </div>
         )}
