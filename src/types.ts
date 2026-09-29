@@ -462,7 +462,10 @@ export const USER_ROLE_BLURB: Record<UserRole, string> = {
 export interface User {
   id: string;
   name: string;
-  /** Also the sign-in name. Unique, case-insensitively. */
+  /**
+   * The sign-in name: an email address, or a plain username such as
+   * `Parvezuddin`. Unique, case-insensitively.
+   */
   email: string;
   /**
    * Stored as typed. This is a demo system with no server to hash against —
@@ -471,11 +474,12 @@ export interface User {
   password: string;
   role: UserRole;
   /**
-   * The branch this account belongs to. Required for a branch manager, which
-   * is the whole of their access; meaningless for the other two, who are not
-   * tied to one branch.
+   * The branches this account runs. At least one is required for a branch
+   * manager, which is the whole of their access; meaningless for the other
+   * roles, who are not tied to a branch. More than one because the estate
+   * has managers who run two branches side by side.
    */
-  branchName?: string;
+  branchNames?: string[];
   /** Shown in the avatar when there is no photo. */
   initials: string;
   /**
@@ -486,6 +490,16 @@ export interface User {
   active: boolean;
   /** ISO date the account was created. */
   createdAt: string;
+}
+
+/**
+ * The branches a branch manager runs, or none for any other role. Read
+ * through here rather than off the field, so an account that has changed
+ * role does not carry a branch it no longer runs.
+ */
+export function branchesOf(user: User | null | undefined): string[] {
+  if (!user || user.role !== 'branch-manager') return [];
+  return user.branchNames ?? [];
 }
 
 /** Initials for the avatar, from however many words the name has. */

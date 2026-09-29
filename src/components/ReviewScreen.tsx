@@ -354,7 +354,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     // Sections can be jumped from the checklist, so re-check completeness here
     if (unansweredItems.length > 0) {
       showToast(
-        `${unansweredItems.length} item${unansweredItems.length === 1 ? ' is' : 's are'} still unanswered`
+        `${unansweredItems.length} item${unansweredItems.length === 1 ? ' is' : 's are'} still unanswered`,
+        'error'
       );
       return;
     }
@@ -364,7 +365,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
       showToast(
         `${needEvidence.length} critical issue${
           needEvidence.length === 1 ? ' needs' : 's need'
-        } photo evidence`
+        } photo evidence`,
+        'error'
       );
       return;
     }
@@ -469,7 +471,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
      */
     if (!saveInspection(submittedInspection)) {
       showToast(
-        'Could not save — this browser\u2019s storage is full. Free some space and submit again; your answers are still here.'
+        'Could not save — this browser\u2019s storage is full. Free some space and submit again; your answers are still here.',
+        'error'
       );
       return;
     }
@@ -811,17 +814,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
           </button>
         </div>
 
-        {signError && (
-          <div
-            id="signature-error-msg"
-            role="alert"
-            className="mb-3 p-2.5 rounded-md bg-[#FDECEE] border border-[#C8202D]/30 text-[#C8202D] text-xs font-semibold flex items-center gap-1.5"
-          >
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{signError}</span>
-          </div>
-        )}
-
         {/*
           Who is actually signing. A signature on its own does not say whose
           it is, and the branch manager is often not the person on site.
@@ -889,6 +881,22 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
           )}
         </div>
       </div>
+
+      {/*
+        Beside the button that raised it. At the top of the sign-off card it
+        sat above the fields and the pad, off screen on a phone, and pressing
+        Submit looked like it did nothing.
+      */}
+      {signError && (
+        <div
+          id="signature-error-msg"
+          role="alert"
+          className="-mt-4 mb-3 p-2.5 rounded-md bg-[#FDECEE] border border-[#C8202D]/30 text-[#C8202D] text-xs font-semibold flex items-center gap-1.5"
+        >
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{signError}</span>
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex items-center justify-between gap-4 pt-2">

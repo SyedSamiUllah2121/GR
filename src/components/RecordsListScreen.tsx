@@ -17,7 +17,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { INSPECTION_KIND_SHORT, Inspection, Item, inspectionKindOf } from '../types';
+import { INSPECTION_KIND_SHORT, Inspection, Item, branchesOf, inspectionKindOf } from '../types';
 import {
   clearActiveDraft,
   deleteInspection,
@@ -54,6 +54,7 @@ import { useRouter } from 'next/navigation';
 import { ScorePill } from './ScorePill';
 import { formatDate, formatDateTime, formatTimeOnly } from '../services/reportModel';
 import { useConfirm } from './ConfirmProvider';
+import { useToast } from './ToastProvider';
 
 export const RecordsListScreen: React.FC = () => {
   const router = useRouter();
@@ -64,7 +65,17 @@ export const RecordsListScreen: React.FC = () => {
   const [activeDraft, setActiveDraft] = useState<Inspection | null>(() => getActiveDraft());
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionErrorBanner] = useState<string | null>(null);
+  const showToast = useToast();
+  /*
+   * The banner sits at the top of the page, and the Start and Withdraw buttons
+   * that raise it can be well down a long list — so a refusal is also shown
+   * as a toast, which is on screen wherever the button was.
+   */
+  const setActionError = (message: string | null) => {
+    setActionErrorBanner(message);
+    if (message) showToast(message, 'error');
+  };
   const pageSize = 10;
 
   useEffect(() => {
@@ -94,11 +105,12 @@ export const RecordsListScreen: React.FC = () => {
         : []
     : [];
 
-  /** A branch manager's own weekly round, and whether it is outstanding. */
-  const monday =
-    user?.role === 'branch-manager' && user.branchName
-      ? mondayStatusFor(user.branchName, inspections)
-      : null;
+  /** A branch manager's own weekly round at each branch, and whether it is outstanding. */
+  const ownBranches = branchesOf(user);
+  const mondays = ownBranches.map((branch) => ({
+    branch,
+    monday: mondayStatusFor(branch, inspections),
+  }));
 
   // Submitted records only, newest visit first. The store keeps insertion
   // order, which drifts from date order as soon as a record is edited.
@@ -206,6 +218,10 @@ export const RecordsListScreen: React.FC = () => {
     }
     setActionError(null);
     const started = startAssignment(assignment);
+    if (!started) {
+      setActionError('Could not start the visit — this browser’s storage is full');
+      return;
+    }
     router.push(`/inspections/${started.id}/checklist`);
   };
 
@@ -228,8 +244,8 @@ export const RecordsListScreen: React.FC = () => {
               flatly would be wrong for two of the three: an inspector is
               looking at their own visits, a manager at one branch's.
             */}
-            {user?.role === 'branch-manager' && user.branchName
-              ? `${user.branchName} — ${filteredInspections.length} submitted record${
+            {ownBranches.length > 0
+              ? `${ownBranches.join(' & ')} — ${filteredInspections.length} submitted record${
                   filteredInspections.length === 1 ? '' : 's'
                 }`
               : user?.role === 'inspector'
@@ -308,9 +324,10 @@ export const RecordsListScreen: React.FC = () => {
           here to do — the history below it is reference, and putting the
           task after the archive got the priority backwards.
         */}
-        {monday && (
+        {mondays.map(({ branch, monday }, index) => (
           <div
-            id="monday-round-card"
+            key={branch}
+            id={index === 0 ? 'monday-round-card' : `monday-round-card-${index + 1}`}
             className={`mb-6 p-4 rounded-md border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs ${
               monday.done
                 ? 'bg-[#EAF6EF] border-[#157F4B]/25'
@@ -333,6 +350,8 @@ export const RecordsListScreen: React.FC = () => {
               </div>
               <div>
                 <p className="text-sm font-bold text-[#17181D]">
+                  {/* Named only when there is more than one round to tell apart */}
+                  {mondays.length > 1 && `${branch}: `}
                   {monday.done
                     ? 'This week’s Monday inspection is done'
                     : monday.inProgress
@@ -359,7 +378,7 @@ export const RecordsListScreen: React.FC = () => {
                 {monday.inProgress && monday.inspection ? (
                   <button
                     type="button"
-                    id="monday-resume-btn"
+                    id={index === 0 ? 'monday-resume-btn' : `monday-resume-btn-${index + 1}`}
                     onClick={() =>
                       router.push(`/inspections/${monday.inspection!.id}/checklist`)
                     }
@@ -370,8 +389,8 @@ export const RecordsListScreen: React.FC = () => {
                   </button>
                 ) : (
                   <Link
-                    id="monday-start-btn"
-                    href="/inspections/new"
+                    id={index === 0 ? 'monday-start-btn' : `monday-start-btn-${index + 1}`}
+                    href={`/inspections/new?branch=${encodeURIComponent(branch)}`}
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-[#C8202D] hover:bg-[#A81823] text-white rounded-md transition-colors whitespace-nowrap"
                   >
                     <PlayCircle className="w-3.5 h-3.5" />
@@ -381,7 +400,7 @@ export const RecordsListScreen: React.FC = () => {
               </div>
             )}
           </div>
-        )}
+        ))}
 
         {/*
           Surprise visits waiting to be carried out. An inspector sees the
@@ -477,7 +496,7 @@ export const RecordsListScreen: React.FC = () => {
         {activeDraft &&
           activeDraft.status === 'draft' &&
           canPerformInspection(user, activeDraft) &&
-          monday?.inspection?.id !== activeDraft.id && (
+          !mondays.some(({ monday }) => monday.inspection?.id === activeDraft.id) && (
           <div
             id="active-draft-banner"
             className="mb-6 p-4 rounded-md bg-[#FDF3E2] border border-[#B4740A]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs"
@@ -565,6 +584,12 @@ export const RecordsListScreen: React.FC = () => {
                 {paginatedInspections.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-12 px-6 text-center text-sm text-[#6B6F76]">
+                      {/*
+                        Pinned to the visible part of the card. The header
+                        keeps the table wider than a phone, and centred across
+                        the whole of it this message ran off the right edge.
+                      */}
+                      <div className="sticky left-6 max-w-[calc(100vw-6.5rem)] sm:max-w-none">
                       <p className="font-medium text-[#17181D]">No inspection records found</p>
                       <p className="text-xs text-[#6B6F76] mt-1">
                         {searchQuery
@@ -579,6 +604,7 @@ export const RecordsListScreen: React.FC = () => {
                           Clear search
                         </button>
                       ) : null}
+                      </div>
                     </td>
                   </tr>
                 ) : (

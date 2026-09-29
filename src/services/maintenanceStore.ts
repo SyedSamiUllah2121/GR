@@ -116,12 +116,15 @@ export function saveJob(job: MaintenanceJob): boolean {
   }
 }
 
-export function deleteJob(id: string): void {
+/** Removes a job. False when the store refused, so the caller does not claim it went. */
+export function deleteJob(id: string): boolean {
   try {
     localStorage.setItem(KEY, JSON.stringify(getJobs().filter((j) => j.id !== id)));
     notify();
+    return true;
   } catch (err) {
     console.error('Failed to delete maintenance job:', err);
+    return false;
   }
 }
 
@@ -211,8 +214,7 @@ export function daysOpen(job: MaintenanceJob, now: Date = new Date()): number {
 export function startJob(job: MaintenanceJob): MaintenanceJob | null {
   if (job.startedAt || job.completedAt) return null;
   const next = { ...job, startedAt: new Date().toISOString() };
-  saveJob(next);
-  return next;
+  return saveJob(next) ? next : null;
 }
 
 export interface CompletionDetails {
@@ -327,7 +329,7 @@ export function setJobTimes(
   }
 
   const next: MaintenanceJob = { ...job, startedAt, completedAt };
-  saveJob(next);
+  if (!saveJob(next)) return { error: 'Could not save — this browser’s storage is full' };
   return { job: next };
 }
 
@@ -339,7 +341,7 @@ export function setJobTimes(
  * leaving them behind would attach a finished job's receipt to an unstarted
  * one.
  */
-export function reopenJob(job: MaintenanceJob): MaintenanceJob {
+export function reopenJob(job: MaintenanceJob): MaintenanceJob | null {
   const next: MaintenanceJob = {
     ...job,
     startedAt: null,
@@ -349,6 +351,7 @@ export function reopenJob(job: MaintenanceJob): MaintenanceJob {
     cost: null,
     completionPhotos: undefined,
   };
-  saveJob(next);
-  return next;
+  // Null when the store refused, so the screen does not show a reopened job
+  // that is still finished in storage
+  return saveJob(next) ? next : null;
 }

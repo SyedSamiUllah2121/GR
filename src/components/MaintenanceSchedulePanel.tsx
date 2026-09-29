@@ -199,7 +199,7 @@ export const MaintenanceSchedulePanel: React.FC<{
   const remove = async (plan: MaintenancePlan) => {
     const raised = jobs.some((j) => j.planId === plan.id);
     if (raised) {
-      showToast('That plan has already raised work — turn it off instead');
+      showToast('That plan has already raised work — turn it off instead', 'error');
       return;
     }
     const ok = await confirm({
@@ -209,7 +209,8 @@ export const MaintenanceSchedulePanel: React.FC<{
     });
     if (!ok) return;
     const result = deletePlan(plan.id);
-    showToast(result.ok ? 'Plan deleted' : result.error ?? 'Could not delete that plan');
+    if (result.ok) showToast('Plan deleted');
+    else showToast(result.error ?? 'Could not delete that plan', 'error');
   };
 
   return (
@@ -304,7 +305,11 @@ export const MaintenanceSchedulePanel: React.FC<{
                       <button
                         type="button"
                         onClick={() => {
-                          setPlanActive(plan.id, !plan.active);
+                          const result = setPlanActive(plan.id, !plan.active);
+                          if (!result.ok) {
+                            showToast(result.error ?? 'Could not save that plan', 'error');
+                            return;
+                          }
                           showToast(
                             plan.active ? `${plan.task} turned off` : `${plan.task} turned on`
                           );

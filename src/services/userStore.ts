@@ -31,29 +31,33 @@ const EVENT = 'inspection_log_users_change';
  *
  *   1  one admin, a manager for each of the nine branches, the maintenance
  *      manager over the board, and three inspectors
+ *   2  the estate's real branch managers in place of the invented ones —
+ *      seven people across the nine branches, two of them running two each.
+ *      The invented managers are retired by `RETIRED_SEEDS`.
+ *   3  Mr. Altaf's sign-in keeps the title, as the others keep their whole
+ *      name: `Mr.Altaf` / `Mr.Altaf123` rather than `Altaf` / `Altaf123`.
+ *      Applied by `CORRECTED_SEEDS`.
  *
  * The count restarts with the estate. The accounts that came before managed
  * branches that do not exist, and `estateReset` clears them rather than
  * repointing them — a manager whose branch was invented has nothing to manage.
  */
-const SEED_VERSION = 1;
+const SEED_VERSION = 3;
 const SEED_VERSION_KEY = 'inspection_log_users_seed_version';
 
 /**
  * The demo accounts.
  *
- * One admin, a manager for each of the nine branches, one maintenance manager
- * over the whole board, and three inspectors. Every branch has a manager by
+ * One admin, the estate's seven branch managers, one maintenance manager over
+ * the whole board, and three inspectors. Every branch has a manager by
  * construction, because a branch nobody manages cannot run its own Monday
- * round or report its own repairs.
+ * round or report its own repairs. Parvezuddin runs both Shabiya 11 and 12,
+ * and Musa Shafqat both Mussafah 26 branches, each from one account.
  *
- * The addresses name the branch the way the estate does — `shabiya11`,
- * `mussafah17`, `zaharat` — rather than the brand, because three branches
- * share the Gujarat name and the area is what tells them apart on the floor.
- *
- * The passwords are deliberately memorable: whoever is being shown the system
- * has to be able to sign in as each role in turn. They are starting
- * credentials, not a security model, and the admin resets them from /users.
+ * A branch manager signs in with their name run together — `Parvezuddin`,
+ * `AliBarakat` — and that name followed by `123` as the password. They are
+ * starting credentials, not a security model, and the admin resets them from
+ * /users. The other roles keep their demo addresses and passwords.
  *
  * Only ever written to a store that is empty, so an installation already in
  * use does not gain an account behind its operator's back. There, a new role
@@ -74,103 +78,81 @@ export const SEED_USERS: User[] = [
     createdAt: '2026-01-05',
   },
   {
-    id: 'usr-bm-nhb',
-    name: 'Imran Yousaf',
-    email: 'shabiya11@royalgujrat.com',
-    password: 'branch123',
+    id: 'usr-bm-parvezuddin',
+    name: 'Parvezuddin',
+    email: 'Parvezuddin',
+    password: 'Parvezuddin123',
     role: 'branch-manager',
-    branchName: BRANCHES[0].name,
-    initials: 'IY',
+    branchNames: [BRANCHES[0].name, BRANCHES[3].name],
+    initials: 'PA',
     active: true,
-    createdAt: '2026-09-17',
+    createdAt: '2026-09-29',
   },
   {
-    id: 'usr-bm-rg',
-    name: 'Bilal Tariq',
-    email: 'royal@royalgujrat.com',
-    password: 'branch123',
+    id: 'usr-bm-ali-barakat',
+    name: 'Ali Barakat',
+    email: 'AliBarakat',
+    password: 'AliBarakat123',
     role: 'branch-manager',
-    branchName: BRANCHES[1].name,
-    initials: 'BT',
+    branchNames: [BRANCHES[4].name],
+    initials: 'AB',
     active: true,
-    createdAt: '2026-09-17',
+    createdAt: '2026-09-29',
   },
   {
-    id: 'usr-bm-dgr',
-    name: 'Adeel Nawaz',
-    email: 'mussafah17@royalgujrat.com',
-    password: 'branch123',
+    id: 'usr-bm-musa-shafqat',
+    name: 'Musa Shafqat',
+    email: 'MusaShafqat',
+    password: 'MusaShafqat123',
     role: 'branch-manager',
-    branchName: BRANCHES[2].name,
-    initials: 'AN',
+    branchNames: [BRANCHES[7].name, BRANCHES[8].name],
+    initials: 'MS',
     active: true,
-    createdAt: '2026-09-17',
+    createdAt: '2026-09-29',
   },
   {
-    id: 'usr-bm-grsb',
-    name: 'Kashif Mehmood',
-    email: 'shabiya12@royalgujrat.com',
-    password: 'branch123',
+    id: 'usr-bm-mehran-shahabuddin',
+    name: 'Mehran Shahabuddin',
+    email: 'MehranShahabuddin',
+    password: 'MehranShahabuddin123',
     role: 'branch-manager',
-    branchName: BRANCHES[3].name,
-    initials: 'KM',
+    branchNames: [BRANCHES[6].name],
+    initials: 'MS',
     active: true,
-    createdAt: '2026-09-17',
+    createdAt: '2026-09-29',
   },
   {
-    id: 'usr-bm-nh',
-    name: 'Usman Zafar',
-    email: 'shabiya10@royalgujrat.com',
-    password: 'branch123',
+    id: 'usr-bm-altaf',
+    name: 'Mr. Altaf',
+    email: 'Mr.Altaf',
+    password: 'Mr.Altaf123',
     role: 'branch-manager',
-    branchName: BRANCHES[4].name,
-    initials: 'UZ',
+    branchNames: [BRANCHES[1].name],
+    initials: 'MA',
     active: true,
-    createdAt: '2026-09-17',
+    createdAt: '2026-09-29',
   },
   {
-    id: 'usr-bm-mgr',
-    name: 'Hamza Sattar',
-    email: 'mafraq@royalgujrat.com',
-    password: 'branch123',
+    id: 'usr-bm-muhammad-arshaan',
+    name: 'Muhammad Arshaan',
+    email: 'MuhammadArshaan',
+    password: 'MuhammadArshaan123',
     role: 'branch-manager',
-    branchName: BRANCHES[5].name,
-    initials: 'HS',
+    branchNames: [BRANCHES[2].name],
+    initials: 'MA',
     active: true,
-    createdAt: '2026-09-17',
+    createdAt: '2026-09-29',
   },
   {
-    id: 'usr-bm-mps',
-    name: 'Rizwan Shah',
-    email: 'manpasand@royalgujrat.com',
-    password: 'branch123',
+    id: 'usr-bm-farooq-khan',
+    name: 'Farooq Khan',
+    email: 'FarooqKhan',
+    password: 'FarooqKhan123',
     role: 'branch-manager',
-    branchName: BRANCHES[6].name,
-    initials: 'RS',
+    branchNames: [BRANCHES[5].name],
+    initials: 'FK',
     active: true,
-    createdAt: '2026-09-17',
-  },
-  {
-    id: 'usr-bm-grs',
-    name: 'Faisal Mahmood',
-    email: 'hotel@royalgujrat.com',
-    password: 'branch123',
-    role: 'branch-manager',
-    branchName: BRANCHES[7].name,
-    initials: 'FM',
-    active: true,
-    createdAt: '2026-09-17',
-  },
-  {
-    id: 'usr-bm-zg',
-    name: 'Waqar Aslam',
-    email: 'zaharat@royalgujrat.com',
-    password: 'branch123',
-    role: 'branch-manager',
-    branchName: BRANCHES[8].name,
-    initials: 'WA',
-    active: true,
-    createdAt: '2026-09-17',
+    createdAt: '2026-09-29',
   },
   {
     /*
@@ -216,6 +198,45 @@ export const SEED_USERS: User[] = [
     initials: 'MF',
     active: true,
     createdAt: '2026-01-05',
+  },
+];
+
+/**
+ * The invented branch managers the first seed shipped, by id and the address
+ * they were created under.
+ *
+ * Retired when a store reaches seed version 2, because the estate's real
+ * managers replace them. Matched on the address as well as the id so an
+ * account the admin has since repointed at a real person — given their own
+ * address — is left alone.
+ */
+const RETIRED_SEEDS: ReadonlyArray<{ id: string; email: string }> = [
+  { id: 'usr-bm-nhb', email: 'shabiya11@royalgujrat.com' },
+  { id: 'usr-bm-rg', email: 'royal@royalgujrat.com' },
+  { id: 'usr-bm-dgr', email: 'mussafah17@royalgujrat.com' },
+  { id: 'usr-bm-grsb', email: 'shabiya12@royalgujrat.com' },
+  { id: 'usr-bm-nh', email: 'shabiya10@royalgujrat.com' },
+  { id: 'usr-bm-mgr', email: 'mafraq@royalgujrat.com' },
+  { id: 'usr-bm-mps', email: 'manpasand@royalgujrat.com' },
+  { id: 'usr-bm-grs', email: 'hotel@royalgujrat.com' },
+  { id: 'usr-bm-zg', email: 'zaharat@royalgujrat.com' },
+];
+
+/**
+ * Seed sign-ins that shipped wrong and have since been corrected.
+ *
+ * Applied only while the account still holds exactly what it shipped with,
+ * so a sign-in name or password the admin has since set is not overwritten.
+ */
+const CORRECTED_SEEDS: ReadonlyArray<{
+  id: string;
+  was: { email: string; password: string };
+  now: { email: string; password: string };
+}> = [
+  {
+    id: 'usr-bm-altaf',
+    was: { email: 'Altaf', password: 'Altaf123' },
+    now: { email: 'Mr.Altaf', password: 'Mr.Altaf123' },
   },
 ];
 
@@ -277,18 +298,36 @@ function markSeeded(): void {
 function reconcileSeeds(stored: User[]): User[] {
   if (storedSeedVersion() >= SEED_VERSION) return stored;
 
-  const ids = new Set(stored.map((u) => u.id));
-  const emails = new Set(stored.map((u) => u.email.trim().toLowerCase()));
+  const retiring = (u: User) =>
+    RETIRED_SEEDS.some(
+      (r) => r.id === u.id && r.email === u.email.trim().toLowerCase()
+    );
+  // Deactivated rather than dropped once they have history, for the same
+  // reason `removeUser` does: their name is on the records they touched.
+  const kept = stored.flatMap((u) => {
+    if (!retiring(u)) {
+      const fix = CORRECTED_SEEDS.find(
+        (c) => c.id === u.id && c.was.email === u.email && c.was.password === u.password
+      );
+      return [fix ? { ...u, ...fix.now } : u];
+    }
+    const usage = userUsage(u);
+    return usage.submitted > 0 || usage.assigned > 0 ? [{ ...u, active: false }] : [];
+  });
+  const retired = kept.length !== stored.length || kept.some((u, i) => u !== stored[i]);
+
+  const ids = new Set(kept.map((u) => u.id));
+  const emails = new Set(kept.map((u) => u.email.trim().toLowerCase()));
   const missing = SEED_USERS.filter(
     (seed) => !ids.has(seed.id) && !emails.has(seed.email.trim().toLowerCase())
   );
 
-  if (missing.length === 0) {
+  if (missing.length === 0 && !retired) {
     markSeeded();
     return stored;
   }
 
-  const next = [...stored, ...missing];
+  const next = [...kept, ...missing];
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
   } catch (err) {
@@ -298,6 +337,19 @@ function reconcileSeeds(stored: User[]): User[] {
   }
   markSeeded();
   return next;
+}
+
+/** An account as an earlier build may have saved it, with a single branch. */
+type StoredUser = User & { branchName?: string };
+
+/**
+ * Reads an account saved before a manager could hold more than one branch.
+ * Its one branch becomes a list of one; nothing else about it changes.
+ */
+function fromStored(stored: StoredUser): User {
+  const { branchName, ...user } = stored;
+  if (user.branchNames || !branchName) return user;
+  return { ...user, branchNames: [branchName] };
 }
 
 /** Every account, withdrawn ones included. */
@@ -312,8 +364,10 @@ export function getUsers(): User[] {
       markSeeded();
       return SEED_USERS;
     }
-    const parsed = JSON.parse(raw) as User[];
-    return Array.isArray(parsed) && parsed.length > 0 ? reconcileSeeds(parsed) : SEED_USERS;
+    const parsed = JSON.parse(raw) as StoredUser[];
+    return Array.isArray(parsed) && parsed.length > 0
+      ? reconcileSeeds(parsed.map(fromStored))
+      : SEED_USERS;
   } catch (err) {
     console.error('Failed to read users:', err);
     return SEED_USERS;
@@ -338,14 +392,19 @@ export function inspectors(users: User[] = getUsers()): User[] {
 /**
  * Checks a sign-in.
  *
- * Email is matched case-insensitively — people capitalise their own address
- * inconsistently, and it is a name here, not a secret. The password is not.
+ * The sign-in name — an email address or a username — is matched
+ * case-insensitively and with any spaces ignored: people capitalise their own
+ * name inconsistently, and type `Mehran Shahabuddin` for the username
+ * `MehranShahabuddin`. It is a name here, not a secret, and no sign-in name
+ * may hold a space, so ignoring them cannot make two accounts collide. The
+ * password is matched exactly.
  * A withdrawn account is refused with the same wording as a wrong password:
  * whether an address exists is not something a sign-in form should confirm.
  */
 export function authenticate(email: string, password: string): User | null {
-  const wanted = email.trim().toLowerCase();
-  const user = getUsers().find((u) => u.email.toLowerCase() === wanted);
+  const signInName = (name: string) => name.replace(/\s+/g, '').toLowerCase();
+  const wanted = signInName(email);
+  const user = getUsers().find((u) => signInName(u.email) === wanted);
   if (!user || !user.active) return null;
   return user.password === password ? user : null;
 }
@@ -362,7 +421,7 @@ export interface UserDraft {
   email: string;
   password: string;
   role: UserRole;
-  branchName?: string;
+  branchNames?: string[];
 }
 
 /**
@@ -376,12 +435,15 @@ function validate(draft: UserDraft, users: User[], ignoreId?: string): string | 
   if (!draft.name.trim()) return 'Enter a name';
 
   const email = draft.email.trim().toLowerCase();
-  if (!email) return 'Enter an email address';
+  if (!email) return 'Enter an email address or username';
   // Deliberately loose: enough to catch a typo, not a standards-compliant
-  // parser. Addresses here are sign-in names on an internal system.
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'That email address does not look right';
+  // parser. Anything with an @ is taken as an address and checked as one;
+  // anything without is a username, which is all a branch manager has.
+  if (email.includes('@') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return 'That email address does not look right';
+  }
   if (users.some((u) => u.id !== ignoreId && u.email.toLowerCase() === email)) {
-    return 'An account with that email already exists';
+    return 'An account with that email or username already exists';
   }
 
   if (!draft.password.trim()) return 'Set a password';
@@ -389,7 +451,7 @@ function validate(draft: UserDraft, users: User[], ignoreId?: string): string | 
 
   // A branch manager's branch *is* their access, so the account cannot exist
   // without one. The other roles are not tied to a branch at all.
-  if (draft.role === 'branch-manager' && !draft.branchName) {
+  if (draft.role === 'branch-manager' && !draft.branchNames?.length) {
     return 'Choose the branch this manager runs';
   }
 
@@ -414,8 +476,20 @@ function managedRoleList(): string {
   return `${labels.slice(0, -1).join(', ')} or ${last}`;
 }
 
-export function addUser(draft: UserDraft): SaveUserResult {
+/**
+ * The draft as it will be saved: the sign-in name with any spaces taken out.
+ *
+ * Taken out rather than refused. Sign-in ignores spaces already, so an admin
+ * who types `Sami Test` means the username `SamiTest`, and turning that away
+ * was a refusal over a difference the sign-in form would never notice.
+ */
+function tidied(draft: UserDraft): UserDraft {
+  return { ...draft, email: draft.email.replace(/\s+/g, '') };
+}
+
+export function addUser(input: UserDraft): SaveUserResult {
   const all = getUsers();
+  const draft = tidied(input);
 
   if (!MANAGED_ROLES.includes(draft.role)) {
     // Named from the list itself, so adding a role cannot leave this lying
@@ -432,7 +506,7 @@ export function addUser(draft: UserDraft): SaveUserResult {
     email: draft.email.trim(),
     password: draft.password.trim(),
     role: draft.role,
-    branchName: draft.role === 'branch-manager' ? draft.branchName : undefined,
+    branchNames: draft.role === 'branch-manager' ? draft.branchNames : undefined,
     initials: initialsOf(name),
     active: true,
     createdAt: new Date().toISOString().slice(0, 10),
@@ -442,8 +516,9 @@ export function addUser(draft: UserDraft): SaveUserResult {
   return { ok: true, user };
 }
 
-export function updateUser(id: string, draft: UserDraft): SaveUserResult {
+export function updateUser(id: string, input: UserDraft): SaveUserResult {
   const all = getUsers();
+  const draft = tidied(input);
   const existing = all.find((u) => u.id === id);
   if (!existing) return { ok: false, error: 'That account no longer exists' };
 
@@ -457,7 +532,7 @@ export function updateUser(id: string, draft: UserDraft): SaveUserResult {
     email: draft.email.trim(),
     password: draft.password.trim(),
     role: draft.role,
-    branchName: draft.role === 'branch-manager' ? draft.branchName : undefined,
+    branchNames: draft.role === 'branch-manager' ? draft.branchNames : undefined,
     initials: initialsOf(name),
   };
 

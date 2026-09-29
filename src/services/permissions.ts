@@ -4,6 +4,7 @@ import {
   MaintenanceJob,
   User,
   UserRole,
+  branchesOf,
   inspectionKindOf,
 } from '../types';
 import { getJobs } from './maintenanceStore';
@@ -201,7 +202,7 @@ function raisedMaintenanceWork(inspectionId: string): boolean {
 /**
  * Whether this person is allowed to see a record at all.
  *
- * A branch manager sees their branch, whoever inspected it — including the
+ * A branch manager sees their branches, whoever inspected them — including the
  * surprise visits, since the findings are theirs to act on. An inspector
  * sees only the visits handed to them: they have no standing at a branch
  * beyond the visit itself.
@@ -218,7 +219,7 @@ export function canViewInspection(user: User | null, inspection: Inspection): bo
   if (can(user, 'inspections.viewAll')) return true;
 
   if (user.role === 'branch-manager') {
-    return inspection.branchName === user.branchName;
+    return branchesOf(user).includes(inspection.branchName);
   }
 
   if (user.role === 'inspector') {
@@ -259,7 +260,7 @@ export function canPerformInspection(user: User | null, inspection: Inspection):
 
   return (
     user.role === 'branch-manager' &&
-    inspection.branchName === user.branchName &&
+    branchesOf(user).includes(inspection.branchName) &&
     can(user, 'monday.perform')
   );
 }
@@ -319,7 +320,7 @@ export function canDiscardDraft(user: User | null, inspection: Inspection): bool
  *   maintenance.view   null — every branch, because a repair is not a
  *                      branch's private business: the same contractor and the
  *                      same budget cover all of them.
- *   branch-manager     their own branch, which is the whole of their access.
+ *   branch-manager     their own branches, which are the whole of their access.
  *   inspector          the branches they have been sent to. They hold no
  *                      branch of their own, so there is nothing to read off
  *                      the account; what gives them standing at a branch is
@@ -346,7 +347,7 @@ export function maintenanceBranchesFor(user: User | null): string[] | null {
     return [...seen].sort((a, b) => a.localeCompare(b));
   }
 
-  return user.branchName ? [user.branchName] : [];
+  return branchesOf(user);
 }
 
 /**
@@ -444,16 +445,27 @@ export function canManageJobs(user: User | null): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * The branch a person is allowed to file an inspection against, when they do
- * not get to choose. `null` means they choose from the open branches.
+ * The branches a person may file an inspection against, when they do not get
+ * the whole estate to choose from. `null` means they choose from every open
+ * branch; a list means only those — one for most managers, two for a manager
+ * who runs two.
  *
  * "Inspector cannot choose their own inspection branch" — theirs comes from
  * the assignment, so this is only asked for the roles that start a visit
  * from the form.
  */
-export function fixedBranchFor(user: User | null): string | null {
-  if (user?.role === 'branch-manager' && user.branchName) return user.branchName;
+export function filingBranchesFor(user: User | null): string[] | null {
+  if (user?.role === 'branch-manager') return branchesOf(user);
   return null;
+}
+
+/**
+ * The one branch a person files against, when there is exactly one and so
+ * nothing to choose — the form shows it locked rather than as a dropdown.
+ */
+export function fixedBranchFor(user: User | null): string | null {
+  const branches = filingBranchesFor(user);
+  return branches !== null && branches.length === 1 ? branches[0] : null;
 }
 
 // ---------------------------------------------------------------------------

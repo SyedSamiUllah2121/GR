@@ -558,9 +558,10 @@ export const MaintenanceScreen: React.FC = () => {
         <EndMaintenanceDialog
           job={ending}
           onClose={() => setEnding(null)}
-          onDone={() => {
+          onDone={(_job, warning) => {
             setEnding(null);
-            showToast('Job marked done');
+            if (warning) showToast(warning, 'error');
+            else showToast('Job marked done');
           }}
         />
       )}
@@ -962,7 +963,10 @@ const ReportProblemDialog: React.FC<{
       cost: null,
       photo: null,
     };
-    saveJob(job);
+    if (!saveJob(job)) {
+      setErrors({ form: 'Could not save the report — this browser’s storage is full' });
+      return;
+    }
     onSaved(job, startNow);
   };
 
@@ -1261,6 +1265,24 @@ const ReportProblemDialog: React.FC<{
               </div>
             )}
           </div>
+
+          {/*
+            Said again beside the buttons. On a phone the fields stack, and the
+            one that is missing can be a screen above where Report it was
+            pressed — which read as the button doing nothing.
+          */}
+          {Object.keys(errors).length > 0 && (
+            <p
+              role="alert"
+              id="mnt-form-error"
+              className="p-2.5 rounded-md bg-[#FDECEE] border border-[#C8202D]/25 text-[#C8202D] text-xs font-semibold"
+            >
+              {errors.form ??
+                (Object.keys(errors).length === 1
+                  ? Object.values(errors)[0]
+                  : 'A few things are missing — they are marked above')}
+            </p>
+          )}
 
           <div className="pt-3 border-t border-[#E6E7EB] flex flex-wrap items-center justify-end gap-2.5">
             <button

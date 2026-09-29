@@ -2,25 +2,27 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Bell,
   CalendarClock,
+  Check,
   ChevronDown,
   ClipboardList,
   LogOut,
   MapPin,
   PenLine,
   Search,
+  Store,
   UserCog,
   Wrench,
   X,
 } from 'lucide-react';
-import { Inspection, MaintenanceJob, USER_ROLE_LABEL } from '../types';
+import { Inspection, MaintenanceJob, USER_ROLE_LABEL, branchesOf } from '../types';
 import { getInspections, subscribeToStorage } from '../services/storage';
 import { getJobs, subscribeToMaintenance } from '../services/maintenanceStore';
 import { formatDate, formatDateTime, formatTimeOnly } from '../services/reportModel';
-import { signOut } from '../services/session';
+import { signOut, switchBranch, switchableBranches } from '../services/session';
 import { can, visibleInspections, visibleJobs } from '../services/permissions';
 import { assignmentsFor, isOverdueAssignment, scheduleLabel } from '../services/assignments';
 import { mondayStatusFor } from '../services/mondaySchedule';
@@ -76,6 +78,7 @@ function daysBetween(from: string, to: string): number {
 
 export const Topbar: React.FC = () => {
   const router = useRouter();
+  const pathname = usePathname();
   const user = useCurrentUser();
   const [allInspections, setInspections] = useState<Inspection[]>(() => getInspections());
   const [allJobs, setJobs] = useState<MaintenanceJob[]>(() => getJobs());
@@ -107,7 +110,10 @@ export const Topbar: React.FC = () => {
   const branches = useMemo(() => {
     const open = activeBranches(allBranches);
     if (can(user, 'inspections.viewAll')) return open;
-    if (user?.role === 'branch-manager') return open.filter((b) => b.name === user.branchName);
+    if (user?.role === 'branch-manager') {
+      const own = branchesOf(user);
+      return open.filter((b) => own.includes(b.name));
+    }
     // An inspector has no standing at a branch beyond the visit itself
     return [];
   }, [user, allBranches]);
@@ -122,7 +128,21 @@ export const Topbar: React.FC = () => {
   const jobs = useMemo(() => visibleJobs(user, allJobs), [user, allJobs]);
 
   // Which panel, if any, is showing. Only one may be open at a time.
-  const [open, setOpen] = useState<'search' | 'alerts' | 'user' | null>(null);
+  const [open, setOpen] = useState<'search' | 'alerts' | 'branch' | 'user' | null>(null);
+
+  /*
+   * A phone-width bar holds the search beside the branch, the bell and the
+   * avatar, which leaves the box a word wide — the full hint showed as "Sea".
+   * Placeholder text cannot be switched by CSS, so the width is watched.
+   */
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const narrow = window.matchMedia('(max-width: 639px)');
+    const update = () => setCompact(narrow.matches);
+    update();
+    narrow.addEventListener('change', update);
+    return () => narrow.removeEventListener('change', update);
+  }, []);
   const [query, setQuery] = useState('');
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -258,22 +278,25 @@ export const Topbar: React.FC = () => {
      * it counts seven days from the last visit of any kind, where the round
      * is due on the Monday whether or not an inspector called on Thursday.
      */
-    if (user?.role === 'branch-manager' && user.branchName) {
-      const monday = mondayStatusFor(user.branchName, inspections);
+    const ownBranches = branchesOf(user);
+    ownBranches.forEach((branch) => {
+      const monday = mondayStatusFor(branch, inspections);
       if (!monday.done) {
+        // Named only when there is more than one round to tell apart
+        const where = ownBranches.length > 1 ? `${branch}: ` : '';
         out.push({
-          key: 'monday',
+          key: `monday-${branch}`,
           href: '/inspections',
           icon: CalendarClock,
-          text: monday.overdue
+          text: where + (monday.overdue
             ? `Monday inspection is ${monday.daysLate} day${
                 monday.daysLate === 1 ? '' : 's'
               } late`
-            : 'Monday inspection is due today',
+            : 'Monday inspection is due today'),
           tone: monday.overdue ? 'bad' : 'warn',
         });
       }
-    }
+    });
 
     // Chasing every branch's cadence is the admin's job — the manager above
     // has already been told about their own, more precisely.
@@ -351,15 +374,53 @@ export const Topbar: React.FC = () => {
   };
 
   /*
+   * The branches a manager who runs more than one can move between. Keyed on
+   * `user` because switching comes back as a new user holding the new
+   * branch, which is also what tells this to read the choice again.
+   */
+  const switcher = useMemo(() => switchableBranches(), [user]);
+
+  /*
+   * A single record belongs to one branch, so one opened at the branch just
+   * left is not the manager's to look at any more. They go back to that
+   * record's list rather than being shown a locked door.
+   */
+  const handleSwitchBranch = (name: string) => {
+    setOpen(null);
+    if (name === switcher.active || !switchBranch(name)) return;
+    if (/^\/inspections\/(?!new$)[^/]+/.test(pathname)) router.push('/inspections');
+    else if (/^\/maintenance\/(?!(jobs|equipment|report|schedule)$)[^/]+$/.test(pathname)) {
+      router.push('/maintenance/jobs');
+    }
+  };
+
+  /** The branch a manager is working on — theirs, or the one switched to. */
+  const activeBranch = branchesOf(user)[0] ?? null;
+
+  /*
    * A branch manager's role is not the whole answer to "who am I signed in
-   * as" — which branch they run is the part that decides what they see, so
-   * it belongs on the same line.
+   * as" — which branch they are working on is the part that decides what they
+   * see, so it belongs on the same line.
    */
   const roleLine = user
-    ? user.role === 'branch-manager' && user.branchName
-      ? `${USER_ROLE_LABEL[user.role]} · ${user.branchName}`
+    ? activeBranch
+      ? `${USER_ROLE_LABEL[user.role]} · ${activeBranch}`
       : USER_ROLE_LABEL[user.role]
     : '';
+
+  /** How this week's round stands at a branch, for the switcher to show. */
+  const mondayLabel = (branch: string) => {
+    const monday = mondayStatusFor(branch, allInspections);
+    if (monday.done) return { text: 'Monday round done', tone: 'text-[#157F4B]' };
+    if (monday.inProgress) return { text: 'Monday round unfinished', tone: 'text-[#B4740A]' };
+    if (monday.overdue) {
+      return {
+        text: `Monday round ${monday.daysLate} day${monday.daysLate === 1 ? '' : 's'} late`,
+        tone: 'text-[#C8202D]',
+      };
+    }
+    return { text: 'Monday round due today', tone: 'text-[#B4740A]' };
+  };
 
   return (
     <div
@@ -378,9 +439,9 @@ export const Topbar: React.FC = () => {
             setOpen('search');
           }}
           onFocus={() => setOpen('search')}
-          placeholder="Search branches, inspections, or jobs…"
+          placeholder={compact ? 'Search' : 'Search branches, inspections, or jobs…'}
           aria-label="Search branches, inspections and maintenance jobs"
-          className="w-full h-10 pl-10 pr-9 rounded-full bg-[#F6F6F8] border border-[#E6E7EB] text-sm text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:bg-white focus:border-[#C8202D]/40 transition-colors"
+          className={`w-full h-10 pl-10 ${query ? 'pr-9' : 'pr-3'} rounded-full bg-[#F6F6F8] border border-[#E6E7EB] text-sm text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:bg-white focus:border-[#C8202D]/40 transition-colors`}
         />
         {query && (
           <button
@@ -435,6 +496,82 @@ export const Topbar: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2 ml-auto">
+        {/*
+          The branch being worked on, where it can be seen from every screen.
+          For a manager with more than one it is also where they switch: it
+          opens the list of their branches, each showing where its Monday
+          round stands, so the branch not on screen is not forgotten.
+        */}
+        {activeBranch && (
+          <div className="relative min-w-0">
+            <button
+              type="button"
+              id="topbar-branch"
+              onClick={() => switcher.branches.length > 0 && setOpen(open === 'branch' ? null : 'branch')}
+              aria-expanded={switcher.branches.length > 0 ? open === 'branch' : undefined}
+              aria-haspopup={switcher.branches.length > 0 ? 'menu' : undefined}
+              title={switcher.branches.length > 0 ? 'Switch branch' : activeBranch}
+              className={`inline-flex items-center gap-1.5 max-w-[8.5rem] sm:max-w-[16rem] px-2.5 sm:px-3 py-1.5 rounded-full border border-[#E6E7EB] bg-[#F6F6F8] text-[11px] font-bold text-[#17181D] ${
+                switcher.branches.length > 0
+                  ? 'hover:border-[#C8202D]/40 cursor-pointer'
+                  : 'cursor-default'
+              }`}
+            >
+              <Store className="w-3.5 h-3.5 text-[#C8202D] shrink-0" />
+              <span className="truncate">{activeBranch}</span>
+              {switcher.branches.length > 0 && (
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-[#9CA1A9] shrink-0 transition-transform ${
+                    open === 'branch' ? 'rotate-180' : ''
+                  }`}
+                />
+              )}
+            </button>
+
+            {open === 'branch' && switcher.branches.length > 0 && (
+              <Panel className="right-0 w-72">
+                <div className="py-1.5" role="group" aria-label="Switch branch">
+                  <p className="px-4 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#9CA1A9]">
+                    Switch branch
+                  </p>
+                  {switcher.branches.map((branch) => {
+                    const selected = branch === switcher.active;
+                    const monday = mondayLabel(branch);
+                    return (
+                      <button
+                        key={branch}
+                        type="button"
+                        onClick={() => handleSwitchBranch(branch)}
+                        aria-pressed={selected}
+                        className={`w-full px-4 py-2 flex items-center gap-2.5 text-left transition-colors cursor-pointer ${
+                          selected ? 'bg-[#FDECEE]' : 'hover:bg-[#FAFAFA]'
+                        }`}
+                      >
+                        <Store
+                          className={`w-4 h-4 shrink-0 ${selected ? 'text-[#C8202D]' : 'text-[#6B6F76]'}`}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className={`block text-xs truncate ${
+                              selected ? 'font-bold text-[#C8202D]' : 'font-semibold text-[#17181D]'
+                            }`}
+                          >
+                            {branch}
+                          </span>
+                          <span className={`block text-[10px] font-semibold ${monday.tone}`}>
+                            {monday.text}
+                          </span>
+                        </span>
+                        {selected && <Check className="w-4 h-4 text-[#C8202D] shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </Panel>
+            )}
+          </div>
+        )}
+
         {/* Alerts */}
         <div className="relative">
           <button

@@ -37,21 +37,26 @@ export function getChecklist(): ChecklistDoc {
   }
 }
 
-export function saveChecklist(doc: ChecklistDoc): void {
+/** Stores the checklist. False when the browser refused, so the editor can say so. */
+export function saveChecklist(doc: ChecklistDoc): boolean {
   try {
     localStorage.setItem(CHECKLIST_KEY, JSON.stringify(doc));
     window.dispatchEvent(new Event(CHECKLIST_EVENT));
+    return true;
   } catch (err) {
     console.error('Failed to save checklist:', err);
+    return false;
   }
 }
 
-export function resetChecklist(): void {
+export function resetChecklist(): boolean {
   try {
     localStorage.removeItem(CHECKLIST_KEY);
     window.dispatchEvent(new Event(CHECKLIST_EVENT));
+    return true;
   } catch (err) {
     console.error('Failed to reset checklist:', err);
+    return false;
   }
 }
 

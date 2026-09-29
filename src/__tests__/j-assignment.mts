@@ -75,7 +75,7 @@ const mondayDraft = {
   ...started,
   id: 'insp-monday-1',
   kind: 'monday',
-  branchName: manager.branchName,
+  branchName: manager.branchNames![0],
   assignedToUserId: undefined,
   status: 'draft',
 } as any;

@@ -92,7 +92,7 @@ ok('branch manager cannot move a job along', !canManageJobs(bm));
 ok('maintenance manager can', canManageJobs(jm));
 
 /* And each of them reads their own branches on it, not the estate. */
-check('branch manager sees one branch', maintenanceBranchesFor(bm)?.length, 1);
+check('branch manager sees their own branches', maintenanceBranchesFor(bm), bm.branchNames);
 ok('maintenance manager sees every branch', maintenanceBranchesFor(jm) === null);
 ok(
   "inspector sees only branches they were sent to",
@@ -102,7 +102,7 @@ ok(
 );
 check(
   'a branch manager\'s board is their own branch',
-  visibleJobs(bm, laterJobs).every((j: { branchName: string }) => j.branchName === bm.branchName),
+  visibleJobs(bm, laterJobs).every((j: { branchName: string }) => bm.branchNames!.includes(j.branchName)),
   true
 );
 ok('admin reaches everything', ['/users','/maintenance/jobs','/inspections','/checklist']

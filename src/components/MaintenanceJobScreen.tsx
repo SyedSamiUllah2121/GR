@@ -169,7 +169,12 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
       destructive: false,
     });
     if (!ok) return;
-    setJob(reopenJob(job));
+    const reopened = reopenJob(job);
+    if (!reopened) {
+      showToast('Could not reopen the job — this browser’s storage is full', 'error');
+      return;
+    }
+    setJob(reopened);
     showToast('Job reopened');
   };
 
@@ -180,7 +185,10 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
       confirmLabel: 'Delete job',
     });
     if (!ok) return;
-    deleteJob(job.id);
+    if (!deleteJob(job.id)) {
+      showToast('Could not delete the job — try again', 'error');
+      return;
+    }
     showToast('Job deleted');
     router.push('/maintenance/jobs');
   };
@@ -534,10 +542,11 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
         <EndMaintenanceDialog
           job={job}
           onClose={() => setEnding(false)}
-          onDone={(next) => {
+          onDone={(next, warning) => {
             setEnding(false);
             setJob(next);
-            showToast('Maintenance completed');
+            if (warning) showToast(warning, 'error');
+            else showToast('Maintenance completed');
           }}
         />
       )}

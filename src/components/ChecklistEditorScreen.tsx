@@ -148,10 +148,18 @@ export const ChecklistEditorScreen: React.FC = () => {
     return subscribeToChecklist(refresh);
   }, []);
 
-  // Every edit writes straight through, the same as answering a checklist item
+  /*
+   * Every edit writes straight through, the same as answering a checklist
+   * item. The screen only moves once the write has landed: showing an edit
+   * the store refused, with its success toast, left the admin believing in a
+   * question every branch would never see.
+   */
   const commit = (next: ChecklistDoc, message?: string) => {
+    if (!saveChecklist(next)) {
+      showToast('Could not save the checklist — this browser’s storage is full', 'error');
+      return;
+    }
     setDoc(next);
-    saveChecklist(next);
     if (message) showToast(message);
   };
 
@@ -164,7 +172,10 @@ export const ChecklistEditorScreen: React.FC = () => {
       confirmLabel: 'Reset checklist',
     });
     if (!ok) return;
-    resetChecklist();
+    if (!resetChecklist()) {
+      showToast('Could not reset the checklist — try again', 'error');
+      return;
+    }
     setDoc(getChecklist());
     showToast('Checklist reset to default');
   };

@@ -68,6 +68,8 @@ import { activeEquipment, subscribeToEquipment } from '../services/equipmentStor
 import { formatDate } from '../services/reportModel';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useRouter } from 'next/navigation';
+import { readImageFile } from '../services/photoFile';
+import { useToast } from './ToastProvider';
 
 interface ChecklistScreenProps {
   inspectionId: string;
@@ -112,6 +114,17 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
   // Ref map for scrolling to the first invalid row
   const itemRowRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
+  /*
+   * The record as it stands right now. A photo is shrunk before it is kept,
+   * which takes a moment, and answers given while it works must not be lost
+   * when it lands — so the write reads this, not the copy the handler closed
+   * over when the file was picked.
+   */
+  const latest = useRef(inspection);
+  latest.current = inspection;
+
+  const showToast = useToast();
+
   useEffect(() => {
     if (!inspection) {
       const found = getInspectionById(inspectionId);
@@ -132,7 +145,9 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
       inspection.status === 'assigned' &&
       canPerformInspection(user, inspection)
     ) {
-      setInspection(startAssignment(inspection));
+      const started = startAssignment(inspection);
+      if (started) setInspection(started);
+      else setSaveFailed(true);
     }
   }, [inspection, user]);
 
@@ -275,9 +290,10 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
   // Immediate save on change helper
   const updateAnswers = (newAnswers: Record<number, Answer>) => {
     const updatedInspection: Inspection = {
-      ...inspection,
+      ...(latest.current ?? inspection),
       answers: newAnswers,
     };
+    latest.current = updatedInspection;
     setInspection(updatedInspection);
     // Only a draft belongs in the draft slot. Writing a submitted record there
     // left a stale copy that getInspectionById would then prefer over the real
@@ -609,23 +625,29 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
   };
 
   // Upload photo
-  const handlePhotoUpload = (itemId: number, file: File) => {
+  /*
+   * Shrunk before it is kept, the same as the repair photos. Stored as taken,
+   * one phone picture is megabytes, and a few of them filled the browser's
+   * store — after which no answer on this screen was being saved at all.
+   */
+  const handlePhotoUpload = async (itemId: number, file: File) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      const current = inspection.answers[itemId] || { status: 'no', reason: null, otherReason: null, note: null, photo: null };
-      const updatedAnswers: Record<number, Answer> = {
-        ...inspection.answers,
-        [itemId]: {
-          ...current,
-          photo: dataUrl,
-        },
-      };
-      clearInvalidIfResolved(itemId, updatedAnswers[itemId]);
-      updateAnswers(updatedAnswers);
+    const { dataUrl, error } = await readImageFile(file);
+    if (!dataUrl) {
+      showToast(error ?? 'That photo could not be used — try another', 'error');
+      return;
+    }
+    const answers = (latest.current ?? inspection).answers;
+    const current = answers[itemId] || { status: 'no', reason: null, otherReason: null, note: null, photo: null };
+    const updatedAnswers: Record<number, Answer> = {
+      ...answers,
+      [itemId]: {
+        ...current,
+        photo: dataUrl,
+      },
     };
-    reader.readAsDataURL(file);
+    clearInvalidIfResolved(itemId, updatedAnswers[itemId]);
+    updateAnswers(updatedAnswers);
   };
 
   // Remove photo
@@ -1364,6 +1386,22 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
             <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
             <span className="text-xs font-semibold">
               Cannot submit yet — {validationError}
+            </span>
+          </div>
+        )}
+
+        {/*
+          The same warning as the banner at the top, where it can be seen from
+          whichever row is being answered when the store fills up.
+        */}
+        {saveFailed && (
+          <div
+            role="alert"
+            className="mb-2.5 px-3 py-2 rounded-md bg-[#FDECEE] border border-[#C8202D]/40 text-[#C8202D] flex items-start gap-2"
+          >
+            <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
+            <span className="text-xs font-semibold">
+              Answers are not being saved — this browser&rsquo;s storage is full
             </span>
           </div>
         )}

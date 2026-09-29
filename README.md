@@ -30,7 +30,7 @@ inspections.
 | Role           | Reach                                                         | Demo sign-in                            |
 | -------------- | ------------------------------------------------------------- | --------------------------------------- |
 | Main Admin     | Everything: all branches, records, accounts, checklist, jobs  | `admin@royalgujrat.com` / `admin123`    |
-| Branch Manager | Their own branch: its Monday round, its repairs and its assets | `royal@royalgujrat.com` / `branch123`   |
+| Branch Manager | Their own branches: Monday rounds, repairs and assets         | `AliBarakat` / `AliBarakat123`          |
 | Maintenance Mgr| The whole maintenance board, every branch                      | `jobs@royalgujrat.com` / `jobs123`      |
 | Inspector      | Only the surprise visits assigned to them                     | `rahman@royalgujrat.com` / `visit123`   |
 
@@ -303,21 +303,37 @@ half-cleared and marked done.
 
 ## Accounts
 
-One admin, **a manager for each of the nine branches**, one maintenance manager
-over the whole board, and three inspectors. Every branch has a manager by
-construction — a branch nobody manages cannot run its own Monday round or
-report its own repairs.
+One admin, **the estate's seven branch managers across the nine branches**,
+one maintenance manager over the whole board, and three inspectors. Every
+branch has a manager by construction — a branch nobody manages cannot run its
+own Monday round or report its own repairs. A manager can run more than one
+branch from the one account. They work on one branch at a time and switch
+between them from the account menu in the top bar, which also shows where each
+branch's Monday round stands; the branch being worked on is named in the bar.
 
-The addresses name the branch the way the estate does — `shabiya11`,
-`mussafah17`, `zaharat` — rather than the brand, because three branches share
-the Gujarat name and the area is what tells them apart on the floor.
+A branch manager signs in with their name run together, no spaces, and that
+name followed by `123` as the password. The sign-in field takes a username or
+an email address.
+
+| Branch manager     | Branches                                                         | Sign-in                                     |
+| ------------------ | ---------------------------------------------------------------- | ------------------------------------------- |
+| Parvezuddin        | Nana House - Shabiya 11, Shabiya 12 - Gujarat Restaurants        | `Parvezuddin` / `Parvezuddin123`            |
+| Ali Barakat        | Nana House - Shabiya 10                                          | `AliBarakat` / `AliBarakat123`              |
+| Musa Shafqat       | Mussafah 26 - Gujarat Hotel, Mussafah 26 - Zaharat Gujarat       | `MusaShafqat` / `MusaShafqat123`            |
+| Mehran Shahabuddin | Manpasand - New Store                                            | `MehranShahabuddin` / `MehranShahabuddin123`|
+| Mr. Altaf          | Royal Gujarat                                                    | `Mr.Altaf` / `Mr.Altaf123`                  |
+| Muhammad Arshaan   | Mussafah 17 - Delight Gujarat                                    | `MuhammadArshaan` / `MuhammadArshaan123`    |
+| Farooq Khan        | Mafraq Gujarat Restaurant                                        | `FarooqKhan` / `FarooqKhan123`              |
 
 | Role | Sign-in |
 | ---- | ------- |
 | Main Admin       | `admin@royalgujrat.com` / `admin123` (or `123` / `123`) |
-| Branch Manager   | `royal@royalgujrat.com` / `branch123`, and one per branch |
 | Maintenance Mgr  | `jobs@royalgujrat.com` / `jobs123` |
 | Inspector        | `rahman@royalgujrat.com` / `visit123` |
+
+A browser that already held the invented managers an earlier build seeded has
+them retired on its next load: removed if they never touched a record,
+withdrawn if they did.
 
 These are starting credentials, not a security model. The admin resets them
 from `/users`.

@@ -160,10 +160,10 @@ const jm = users.find((u) => u.role === 'job-manager')!;
 
 check('the admin sees every job', visibleJobs(admin, all).length, all.length);
 check('and every appliance', visibleEquipment(admin, getEquipment()).length, getEquipment().length);
-ok('a branch manager sees only their own branch',
-  visibleJobs(bm, all).every((j) => j.branchName === bm.branchName));
+ok('a branch manager sees only their own branches',
+  visibleJobs(bm, all).every((j) => bm.branchNames!.includes(j.branchName)));
 ok('their register matches their board',
-  visibleEquipment(bm, getEquipment()).every((e) => e.branchName === bm.branchName));
+  visibleEquipment(bm, getEquipment()).every((e) => bm.branchNames!.includes(e.branchName)));
 ok('an inspector sees only branches they were sent to',
   visibleJobs(insp, all).every((j) => (maintenanceBranchesFor(insp) ?? []).includes(j.branchName)));
 ok('neither may move a job along', !canManageJobs(bm) && !canManageJobs(insp));
@@ -195,7 +195,7 @@ check('open matches', overview.open, openForBm.length);
 check('open splits cleanly into started and not', overview.inProgress + overview.notStarted, overview.open);
 check('open and completed account for the whole', overview.open + overview.completed, overview.total);
 ok('every branch it names is one this reader may see',
-  overview.byBranch.every((b) => b.branchName === bm.branchName));
+  overview.byBranch.every((b) => bm.branchNames!.includes(b.branchName)));
 
 // ---------------------------------------------------------------------------
 section('reporting a problem offers the same register the checklist does');

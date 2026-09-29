@@ -25,13 +25,17 @@ import { ORGANISATION } from '../data/user';
 type Variant = 'horizontal' | 'knockout' | 'emblem';
 
 /**
- * Sources are tried in order: drop the original artwork in as a `.png` beside
- * the vector rebuild and it takes precedence, with no code change.
+ * Sources are tried in order, falling back to the text mark if none loads.
+ *
+ * Only files that are actually in `public/brand/` are listed: a candidate that
+ * is not there costs a 404 on every screen, since the rail draws the logo on
+ * all of them. To use the original artwork, add it as a `.png` and put it
+ * ahead of the vector rebuild here.
  */
 const SOURCES: Record<Variant, string[]> = {
-  horizontal: ['/brand/royal-gujrat.png', '/brand/royal-gujrat.svg'],
-  knockout: ['/brand/royal-gujrat-knockout.png', '/brand/royal-gujrat-knockout.svg'],
-  emblem: ['/brand/royal-gujrat-emblem.png', '/brand/royal-gujrat-emblem.svg'],
+  horizontal: ['/brand/royal-gujrat.svg'],
+  knockout: ['/brand/royal-gujrat-knockout.svg'],
+  emblem: ['/brand/royal-gujrat-emblem.svg'],
 };
 
 interface BrandLogoProps {

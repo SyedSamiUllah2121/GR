@@ -391,7 +391,7 @@ export const EquipmentScreen: React.FC = () => {
     if (!ok) return;
     const result = removeEquipment(item.id, referenced);
     if (!result.ok) {
-      showToast(result.error ?? 'Could not withdraw that asset');
+      showToast(result.error ?? 'Could not withdraw that asset', 'error');
       return;
     }
     showToast(result.archived ? `${item.name} archived` : `${item.name} deleted`);
@@ -410,7 +410,7 @@ export const EquipmentScreen: React.FC = () => {
     const id = generalPlanIdFor(category);
     const plan = allPlans.find((p) => p.id === id);
     if (!plan) {
-      showToast('This category has no general maintenance plan to change');
+      showToast('This category has no general maintenance plan to change', 'error');
       return;
     }
     const result = updatePlan(id, {
@@ -420,11 +420,8 @@ export const EquipmentScreen: React.FC = () => {
       priority: plan.priority,
       instructions: plan.instructions,
     });
-    showToast(
-      result.ok
-        ? `Serviced ${intervalText(interval)} from now on`
-        : result.error ?? 'Could not save that'
-    );
+    if (result.ok) showToast(`Serviced ${intervalText(interval)} from now on`);
+    else showToast(result.error ?? 'Could not save that', 'error');
   };
 
   /**
@@ -448,8 +445,9 @@ export const EquipmentScreen: React.FC = () => {
       onEdit={() => setEditing(item)}
       onWithdraw={() => withdraw(item)}
       onRestore={() => {
-        restoreEquipment(item.id);
-        showToast(`${item.name} back in service`);
+        const result = restoreEquipment(item.id);
+        if (result.ok) showToast(`${item.name} back in service`);
+        else showToast(result.error ?? 'Could not bring that asset back', 'error');
       }}
     />
   );
@@ -1912,7 +1910,11 @@ const CategoryDialog: React.FC<{
                       <button
                         type="button"
                         onClick={() => {
-                          setPlanActive(plan.id, !plan.active);
+                          const result = setPlanActive(plan.id, !plan.active);
+                          if (!result.ok) {
+                            showToast(result.error ?? 'Could not save that', 'error');
+                            return;
+                          }
                           showToast(
                             plan.active
                               ? `${category.label} no longer raises general maintenance`
@@ -1960,8 +1962,9 @@ const CategoryDialog: React.FC<{
                       key={category.id}
                       type="button"
                       onClick={() => {
-                        setCategoryActive(category.id, true);
-                        showToast(`${category.label} back on the list`);
+                        const result = setCategoryActive(category.id, true);
+                        if (result.ok) showToast(`${category.label} back on the list`);
+                        else showToast(result.error ?? 'Could not save that', 'error');
                       }}
                       title="Put this category back on the list"
                       className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-[#E6E7EB] rounded-md text-[11px] font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] transition-colors cursor-pointer"

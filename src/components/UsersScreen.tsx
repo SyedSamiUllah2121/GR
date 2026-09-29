@@ -22,6 +22,7 @@ import {
   USER_ROLE_LABEL,
   User,
   UserRole,
+  branchesOf,
 } from '../types';
 import {
   MANAGED_ROLES,
@@ -72,7 +73,7 @@ const blankDraft = (role: UserRole): UserDraft => ({
   email: '',
   password: '',
   role,
-  branchName: undefined,
+  branchNames: undefined,
 });
 
 export const UsersScreen: React.FC = () => {
@@ -120,7 +121,7 @@ export const UsersScreen: React.FC = () => {
         email: user.email,
         password: user.password,
         role: user.role,
-        branchName: user.branchName,
+        branchNames: branchesOf(user),
       },
     });
   };
@@ -341,10 +342,21 @@ const UserRow: React.FC<{
       <p className="text-[11px] text-[#6B6F76] truncate">{user.email}</p>
     </div>
 
-    {user.branchName && (
-      <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#F6F6F8] text-[11px] font-semibold text-[#17181D] whitespace-nowrap">
-        <Store className="w-3 h-3 text-[#6B6F76]" />
-        {user.branchName}
+    {/*
+      Below the name on a phone, beside it from sm up. Beside it on a narrow
+      screen, a long branch name squeezed the person's own name to "Farooq …".
+    */}
+    {branchesOf(user).length > 0 && (
+      <span className="order-last basis-full pl-[3.25rem] sm:order-none sm:basis-auto sm:pl-0 flex flex-col items-start gap-1">
+        {branchesOf(user).map((branch) => (
+          <span
+            key={branch}
+            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#F6F6F8] text-[11px] font-semibold text-[#17181D] whitespace-nowrap"
+          >
+            <Store className="w-3 h-3 text-[#6B6F76]" />
+            {branch}
+          </span>
+        ))}
       </span>
     )}
 
@@ -429,17 +441,6 @@ const UserForm: React.FC<{
         </button>
       </div>
 
-      {error && (
-        <div
-          id="user-form-error"
-          role="alert"
-          className="mb-4 p-2.5 rounded-lg bg-[#FDECEE] border border-[#C8202D]/25 text-[#C8202D] text-xs font-semibold flex items-center gap-2"
-        >
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
       {/* Role first: it decides whether the branch field below applies */}
       <div className="mb-4">
         <span className={label}>Role</span>
@@ -471,7 +472,7 @@ const UserForm: React.FC<{
                       role,
                       // A branch on an inspector means nothing, and leaving a
                       // stale one behind would save it
-                      branchName: role === 'branch-manager' ? draft.branchName : undefined,
+                      branchNames: role === 'branch-manager' ? draft.branchNames : undefined,
                     })
                   }
                   aria-pressed={selected}
@@ -502,7 +503,7 @@ const UserForm: React.FC<{
             type="text"
             value={draft.name}
             onChange={(e) => onChange({ ...draft, name: e.target.value })}
-            placeholder="e.g. Imran Yousaf"
+            placeholder="e.g. Ali Barakat"
             className={field}
             autoFocus
           />
@@ -510,17 +511,23 @@ const UserForm: React.FC<{
 
         <div>
           <label className={label} htmlFor="user-form-email">
-            Email — also their sign-in
+            Email or username — their sign-in
           </label>
           <input
             id="user-form-email"
             type="text"
             value={draft.email}
             onChange={(e) => onChange({ ...draft, email: e.target.value })}
-            placeholder="name@royalgujrat.com"
+            placeholder="e.g. AliBarakat or name@royalgujrat.com"
             className={field}
             autoComplete="off"
           />
+          {/\s/.test(draft.email.trim()) && (
+            <p className="mt-1.5 text-[10px] text-[#6B6F76]">
+              Spaces are left out — they sign in as{' '}
+              <strong className="text-[#17181D]">{draft.email.replace(/\s+/g, '')}</strong>
+            </p>
+          )}
         </div>
 
         <div>
@@ -547,29 +554,63 @@ const UserForm: React.FC<{
         </div>
 
         {draft.role === 'branch-manager' && (
-          <div>
-            <label className={label} htmlFor="user-form-branch">
-              Branch they run
-            </label>
-            <select
-              id="user-form-branch"
-              value={draft.branchName ?? ''}
-              onChange={(e) => onChange({ ...draft, branchName: e.target.value || undefined })}
-              className={field}
-            >
-              <option value="">Choose a branch…</option>
-              {branches.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+          <fieldset className="sm:col-span-2">
+            <legend className={label}>Branches they run</legend>
+            {/*
+              Checkboxes rather than a dropdown: some managers run two
+              branches side by side, from the one account.
+            */}
+            <div id="user-form-branch" className="grid gap-1.5 sm:grid-cols-2">
+              {branches.map((name) => {
+                const chosen = draft.branchNames ?? [];
+                const checked = chosen.includes(name);
+                return (
+                  <label
+                    key={name}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md border text-[12px] cursor-pointer transition-colors ${
+                      checked
+                        ? 'border-[#C8202D] bg-[#FDECEE] text-[#17181D] font-semibold'
+                        : 'border-[#E6E7EB] text-[#17181D] hover:border-[#C8202D]/40'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? chosen.filter((b) => b !== name)
+                          : [...chosen, name];
+                        onChange({ ...draft, branchNames: next.length > 0 ? next : undefined });
+                      }}
+                      className="accent-[#C8202D]"
+                    />
+                    <span className="truncate">{name}</span>
+                  </label>
+                );
+              })}
+            </div>
             <p className="mt-1.5 text-[10px] text-[#9CA1A9]">
-              This is the whole of their access — records and inspections for this branch only.
+              This is the whole of their access — records and inspections for these branches only.
             </p>
-          </div>
+          </fieldset>
         )}
       </div>
+
+      {/*
+        Beside the button rather than at the top of the form: the form is long
+        enough to scroll, and a refusal printed above the fold read as the
+        button doing nothing.
+      */}
+      {error && (
+        <div
+          id="user-form-error"
+          role="alert"
+          className="mt-5 p-2.5 rounded-lg bg-[#FDECEE] border border-[#C8202D]/25 text-[#C8202D] text-xs font-semibold flex items-center gap-2"
+        >
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
       <div className="mt-5 pt-4 border-t border-[#EFEFF2] flex flex-wrap gap-2 justify-end">
         <button

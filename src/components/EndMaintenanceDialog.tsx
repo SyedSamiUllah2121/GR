@@ -51,7 +51,12 @@ const MAX_PHOTOS = 6;
 export const EndMaintenanceDialog: React.FC<{
   job: MaintenanceJob;
   onClose: () => void;
-  onDone: (job: MaintenanceJob) => void;
+  /**
+   * The job, closed. `warning` is set when the repair was recorded but the
+   * service done alongside it was not — the job is finished either way, so
+   * the dialog closes and the caller says what is still missing.
+   */
+  onDone: (job: MaintenanceJob, warning?: string) => void;
 }> = ({ job, onClose, onDone }) => {
   const [attendedBy, setAttendedBy] = useState(() => getLastPerson());
   const [resolutionNote, setResolutionNote] = useState('');
@@ -145,8 +150,20 @@ export const EndMaintenanceDialog: React.FC<{
       }
     }
 
-    setErrors(next);
-    if (Object.keys(next).length > 0) return;
+    /*
+     * Also said beside the button, in the form slot. The fields are at the
+     * top, and with photos attached the dialog is taller than a phone screen,
+     * so a refusal shown only up there read as Mark done doing nothing.
+     */
+    const problems = Object.values(next);
+    if (problems.length > 0) {
+      setErrors({
+        ...next,
+        form: problems.length === 1 ? problems[0] : 'A couple of things need fixing — they are marked above',
+      });
+      return;
+    }
+    setErrors({});
 
     if (attendedBy.trim()) rememberPerson(attendedBy);
 
@@ -200,8 +217,19 @@ export const EndMaintenanceDialog: React.FC<{
         },
         today
       );
+      /*
+       * The repair is already closed at this point, so the dialog cannot stay
+       * open offering to close it again — pressing the button a second time
+       * only met "This job is already finished". It closes, and says what did
+       * not get recorded.
+       */
       if (!result.ok) {
-        setErrors({ form: result.error ?? 'The repair was closed, but the service was not recorded' });
+        onDone(
+          saved,
+          `The repair was closed, but the service was not recorded: ${
+            result.error ?? 'record it from the appliance'
+          }`
+        );
         return;
       }
     }

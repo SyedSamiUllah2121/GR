@@ -438,7 +438,12 @@ export function openAssignments(all: Inspection[] = getInspections()): Inspectio
  * restamped to now: they were the moment it was *assigned*, and the report
  * measures the visit, which may be days later.
  */
-export function startAssignment(inspection: Inspection, now: Date = new Date()): Inspection {
+/**
+ * Turns an assigned visit into the inspector's draft. Null when the store
+ * refused it, so the caller does not open a checklist for a visit that was
+ * never started.
+ */
+export function startAssignment(inspection: Inspection, now: Date = new Date()): Inspection | null {
   const started: Inspection = {
     ...inspection,
     status: 'draft',
@@ -448,7 +453,7 @@ export function startAssignment(inspection: Inspection, now: Date = new Date()):
     currentSectionIndex: 0,
   };
 
-  saveInspection(started);
+  if (!saveInspection(started)) return null;
   saveActiveDraft(started);
   return started;
 }

@@ -1,4 +1,4 @@
-import { User } from '../types';
+import { User, branchesOf } from '../types';
 import {
   DEMO_SHORTHAND_USER_ID,
   authenticate,
@@ -22,6 +22,14 @@ import { notifyStorageChange } from './storage';
  */
 
 const KEY = 'inspection_log_session_v1';
+
+/**
+ * Which of their branches a manager who runs more than one is working on.
+ *
+ * Per tab, like the session itself, and cleared on every sign-in and sign-out
+ * so the next person on a shared tablet starts from their own first branch.
+ */
+const BRANCH_KEY = 'inspection_log_active_branch_v1';
 
 /**
  * Keys an earlier build wrote.
@@ -93,16 +101,76 @@ export function currentUserId(): string | null {
 }
 
 /**
- * The signed-in account, or null.
+ * The signed-in account exactly as stored, every branch it runs included.
  *
  * Returns null for a session naming an account that has since been withdrawn
  * or deleted, so a revoked account cannot keep using an open tab.
  */
-export function currentUser(): User | null {
+function signedInAccount(): User | null {
   const id = currentUserId();
   if (!id) return null;
   const user = getUserById(id);
   return user && user.active ? user : null;
+}
+
+/** The branch a multi-branch manager has switched to, or their first. */
+function activeBranchAmong(branches: string[]): string {
+  let stored: string | null = null;
+  try {
+    stored = sessionStorage.getItem(BRANCH_KEY);
+  } catch {
+    // Storage unreadable — fall back to their first branch
+  }
+  return stored && branches.includes(stored) ? stored : branches[0];
+}
+
+function clearActiveBranch(): void {
+  try {
+    sessionStorage.removeItem(BRANCH_KEY);
+  } catch {
+    // Nothing stored, or nothing to store in — either way nothing to clear
+  }
+}
+
+/**
+ * The signed-in account, as the app works with it, or null.
+ *
+ * A manager who runs more than one branch works on one of them at a time, so
+ * the account comes back holding only the branch they have switched to. Done
+ * here rather than screen by screen: every screen and every permission reads
+ * the user from this one place, so the dashboard, the records, the Monday
+ * round and the maintenance board all follow the switch together, and none
+ * of them can be left showing the other branch.
+ */
+export function currentUser(): User | null {
+  const user = signedInAccount();
+  if (!user) return null;
+  const branches = branchesOf(user);
+  if (branches.length < 2) return user;
+  return { ...user, branchNames: [activeBranchAmong(branches)] };
+}
+
+/**
+ * The branches the signed-in manager can switch between, and the one they
+ * are on. Empty for anyone with fewer than two, who has nothing to switch.
+ */
+export function switchableBranches(): { branches: string[]; active: string | null } {
+  const branches = branchesOf(signedInAccount());
+  if (branches.length < 2) return { branches: [], active: null };
+  return { branches, active: activeBranchAmong(branches) };
+}
+
+/** Moves a multi-branch manager onto another of their own branches. */
+export function switchBranch(name: string): boolean {
+  if (!switchableBranches().branches.includes(name)) return false;
+  try {
+    sessionStorage.setItem(BRANCH_KEY, name);
+  } catch (err) {
+    console.error('Failed to switch branch:', err);
+    return false;
+  }
+  notifyStorageChange();
+  return true;
 }
 
 export function isAuthenticated(): boolean {
@@ -123,8 +191,9 @@ export function signIn(email: string, password: string): SignInResult {
     ? getUsers().find((u) => u.id === DEMO_SHORTHAND_USER_ID && u.active) ?? null
     : authenticate(email, password);
 
-  if (!user) return { ok: false, error: 'Incorrect email or password' };
+  if (!user) return { ok: false, error: 'Incorrect username or password' };
 
+  clearActiveBranch();
   try {
     sessionStorage.setItem(KEY, user.id);
   } catch (err) {
@@ -137,6 +206,7 @@ export function signIn(email: string, password: string): SignInResult {
 }
 
 export function signOut(): void {
+  clearActiveBranch();
   try {
     sessionStorage.removeItem(KEY);
   } catch (err) {
@@ -160,12 +230,13 @@ export function signInAs(userId: string): SignInResult {
    * admin should not be one call away from anything that can reach the module.
    */
   if (!DEMO_SIGN_IN_ENABLED) {
-    return { ok: false, error: 'Sign in with your email address and password' };
+    return { ok: false, error: 'Sign in with your username and password' };
   }
 
   const user = getUserById(userId);
   if (!user || !user.active) return { ok: false, error: 'That account is not available' };
 
+  clearActiveBranch();
   try {
     sessionStorage.setItem(KEY, user.id);
   } catch (err) {

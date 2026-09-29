@@ -43,7 +43,7 @@ import {
 import { fromLocalInputValue, toLocalInputValue } from '../services/localDateTime';
 import { activeBranches, addBranch, branchUsage, removeBranch } from '../services/branchStore';
 import { inspectors as inspectorAccounts } from '../services/userStore';
-import { can, canDiscardDraft, fixedBranchFor } from '../services/permissions';
+import { can, canDiscardDraft, filingBranchesFor, fixedBranchFor } from '../services/permissions';
 import {
   createSurpriseVisit,
   nextAutoSurpriseDue,
@@ -104,11 +104,36 @@ export const NewInspectionScreen: React.FC = () => {
   const [selectedBranch, setSelectedBranch] = useState(() => branches[0]?.name ?? '');
 
   /*
-   * A branch manager has one branch and it is not up for choosing, so the
-   * selection is overridden rather than merely defaulted — that way it stays
-   * right even if the account's branch is changed while this form is open.
+   * A manager who runs more than one branch picks between their own, and
+   * only their own. Held apart from `selectedBranch`, which ranges over the
+   * whole estate for the admin.
    */
-  const branchName = fixedBranch ?? selectedBranch;
+  const ownBranches = filingBranchesFor(user);
+  const choosesOwnBranch = ownBranches !== null && ownBranches.length > 1;
+  const [ownPick, setOwnPick] = useState<string | null>(null);
+
+  /*
+   * The inspections page links here naming the branch whose round was
+   * started, so a manager with two lands on the right one. Read once on
+   * arrival, and only ever honoured for a branch that is theirs.
+   */
+  useEffect(() => {
+    const asked = new URLSearchParams(window.location.search).get('branch');
+    if (asked) setOwnPick(asked);
+  }, []);
+
+  /*
+   * A branch manager's branch is not up for choosing beyond their own, so the
+   * selection is overridden rather than merely defaulted — that way it stays
+   * right even if the account's branches are changed while this form is open.
+   */
+  const branchName =
+    fixedBranch ??
+    (choosesOwnBranch
+      ? ownPick && ownBranches.includes(ownPick)
+        ? ownPick
+        : ownBranches[0]
+      : selectedBranch);
 
   /**
    * Whether the system is allowed to place a surprise visit itself. The
@@ -270,6 +295,8 @@ export const NewInspectionScreen: React.FC = () => {
   const [otherInspector, setOtherInspector] = useState('');
   const [inspectionType, setInspectionType] = useState<InspectionType>('routine');
   const [nameError, setNameError] = useState<string | null>(null);
+  /** Why a Monday round could not be opened, when the store refused it. */
+  const [startError, setStartError] = useState<string | null>(null);
 
   // Formatted current date and time
   const now = new Date();
@@ -434,7 +461,16 @@ export const NewInspectionScreen: React.FC = () => {
       startedAt: new Date().toISOString(),
     };
 
-    saveActiveDraft(newInspection);
+    /*
+     * Only onto the checklist once the draft is actually stored. Going there
+     * regardless opened a checklist for a record that did not exist, and every
+     * answer given on it went nowhere.
+     */
+    if (!saveActiveDraft(newInspection)) {
+      setStartError('Could not start the inspection — this browser’s storage is full');
+      return;
+    }
+    setStartError(null);
     router.push(`/inspections/${newId}/checklist`);
   };
 
@@ -494,7 +530,9 @@ export const NewInspectionScreen: React.FC = () => {
             ? 'Send an inspector to a branch unannounced. Every branch runs the same full checklist.'
             : fixedBranch
               ? `This week's round for ${fixedBranch}. Every branch runs the same full checklist.`
-              : 'Pick the branch to begin. Every branch runs the same full checklist.'}
+              : choosesOwnBranch
+                ? 'Pick which of your branches this week’s round is for. Every branch runs the same full checklist.'
+                : 'Pick the branch to begin. Every branch runs the same full checklist.'}
         </p>
       </div>
 
@@ -599,7 +637,33 @@ export const NewInspectionScreen: React.FC = () => {
             no business removing branches, so they get the name and a padlock
             — a disabled dropdown would imply there was an alternative.
           */}
-          {kind === 'monday' && !mayPickBranch && (
+          {kind === 'monday' && !mayPickBranch && choosesOwnBranch && (
+            <div>
+              <label
+                htmlFor="own-branch-select"
+                className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
+              >
+                Branch
+              </label>
+              <select
+                id="own-branch-select"
+                value={branchName}
+                onChange={(e) => setOwnPick(e.target.value)}
+                className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D] focus:border-[#C8202D] cursor-pointer"
+              >
+                {ownBranches.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+                You inspect your own branches — one round each, every week.
+              </p>
+            </div>
+          )}
+
+          {kind === 'monday' && !mayPickBranch && !choosesOwnBranch && (
             <div>
               <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
                 Branch
@@ -834,9 +898,12 @@ export const NewInspectionScreen: React.FC = () => {
                       aria-checked={randomOn}
                       aria-label="Let the system place surprise visits"
                       onClick={() => {
-                        saveSetting('randomAssignment', !randomOn);
-                        setAssignError(null);
                         setAssignDone(null);
+                        setAssignError(
+                          saveSetting('randomAssignment', !randomOn)
+                            ? null
+                            : 'Could not save that setting — try again'
+                        );
                       }}
                       className={`shrink-0 relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
                         randomOn ? 'bg-[#157F4B]' : 'bg-[#C9CCD2]'
@@ -910,7 +977,9 @@ export const NewInspectionScreen: React.FC = () => {
                               Math.max(Math.round(Number(e.target.value) || 0), 0),
                               MAX_AUTO_SURPRISE_DAYS
                             );
-                            saveSetting('autoSurpriseDays', days);
+                            if (!saveSetting('autoSurpriseDays', days)) {
+                              setAssignError('Could not save that setting — try again');
+                            }
                           }}
                           className="w-16 px-2 py-1.5 bg-white border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D] text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
                         />
@@ -1127,12 +1196,6 @@ export const NewInspectionScreen: React.FC = () => {
                 </p>
               </div>
 
-              {assignError && (
-                <p role="alert" id="assign-error" className="text-xs font-semibold text-[#C8202D]">
-                  {assignError}
-                </p>
-              )}
-
               {assignDone && (
                 <div
                   id="assign-done"
@@ -1320,6 +1383,31 @@ export const NewInspectionScreen: React.FC = () => {
             </div>
           </div>
           )}
+
+          {/*
+            Why the button did not go ahead, said beside it. The field it is
+            about can be a screen above on a phone, with the checklist and the
+            date between — so a refusal shown only there read as nothing
+            happening. The field keeps its own marker as well.
+          */}
+          {(() => {
+            const problem =
+              kind === 'surprise'
+                ? assignError ??
+                  (availableInspectors.length === 0
+                    ? 'No inspector accounts yet — add one under Users first.'
+                    : null)
+                : nameError ?? startError;
+            return problem ? (
+              <p
+                role="alert"
+                id={kind === 'surprise' ? 'assign-error' : 'start-error'}
+                className="p-2.5 rounded-md bg-[#FDECEE] border border-[#C8202D]/25 text-xs font-semibold text-[#C8202D]"
+              >
+                {problem}
+              </p>
+            ) : null;
+          })()}
 
           <div className="pt-3 border-t border-[#E6E7EB] flex items-center justify-end gap-3">
             <button

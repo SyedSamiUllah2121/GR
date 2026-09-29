@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 import { ORGANISATION } from '../data/user';
-import { USER_ROLE_BLURB, USER_ROLE_KEYS, USER_ROLE_LABEL, User } from '../types';
+import { USER_ROLE_BLURB, USER_ROLE_KEYS, USER_ROLE_LABEL, User, branchesOf } from '../types';
 import { DEMO_SIGN_IN_ENABLED, signIn, signInAs } from '../services/session';
 import { homePathFor } from '../services/permissions';
 import { activeUsers } from '../services/userStore';
@@ -34,16 +34,12 @@ import { useRouter } from 'next/navigation';
 /**
  * The photograph behind the sign-in panel, tried in order.
  *
- * Drop a picture of the food at any of these paths and it appears — no code
- * change. With none of them present the panel falls back to a warm dark
- * ground rather than a broken image, and still reads as intentional.
+ * Empty while there is no photograph in `public/brand/`, so the panel draws
+ * its warm dark ground without asking the server for files that are not
+ * there — each of those probes was a 404 in the console on every sign-in.
+ * Put a picture of the food at `public/brand/login-bg.jpg` and list it here.
  */
-const BACKDROP_SOURCES = [
-  '/brand/login-bg.jpg',
-  '/brand/login-bg.jpeg',
-  '/brand/login-bg.png',
-  '/brand/login-bg.webp',
-];
+const BACKDROP_SOURCES: string[] = [];
 
 const LoginBackdrop: React.FC = () => {
   const [stage, setStage] = useState(0);
@@ -169,7 +165,7 @@ export const LoginScreen: React.FC = () => {
     if (result.ok && result.user) {
       enter(result.user);
     } else {
-      setErrorMessage(result.error ?? 'Incorrect email or password');
+      setErrorMessage(result.error ?? 'Incorrect username or password');
     }
   };
 
@@ -202,6 +198,8 @@ export const LoginScreen: React.FC = () => {
       enter(result.user);
     } else {
       setErrorMessage(result.error ?? 'Could not sign in as that account');
+      // The banner is above the form, and on a phone these buttons are below it
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -274,7 +272,7 @@ export const LoginScreen: React.FC = () => {
                 htmlFor="email-input"
                 className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
               >
-                Email
+                Email or username
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-[#9CA1A9] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -287,7 +285,7 @@ export const LoginScreen: React.FC = () => {
                     setEmail(e.target.value);
                     if (errorMessage) setErrorMessage('');
                   }}
-                  placeholder="Enter your email"
+                  placeholder="Enter your email or username"
                   className={fieldClass}
                   autoComplete="username"
                   required
@@ -402,7 +400,7 @@ export const LoginScreen: React.FC = () => {
                   <span className="min-w-0 flex-1">
                     <span className="block text-xs font-bold text-[#17181D] truncate">
                       {USER_ROLE_LABEL[account.role]}
-                      {account.branchName ? ` — ${account.branchName}` : ''}
+                      {branchesOf(account).length > 0 ? ` — ${branchesOf(account).join(' & ')}` : ''}
                     </span>
                     <span className="block text-[11px] text-[#6B6F76] truncate">
                       {USER_ROLE_BLURB[account.role]}

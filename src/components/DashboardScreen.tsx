@@ -26,7 +26,7 @@ import {
   Users,
   Wrench,
 } from 'lucide-react';
-import { Inspection, MaintenanceJob, ReasonGroup, Severity } from '../types';
+import { Inspection, MaintenanceJob, ReasonGroup, Severity, branchesOf } from '../types';
 import { useChecklist } from '../hooks/useChecklist';
 import { useBranches } from '../hooks/useBranches';
 import { useCurrentUser } from '../hooks/useCurrentUser';
@@ -113,9 +113,11 @@ export const DashboardScreen: React.FC = () => {
     [user, allInspections]
   );
 
+  const ownBranches = useMemo(() => branchesOf(user), [user]);
+
   const branches = useMemo(
-    () => (everyBranch ? allBranches : allBranches.filter((b) => b.name === user?.branchName)),
-    [everyBranch, allBranches, user]
+    () => (everyBranch ? allBranches : allBranches.filter((b) => ownBranches.includes(b.name))),
+    [everyBranch, allBranches, ownBranches]
   );
 
   const model = useMemo(
@@ -158,13 +160,11 @@ export const DashboardScreen: React.FC = () => {
     };
   }, [user, allJobs]);
 
-  /** This week's round, for the manager whose branch this dashboard is. */
-  const monday = useMemo(
+  /** This week's round at each branch the manager whose dashboard this is runs. */
+  const mondays = useMemo(
     () =>
-      user?.role === 'branch-manager' && user.branchName
-        ? mondayStatusFor(user.branchName, inspections)
-        : null,
-    [user, inspections]
+      ownBranches.map((branch) => ({ branch, monday: mondayStatusFor(branch, inspections) })),
+    [ownBranches, inspections]
   );
   const needsAction = model.severityTotals.critical + model.severityTotals.high;
   const inspectedCount = model.branches.filter((b) => !b.neverInspected).length;
@@ -177,11 +177,18 @@ export const DashboardScreen: React.FC = () => {
         <div>
           <h1 className="text-2xl md:text-[26px] font-bold tracking-tight text-[#17181D]">
             {/*
-              A branch manager's dashboard covers one branch, so it says
-              which. Calling it "Dashboard" while showing a single branch's
-              averages would read as the whole estate doing badly.
+              A branch manager's dashboard covers their own branches, so it
+              says which — or "Your branches" for a manager who runs two.
+              Calling it "Dashboard" while showing one branch's averages
+              would read as the whole estate doing badly.
             */}
-            {everyBranch ? 'Dashboard' : user?.branchName ?? 'Dashboard'}
+            {everyBranch
+              ? 'Dashboard'
+              : ownBranches.length === 1
+                ? ownBranches[0]
+                : ownBranches.length > 1
+                  ? 'Your branches'
+                  : 'Dashboard'}
           </h1>
           <p className="text-xs text-[#6B6F76] mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             {model.empty ? (
@@ -216,9 +223,10 @@ export const DashboardScreen: React.FC = () => {
             they land on. A link rather than the full card the inspections page
             carries — this page reports, and the doing belongs over there.
           */}
-          {monday && (
+          {mondays.map(({ branch, monday }, index) => (
             <Link
-              id="dashboard-monday-link"
+              key={branch}
+              id={index === 0 ? 'dashboard-monday-link' : `dashboard-monday-link-${index + 1}`}
               href="/inspections"
               className={`shrink-0 inline-flex items-center gap-2.5 px-4 py-2.5 rounded-lg border text-xs font-bold transition-colors ${
                 monday.done
@@ -230,6 +238,8 @@ export const DashboardScreen: React.FC = () => {
             >
               <CalendarClock className="w-4 h-4 shrink-0" />
               <span>
+                {/* Named only when there is more than one round to tell apart */}
+                {mondays.length > 1 && `${branch}: `}
                 {monday.done
                   ? 'Monday inspection done this week'
                   : monday.inProgress
@@ -242,7 +252,7 @@ export const DashboardScreen: React.FC = () => {
               </span>
               <ArrowRight className="w-3.5 h-3.5 shrink-0" />
             </Link>
-          )}
+          ))}
 
           {/*
             Equipment does not wait for Monday. A manager who finds a fault on
