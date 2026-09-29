@@ -8,7 +8,9 @@ import React, { useEffect, useRef, useState } from 'react';
  * Small enough to sit in a table row, so there are no axes or legend — the
  * number in the centre is the reading, and the ring is there to make a row of
  * branches comparable at a glance. Colour repeats what the number already
- * says rather than carrying meaning on its own.
+ * says rather than carrying meaning on its own — which is why the figure
+ * itself is ink rather than the ring's colour: text in the data colour reads
+ * as a second, louder mark, and the amber step is under 3:1 on white.
  */
 
 const TRACK = '#EFEFF2';
@@ -97,7 +99,7 @@ export const ScoreRing: React.FC<ScoreRingProps> = ({
       role="img"
       aria-label={`Score ${score} percent`}
     >
-      <svg width={size} height={size} className="-rotate-90">
+      <svg width={size} height={size} className="-rotate-90" aria-hidden>
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -119,10 +121,13 @@ export const ScoreRing: React.FC<ScoreRingProps> = ({
         />
       </svg>
       <span
-        className="absolute inset-0 flex items-center justify-center font-bold tabular-nums"
-        style={{ color: stroke, fontSize: Math.max(size * 0.26, 10) }}
+        className="absolute inset-0 flex items-center justify-center font-bold tabular-nums tracking-tight text-[#17181D]"
+        style={{ fontSize: Math.max(size * 0.27, 10) }}
       >
-        {score}%
+        {score}
+        <span className="font-semibold text-[#9CA1A9]" style={{ fontSize: '0.62em' }}>
+          %
+        </span>
       </span>
     </div>
   );

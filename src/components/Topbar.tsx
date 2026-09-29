@@ -3,11 +3,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { motion } from 'motion/react';
 import {
   Bell,
   CalendarClock,
   Check,
   ChevronDown,
+  ChevronRight,
   ClipboardList,
   LogOut,
   MapPin,
@@ -29,6 +31,7 @@ import { mondayStatusFor } from '../services/mondaySchedule';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useBranches } from '../hooks/useBranches';
 import { activeBranches } from '../services/branchStore';
+import { EASE_OUT, t } from './motion';
 
 /**
  * The bar above every screen: find a record, see what is outstanding, sign out.
@@ -425,11 +428,21 @@ export const Topbar: React.FC = () => {
   return (
     <div
       ref={barRef}
-      className="no-print sticky top-0 z-20 h-16 bg-white border-b border-[#E6E7EB] flex items-center gap-3 sm:gap-5 px-4 sm:px-6 md:px-8 shrink-0"
+      /*
+       * Frosted rather than solid, so the page scrolling under it stays
+       * faintly visible and the bar reads as sitting above the page rather
+       * than as a band cut out of it. The filter only reaches this bar's own
+       * contents — its panels are absolute, and nothing fixed lives in here.
+       */
+      className="no-print sticky top-0 z-20 h-16 bg-white/80 backdrop-blur-xl backdrop-saturate-150 border-b border-[#E8E9EE] shadow-[0_1px_0_rgba(16,24,40,0.02)] flex items-center gap-3 sm:gap-5 px-4 sm:px-6 md:px-8 shrink-0"
     >
       {/* Search */}
-      <div className="relative flex-1 max-w-2xl">
-        <Search className="w-4 h-4 text-[#9CA1A9] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="relative flex-1 max-w-xl">
+        <Search
+          className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors ${
+            open === 'search' ? 'text-[#17181D]' : 'text-[#9CA1A9]'
+          }`}
+        />
         <input
           id="global-search"
           type="search"
@@ -441,13 +454,13 @@ export const Topbar: React.FC = () => {
           onFocus={() => setOpen('search')}
           placeholder={compact ? 'Search' : 'Search branches, inspections, or jobs…'}
           aria-label="Search branches, inspections and maintenance jobs"
-          className={`w-full h-10 pl-10 ${query ? 'pr-9' : 'pr-3'} rounded-full bg-[#F6F6F8] border border-[#E6E7EB] text-sm text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:bg-white focus:border-[#C8202D]/40 transition-colors`}
+          className={`w-full h-10 pl-10 ${query ? 'pr-9' : 'pr-3'} rounded-xl bg-[#F4F5F7] border border-transparent text-[13px] text-[#17181D] placeholder:text-[#9CA1A9] hover:bg-[#EFF0F3] focus:outline-none focus:bg-white focus:border-[#E0E2E7] focus:shadow-[0_0_0_4px_rgba(200,32,45,0.08)] transition-[background-color,border-color,box-shadow] duration-200 [&::-webkit-search-cancel-button]:appearance-none`}
         />
         {query && (
           <button
             type="button"
             onClick={() => setQuery('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA1A9] hover:text-[#17181D] cursor-pointer"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md flex items-center justify-center text-[#9CA1A9] hover:text-[#17181D] hover:bg-[#F4F5F7] transition-colors cursor-pointer"
             aria-label="Clear search"
           >
             <X className="w-3.5 h-3.5" />
@@ -455,36 +468,46 @@ export const Topbar: React.FC = () => {
         )}
 
         {open === 'search' && query.trim().length >= 2 && (
-          <Panel className="left-0 right-0">
+          <Panel origin="top left" className="left-0 right-0">
             {hits.length === 0 ? (
-              <p className="px-4 py-6 text-xs text-[#6B6F76] text-center">
-                Nothing matches “{query.trim()}”.
-              </p>
+              <div className="px-4 py-8 flex flex-col items-center text-center">
+                <span className="w-10 h-10 rounded-xl bg-[#F4F5F7] text-[#9CA1A9] flex items-center justify-center">
+                  <Search className="w-[18px] h-[18px]" />
+                </span>
+                <p className="mt-3 text-xs text-[#6B6F76]">Nothing matches “{query.trim()}”.</p>
+              </div>
             ) : (
-              <ul className="py-1.5 max-h-[22rem] overflow-y-auto">
+              <ul className="p-1.5 max-h-[24rem] overflow-y-auto">
                 {hits.map((hit, i) => {
                   const newGroup = i === 0 || hits[i - 1].group !== hit.group;
                   return (
                     <li key={hit.key}>
                       {newGroup && (
-                        <p className="px-4 pt-2.5 pb-1 text-[9px] font-bold uppercase tracking-[0.14em] text-[#9CA1A9]">
+                        <p
+                          className={`px-2.5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9CA1A9] ${
+                            i === 0 ? 'pt-1.5' : 'pt-3'
+                          }`}
+                        >
                           {hit.group}
                         </p>
                       )}
                       <button
                         type="button"
                         onClick={() => go(hit.href)}
-                        className="w-full px-4 py-2 flex items-center gap-3 text-left hover:bg-[#FAFAFA] transition-colors cursor-pointer"
+                        className="w-full px-2.5 py-2 rounded-lg flex items-center gap-3 text-left hover:bg-[#F7F8FA] transition-colors cursor-pointer group"
                       >
-                        <hit.icon className="w-4 h-4 text-[#6B6F76] shrink-0" />
+                        <span className="w-8 h-8 rounded-lg bg-[#F4F5F7] text-[#6B6F76] flex items-center justify-center shrink-0 transition-colors group-hover:bg-white group-hover:text-[#17181D] group-hover:shadow-xs">
+                          <hit.icon className="w-4 h-4" />
+                        </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-xs font-semibold text-[#17181D] truncate">
+                          <span className="block text-[13px] font-semibold text-[#17181D] truncate">
                             {hit.title}
                           </span>
                           <span className="block text-[11px] text-[#6B6F76] truncate">
                             {hit.meta}
                           </span>
                         </span>
+                        <ChevronRight className="w-4 h-4 text-[#C9CCD2] shrink-0 transition-all group-hover:text-[#17181D] group-hover:translate-x-0.5" />
                       </button>
                     </li>
                   );
@@ -495,7 +518,7 @@ export const Topbar: React.FC = () => {
         )}
       </div>
 
-      <div className="flex items-center gap-1 sm:gap-2 ml-auto">
+      <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
         {/*
           The branch being worked on, where it can be seen from every screen.
           For a manager with more than one it is also where they switch: it
@@ -503,7 +526,7 @@ export const Topbar: React.FC = () => {
           round stands, so the branch not on screen is not forgotten.
         */}
         {activeBranch && (
-          <div className="relative min-w-0">
+          <div className="sm:relative min-w-0">
             <button
               type="button"
               id="topbar-branch"
@@ -511,17 +534,21 @@ export const Topbar: React.FC = () => {
               aria-expanded={switcher.branches.length > 0 ? open === 'branch' : undefined}
               aria-haspopup={switcher.branches.length > 0 ? 'menu' : undefined}
               title={switcher.branches.length > 0 ? 'Switch branch' : activeBranch}
-              className={`inline-flex items-center gap-1.5 max-w-[8.5rem] sm:max-w-[16rem] px-2.5 sm:px-3 py-1.5 rounded-full border border-[#E6E7EB] bg-[#F6F6F8] text-[11px] font-bold text-[#17181D] ${
+              className={`inline-flex items-center gap-2 h-9 max-w-[8.5rem] sm:max-w-[16rem] pl-1.5 pr-2.5 sm:pr-3 rounded-xl border bg-white text-xs font-bold text-[#17181D] shadow-xs transition-all duration-200 ${
+                open === 'branch' ? 'border-[#D5D8DE] shadow-sm' : 'border-[#E8E9EE]'
+              } ${
                 switcher.branches.length > 0
-                  ? 'hover:border-[#C8202D]/40 cursor-pointer'
+                  ? 'hover:border-[#D5D8DE] hover:shadow-sm cursor-pointer'
                   : 'cursor-default'
               }`}
             >
-              <Store className="w-3.5 h-3.5 text-[#C8202D] shrink-0" />
+              <span className="w-6 h-6 rounded-lg bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
+                <Store className="w-3.5 h-3.5" />
+              </span>
               <span className="truncate">{activeBranch}</span>
               {switcher.branches.length > 0 && (
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-[#9CA1A9] shrink-0 transition-transform ${
+                  className={`w-3.5 h-3.5 text-[#9CA1A9] shrink-0 transition-transform duration-200 ${
                     open === 'branch' ? 'rotate-180' : ''
                   }`}
                 />
@@ -529,9 +556,9 @@ export const Topbar: React.FC = () => {
             </button>
 
             {open === 'branch' && switcher.branches.length > 0 && (
-              <Panel className="right-0 w-72">
-                <div className="py-1.5" role="group" aria-label="Switch branch">
-                  <p className="px-4 pt-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#9CA1A9]">
+              <Panel className="left-4 right-4 sm:left-auto sm:right-0 sm:w-72">
+                <div className="p-1.5" role="group" aria-label="Switch branch">
+                  <p className="px-2.5 pt-1.5 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9CA1A9]">
                     Switch branch
                   </p>
                   {switcher.branches.map((branch) => {
@@ -543,22 +570,26 @@ export const Topbar: React.FC = () => {
                         type="button"
                         onClick={() => handleSwitchBranch(branch)}
                         aria-pressed={selected}
-                        className={`w-full px-4 py-2 flex items-center gap-2.5 text-left transition-colors cursor-pointer ${
-                          selected ? 'bg-[#FDECEE]' : 'hover:bg-[#FAFAFA]'
+                        className={`w-full px-2.5 py-2 rounded-lg flex items-center gap-3 text-left transition-colors cursor-pointer ${
+                          selected ? 'bg-[#FDF3F4]' : 'hover:bg-[#F7F8FA]'
                         }`}
                       >
-                        <Store
-                          className={`w-4 h-4 shrink-0 ${selected ? 'text-[#C8202D]' : 'text-[#6B6F76]'}`}
-                        />
+                        <span
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                            selected ? 'bg-[#FDECEE] text-[#C8202D]' : 'bg-[#F4F5F7] text-[#6B6F76]'
+                          }`}
+                        >
+                          <Store className="w-4 h-4" />
+                        </span>
                         <span className="min-w-0 flex-1">
                           <span
-                            className={`block text-xs truncate ${
-                              selected ? 'font-bold text-[#C8202D]' : 'font-semibold text-[#17181D]'
+                            className={`block text-[13px] truncate ${
+                              selected ? 'font-bold text-[#A81823]' : 'font-semibold text-[#17181D]'
                             }`}
                           >
                             {branch}
                           </span>
-                          <span className={`block text-[10px] font-semibold ${monday.tone}`}>
+                          <span className={`block text-[11px] font-semibold ${monday.tone}`}>
                             {monday.text}
                           </span>
                         </span>
@@ -573,47 +604,68 @@ export const Topbar: React.FC = () => {
         )}
 
         {/* Alerts */}
-        <div className="relative">
+        <div className="sm:relative">
           <button
             type="button"
             id="topbar-alerts-btn"
             onClick={() => setOpen(open === 'alerts' ? null : 'alerts')}
             aria-expanded={open === 'alerts'}
             aria-label={`Alerts${alerts.length > 0 ? ` — ${alerts.length} outstanding` : ''}`}
-            className="relative w-10 h-10 rounded-full flex items-center justify-center text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] transition-colors cursor-pointer"
+            className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-colors duration-200 cursor-pointer ${
+              open === 'alerts'
+                ? 'bg-[#F4F5F7] text-[#17181D]'
+                : 'text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F4F5F7]'
+            }`}
           >
             <Bell className="w-[18px] h-[18px]" />
             {alerts.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-[#C8202D] text-white text-[9px] font-bold flex items-center justify-center tabular-nums">
+              <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#C8202D] ring-2 ring-white text-white text-[10px] font-bold flex items-center justify-center tabular-nums">
                 {alerts.length > 9 ? '9+' : alerts.length}
               </span>
             )}
           </button>
 
           {open === 'alerts' && (
-            <Panel className="right-0 w-[20rem] sm:w-[23rem]">
-              <p className="px-4 py-2.5 border-b border-[#EFEFF2] text-[11px] font-bold uppercase tracking-wider text-[#6B6F76]">
-                Needs attention
-              </p>
+            <Panel className="left-4 right-4 sm:left-auto sm:right-0 sm:w-[23rem]">
+              <div className="px-4 py-3 border-b border-[#F0F1F4] flex items-center gap-2">
+                <p className="text-[13px] font-bold text-[#17181D]">Needs attention</p>
+                {alerts.length > 0 && (
+                  <span className="rounded-full bg-[#FDECEE] px-2 py-0.5 text-[11px] font-bold text-[#A81823] tabular-nums">
+                    {alerts.length}
+                  </span>
+                )}
+              </div>
               {alerts.length === 0 ? (
-                <p className="px-4 py-6 text-xs text-[#6B6F76] text-center">
-                  Nothing outstanding. Every branch is within schedule.
-                </p>
+                <div className="px-4 py-8 flex flex-col items-center text-center">
+                  <span className="w-10 h-10 rounded-xl bg-[#E6F4EC] text-[#157F4B] flex items-center justify-center">
+                    <Check className="w-5 h-5" />
+                  </span>
+                  <p className="mt-3 text-xs text-[#6B6F76]">
+                    Nothing outstanding. Every branch is within schedule.
+                  </p>
+                </div>
               ) : (
-                <ul className="py-1 max-h-[22rem] overflow-y-auto">
+                <ul className="p-1.5 max-h-[24rem] overflow-y-auto">
                   {alerts.map((alert) => (
                     <li key={alert.key}>
                       <button
                         type="button"
                         onClick={() => go(alert.href)}
-                        className="w-full px-4 py-2.5 flex items-start gap-3 text-left hover:bg-[#FAFAFA] transition-colors cursor-pointer"
+                        className="w-full px-2.5 py-2.5 rounded-lg flex items-start gap-3 text-left hover:bg-[#F7F8FA] transition-colors cursor-pointer group"
                       >
-                        <alert.icon
-                          className={`w-4 h-4 shrink-0 mt-0.5 ${
-                            alert.tone === 'bad' ? 'text-[#C8202D]' : 'text-[#B4740A]'
+                        <span
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                            alert.tone === 'bad'
+                              ? 'bg-[#FDECEE] text-[#C8202D]'
+                              : 'bg-[#FDF3E2] text-[#B4740A]'
                           }`}
-                        />
-                        <span className="text-xs text-[#17181D] leading-snug">{alert.text}</span>
+                        >
+                          <alert.icon className="w-4 h-4" />
+                        </span>
+                        <span className="flex-1 min-w-0 pt-1.5 text-[13px] text-[#17181D] leading-snug">
+                          {alert.text}
+                        </span>
+                        <ChevronRight className="w-4 h-4 mt-2 text-[#C9CCD2] shrink-0 transition-all group-hover:text-[#17181D] group-hover:translate-x-0.5" />
                       </button>
                     </li>
                   ))}
@@ -623,7 +675,7 @@ export const Topbar: React.FC = () => {
           )}
         </div>
 
-        <span className="hidden sm:block w-px h-6 bg-[#E6E7EB]" />
+        <span className="hidden sm:block w-px h-6 bg-[#E8E9EE]" />
 
         {/* User */}
         <div className="relative">
@@ -632,34 +684,41 @@ export const Topbar: React.FC = () => {
             id="topbar-user-btn"
             onClick={() => setOpen(open === 'user' ? null : 'user')}
             aria-expanded={open === 'user'}
-            className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-full hover:bg-[#F6F6F8] transition-colors cursor-pointer"
+            className={`flex items-center gap-2.5 p-1 md:pr-2.5 rounded-xl transition-colors duration-200 cursor-pointer ${
+              open === 'user' ? 'bg-[#F4F5F7]' : 'hover:bg-[#F4F5F7]'
+            }`}
           >
-            <span className="w-9 h-9 rounded-full bg-[#C8202D] text-white text-xs font-bold flex items-center justify-center shrink-0">
-              {user?.initials ?? '?'}
-            </span>
+            <Avatar initials={user?.initials ?? '?'} />
             <span className="hidden md:block text-left leading-tight">
               <span className="block text-xs font-bold text-[#17181D]">{user?.name ?? ''}</span>
               <span className="block text-[11px] text-[#6B6F76]">{roleLine}</span>
             </span>
-            <ChevronDown className="hidden md:block w-4 h-4 text-[#9CA1A9]" />
+            <ChevronDown
+              className={`hidden md:block w-4 h-4 text-[#9CA1A9] transition-transform duration-200 ${
+                open === 'user' ? 'rotate-180' : ''
+              }`}
+            />
           </button>
 
           {open === 'user' && (
-            <Panel className="right-0 w-60">
-              <div className="px-4 py-3 border-b border-[#EFEFF2]">
-                <p className="text-xs font-bold text-[#17181D]">{user?.name ?? ''}</p>
-                <p className="text-[11px] text-[#6B6F76]">{roleLine}</p>
-                {user && (
-                  <p className="mt-1 text-[10px] text-[#9CA1A9] break-all">{user.email}</p>
-                )}
+            <Panel className="right-0 w-64">
+              <div className="px-4 py-3.5 border-b border-[#F0F1F4] flex items-center gap-3">
+                <Avatar initials={user?.initials ?? '?'} size="lg" />
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-[#17181D] truncate">{user?.name ?? ''}</p>
+                  <p className="text-[11px] text-[#6B6F76]">{roleLine}</p>
+                  {user && (
+                    <p className="mt-0.5 text-[11px] text-[#9CA1A9] break-all">{user.email}</p>
+                  )}
+                </div>
               </div>
-              <div className="py-1.5">
+              <div className="p-1.5">
                 {/* Only the admin has a checklist to set up */}
                 {can(user, 'checklist.manage') && (
                   <Link
                     href="/checklist"
                     onClick={() => setOpen(null)}
-                    className="w-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-[#17181D] hover:bg-[#FAFAFA] transition-colors"
+                    className="w-full px-2.5 py-2 rounded-lg flex items-center gap-2.5 text-xs font-semibold text-[#17181D] hover:bg-[#F7F8FA] transition-colors"
                   >
                     <ClipboardList className="w-4 h-4 text-[#6B6F76]" />
                     Checklist setup
@@ -669,16 +728,19 @@ export const Topbar: React.FC = () => {
                   <Link
                     href="/users"
                     onClick={() => setOpen(null)}
-                    className="w-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-[#17181D] hover:bg-[#FAFAFA] transition-colors"
+                    className="w-full px-2.5 py-2 rounded-lg flex items-center gap-2.5 text-xs font-semibold text-[#17181D] hover:bg-[#F7F8FA] transition-colors"
                   >
                     <UserCog className="w-4 h-4 text-[#6B6F76]" />
                     Users &amp; access
                   </Link>
                 )}
+                {(can(user, 'checklist.manage') || can(user, 'users.manage')) && (
+                  <div className="my-1.5 mx-2.5 h-px bg-[#F0F1F4]" aria-hidden />
+                )}
                 <button
                   type="button"
                   onClick={handleSignOut}
-                  className="w-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-[#C8202D] hover:bg-[#FDECEE] transition-colors cursor-pointer"
+                  className="w-full px-2.5 py-2 rounded-lg flex items-center gap-2.5 text-xs font-semibold text-[#C8202D] hover:bg-[#FDF3F4] transition-colors cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                   Sign out
@@ -692,14 +754,44 @@ export const Topbar: React.FC = () => {
   );
 };
 
-/** The dropdown shell. One place for the surface, so all three panels match. */
-const Panel: React.FC<{ className?: string; children: React.ReactNode }> = ({
-  className = '',
-  children,
-}) => (
-  <div
-    className={`absolute top-[calc(100%+0.5rem)] bg-white border border-[#E6E7EB] rounded-xl shadow-lg overflow-hidden z-30 ${className}`}
+/** The signed-in account's initials, on the brand red. */
+const Avatar: React.FC<{ initials: string; size?: 'md' | 'lg' }> = ({ initials, size = 'md' }) => (
+  <span
+    className={`rounded-full bg-gradient-to-br from-[#D6303D] to-[#A81823] text-white font-bold flex items-center justify-center shrink-0 shadow-[0_4px_10px_-4px_rgba(200,32,45,0.6)] ring-2 ring-white ${
+      size === 'lg' ? 'w-10 h-10 text-[13px]' : 'w-8 h-8 text-[11px]'
+    }`}
+  >
+    {initials}
+  </span>
+);
+
+/**
+ * The dropdown shell. One place for the surface, so all three panels match.
+ *
+ * Each grows out of the control that opened it — a short fade with a slight
+ * drop and scale from that corner. Closing is instant rather than animated:
+ * a panel lingering on its way out is still there to be read and clicked,
+ * and the next panel opened would briefly sit on top of it. A transform is
+ * safe here: the panels are absolute, and nothing inside them is fixed.
+ *
+ * Below `sm` the branch and alert panels are measured from the bar itself
+ * rather than from their button (their wrappers are only `relative` from
+ * `sm` up), so on a phone they span the screen with a gutter each side
+ * instead of hanging off its left edge.
+ */
+const Panel: React.FC<{
+  className?: string;
+  /** The corner it grows from: the side it is pinned to. */
+  origin?: 'top right' | 'top left';
+  children: React.ReactNode;
+}> = ({ className = '', origin = 'top right', children }) => (
+  <motion.div
+    initial={{ opacity: 0, y: -6, scale: 0.97 }}
+    animate={{ opacity: 1, y: 0, scale: 1 }}
+    transition={{ duration: t(0.22), ease: EASE_OUT }}
+    style={{ transformOrigin: origin }}
+    className={`absolute top-[calc(100%+0.5rem)] bg-white border border-[#E8E9EE] rounded-2xl shadow-[0_20px_44px_-16px_rgba(16,24,40,0.28),0_2px_6px_-2px_rgba(16,24,40,0.08)] overflow-hidden z-30 ${className}`}
   >
     {children}
-  </div>
+  </motion.div>
 );

@@ -65,6 +65,33 @@
   }
 }
 
+/*
+ * An entrance that needs no script: for screens rendered on the server, where
+ * a motion entrance would hold the content at opacity 0 until hydration.
+ * Stagger with an inline `animation-delay`.
+ */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-rise {
+  /* 0.45s at the app's tempo of 1.7 (see TEMPO in motion.tsx), on the same ease-out cubic */
+  animation: rise-in 0.77s cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise {
+    animation: none;
+  }
+}
+
 @media print {
   body {
     background-color: #ffffff !important;

@@ -9,6 +9,9 @@ import {
   CalendarClock,
   Check,
   ChevronDown,
+  ChevronRight,
+  ClipboardList,
+  Clock,
   Lock,
   PlayCircle,
   Plus,
@@ -61,6 +64,8 @@ import {
 } from '../services/storage';
 import { useRouter } from 'next/navigation';
 import { formatDate, formatDateTime, formatTimeOnly } from '../services/reportModel';
+import { BUTTON, CARD, PageHeader } from './ui';
+import { Reveal, Stagger, StaggerItem } from './motion';
 
 /** Sentinel for the "not on the list" option. */
 const OTHER_INSPECTOR = '__other__';
@@ -511,123 +516,146 @@ export const NewInspectionScreen: React.FC = () => {
    * The fields pair up from `md` and the page stops scrolling.
    */
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto w-full">
-      {/* Back link */}
-      <button
-        type="button"
-        onClick={() => router.push('/inspections')}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6B6F76] hover:text-[#17181D] mb-6 transition cursor-pointer"
-      >
-        <ArrowLeft className="w-3.5 h-3.5" />
-        <span>Back to inspection records</span>
-      </button>
+    <div className="p-5 sm:p-6 md:p-8 lg:p-10 max-w-5xl mx-auto w-full space-y-6">
+      <Reveal>
+        {/* Back link */}
+        <button
+          type="button"
+          onClick={() => router.push('/inspections')}
+          className="group inline-flex items-center gap-1.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] mb-4 transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
+          <span>Back to inspection records</span>
+        </button>
 
-      {/* Heading */}
-      <div className="mb-6">
-        <h1 className="text-xl font-bold tracking-tight text-[#17181D]">New inspection</h1>
-        <p className="text-xs text-[#6B6F76] mt-0.5">
-          {kind === 'surprise'
-            ? 'Send an inspector to a branch unannounced. Every branch runs the same full checklist.'
-            : fixedBranch
-              ? `This week's round for ${fixedBranch}. Every branch runs the same full checklist.`
-              : choosesOwnBranch
-                ? 'Pick which of your branches this week’s round is for. Every branch runs the same full checklist.'
-                : 'Pick the branch to begin. Every branch runs the same full checklist.'}
-        </p>
-      </div>
+        <PageHeader
+          eyebrow={kind === 'surprise' ? 'Surprise visit' : 'Inspections'}
+          title="New inspection"
+          subtitle={
+            kind === 'surprise'
+              ? 'Send an inspector to a branch unannounced. Every branch runs the same full checklist.'
+              : fixedBranch
+                ? `This week's round for ${fixedBranch}. Every branch runs the same full checklist.`
+                : choosesOwnBranch
+                  ? 'Pick which of your branches this week’s round is for. Every branch runs the same full checklist.'
+                  : 'Pick the branch to begin. Every branch runs the same full checklist.'
+          }
+        />
+      </Reveal>
 
       {/*
         Which kind of visit. Only the admin sees this: a branch manager can
         raise one kind, so a picker with a single option would be furniture.
       */}
       {mayAssignSurprise && (
-        <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <KindCard
-            id="visit-kind-monday"
-            selected={kind === 'monday'}
-            icon={CalendarCheck}
-            title={INSPECTION_KIND_LABEL.monday}
-            blurb="The branch's own weekly round. Start it now and fill it in."
-            onSelect={() => {
-              setKind('monday');
-              setAssignDone(null);
-              setAssignError(null);
-            }}
-          />
-          <KindCard
-            id="visit-kind-surprise"
-            selected={kind === 'surprise'}
-            icon={Zap}
-            title={INSPECTION_KIND_LABEL.surprise}
-            blurb="Assign a branch to an inspector. They carry it out unannounced."
-            onSelect={() => {
-              setKind('surprise');
-              setNameError(null);
-            }}
-          />
-        </div>
+        <Stagger className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <StaggerItem>
+            <KindCard
+              id="visit-kind-monday"
+              selected={kind === 'monday'}
+              icon={CalendarCheck}
+              title={INSPECTION_KIND_LABEL.monday}
+              blurb="The branch's own weekly round. Start it now and fill it in."
+              onSelect={() => {
+                setKind('monday');
+                setAssignDone(null);
+                setAssignError(null);
+              }}
+            />
+          </StaggerItem>
+          <StaggerItem>
+            <KindCard
+              id="visit-kind-surprise"
+              selected={kind === 'surprise'}
+              icon={Zap}
+              title={INSPECTION_KIND_LABEL.surprise}
+              blurb="Assign a branch to an inspector. They carry it out unannounced."
+              onSelect={() => {
+                setKind('surprise');
+                setNameError(null);
+              }}
+            />
+          </StaggerItem>
+        </Stagger>
       )}
 
       {/* Existing draft warning banner */}
       {existingDraft && existingDraft.status === 'draft' && (
-        <div
-          id="existing-draft-notice"
-          className="mb-6 p-4 rounded-md bg-[#FDF3E2] border border-[#B4740A]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs"
-        >
-          <div className="flex items-start gap-3">
-            <div className="p-1.5 bg-[#B4740A]/15 text-[#B4740A] rounded-md mt-0.5">
-              <AlertCircle className="w-4 h-4" />
+        <Reveal delay={0.05}>
+          <div
+            id="existing-draft-notice"
+            className={`${CARD} relative overflow-hidden p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4`}
+          >
+            <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-[#B4740A]" />
+            <div className="flex items-start gap-3.5">
+              <span className="w-10 h-10 rounded-xl bg-[#FDF3E2] text-[#B4740A] flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </span>
+              <div>
+                <p className="text-sm font-bold text-[#17181D]">
+                  Unfinished draft exists: {existingDraft.branchName}
+                </p>
+                <p className="text-xs text-[#6B6F76] mt-0.5">
+                  {FULL_CHECKLIST_LABEL} • Started {formatDate(existingDraft.date)} at{' '}
+                  {existingDraft.time}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-[#17181D]">
-                Unfinished draft exists: {existingDraft.branchName}
-              </p>
-              <p className="text-xs text-[#6B6F76] mt-0.5">
-                {FULL_CHECKLIST_LABEL} • Started {formatDate(existingDraft.date)} at{' '}
-                {existingDraft.time}
-              </p>
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <button
+                id="existing-draft-resume-btn"
+                type="button"
+                onClick={handleResumeDraft}
+                className={`${BUTTON.primary} h-9 px-3.5`}
+              >
+                <PlayCircle className="w-3.5 h-3.5" />
+                <span>Resume</span>
+              </button>
+              {/* Deleting a record, or freeing the slot — never the same button */}
+              {canDiscardDraft(user, existingDraft) ? (
+                <button
+                  id="existing-draft-discard-btn"
+                  type="button"
+                  onClick={handleDiscardDraft}
+                  className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-bold text-[#C8202D] bg-white border border-[#C8202D]/30 rounded-xl hover:bg-[#FDECEE] transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Discard</span>
+                </button>
+              ) : (
+                <button
+                  id="existing-draft-set-aside-btn"
+                  type="button"
+                  onClick={handleDiscardDraft}
+                  title="Keeps the visit and the answers on it"
+                  className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-bold text-[#6B6F76] bg-white border border-[#E4E6EB] rounded-xl hover:bg-[#F4F5F7] hover:text-[#17181D] transition-colors cursor-pointer"
+                >
+                  <CalendarClock className="w-3.5 h-3.5" />
+                  <span>Set aside</span>
+                </button>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            <button
-              id="existing-draft-resume-btn"
-              type="button"
-              onClick={handleResumeDraft}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#C8202D] hover:bg-[#A81823] text-white rounded-md transition-colors cursor-pointer"
-            >
-              <PlayCircle className="w-3.5 h-3.5" />
-              <span>Resume</span>
-            </button>
-            {/* Deleting a record, or freeing the slot — never the same button */}
-            {canDiscardDraft(user, existingDraft) ? (
-              <button
-                id="existing-draft-discard-btn"
-                type="button"
-                onClick={handleDiscardDraft}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#C8202D] border border-[#C8202D]/30 rounded-md hover:bg-[#FDECEE] transition-colors cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Discard</span>
-              </button>
-            ) : (
-              <button
-                id="existing-draft-set-aside-btn"
-                type="button"
-                onClick={handleDiscardDraft}
-                title="Keeps the visit and the answers on it"
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-[#6B6F76] border border-[#E6E7EB] rounded-md hover:bg-[#F6F6F8] hover:text-[#17181D] transition-colors cursor-pointer"
-              >
-                <CalendarClock className="w-3.5 h-3.5" />
-                <span>Set aside</span>
-              </button>
-            )}
-          </div>
-        </div>
+        </Reveal>
       )}
 
-      {/* Form Card */}
-      <div className="bg-white border border-[#E6E7EB] rounded-md p-6 md:p-8 shadow-xs">
-        <form onSubmit={handleStartInspection} className="space-y-5">
+      {/*
+        The form. Risen into place like the cards above it — nothing inside
+        is fixed or sticky: the branch list is absolutely placed, and the
+        remove-branch dialog is rendered outside this, at the foot of the page.
+      */}
+      <Reveal delay={0.08}>
+      <div className={`${CARD}`}>
+        <form onSubmit={handleStartInspection}>
+          <FormSection
+            step={1}
+            title={kind === 'surprise' ? 'Where, and who goes' : 'Visit details'}
+            caption={
+              kind === 'surprise'
+                ? 'Both can be left to the system, and the time is optional.'
+                : 'The branch, who is carrying it out, and why.'
+            }
+          >
           {/*
             Branch.
 
@@ -639,25 +667,24 @@ export const NewInspectionScreen: React.FC = () => {
           */}
           {kind === 'monday' && !mayPickBranch && choosesOwnBranch && (
             <div>
-              <label
-                htmlFor="own-branch-select"
-                className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-              >
+              <label htmlFor="own-branch-select" className={LABEL}>
                 Branch
               </label>
-              <select
-                id="own-branch-select"
-                value={branchName}
-                onChange={(e) => setOwnPick(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D] focus:border-[#C8202D] cursor-pointer"
-              >
-                {ownBranches.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+              <SelectShell>
+                <select
+                  id="own-branch-select"
+                  value={branchName}
+                  onChange={(e) => setOwnPick(e.target.value)}
+                  className={`${SELECT} font-semibold`}
+                >
+                  {ownBranches.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </SelectShell>
+              <p className={HINT}>
                 You inspect your own branches — one round each, every week.
               </p>
             </div>
@@ -665,18 +692,13 @@ export const NewInspectionScreen: React.FC = () => {
 
           {kind === 'monday' && !mayPickBranch && !choosesOwnBranch && (
             <div>
-              <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
-                Branch
-              </span>
-              <p
-                id="fixed-branch"
-                className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D]"
-              >
+              <span className={LABEL}>Branch</span>
+              <p id="fixed-branch" className={READONLY}>
                 <Store className="w-4 h-4 text-[#6B6F76] shrink-0" />
                 <span className="truncate">{fixedBranch}</span>
                 <Lock className="w-3.5 h-3.5 text-[#9CA1A9] ml-auto shrink-0" />
               </p>
-              <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+              <p className={HINT}>
                 You inspect your own branch — this cannot be changed.
               </p>
             </div>
@@ -684,9 +706,7 @@ export const NewInspectionScreen: React.FC = () => {
 
           {kind === 'monday' && mayPickBranch && (
           <div ref={branchMenuRef}>
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
-              Branch
-            </span>
+            <span className={LABEL}>Branch</span>
             <div className="flex items-center gap-2">
               <div className="relative flex-1 min-w-0">
                 <button
@@ -695,11 +715,18 @@ export const NewInspectionScreen: React.FC = () => {
                   onClick={() => setBranchMenuOpen((v) => !v)}
                   aria-expanded={branchMenuOpen}
                   aria-haspopup="listbox"
-                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] text-left hover:border-[#C9CCD2] focus:outline-none focus:ring-1 focus:ring-[#C8202D] focus:border-[#C8202D] transition-colors cursor-pointer"
+                  className={`${FIELD} flex items-center justify-between gap-2 text-left cursor-pointer ${
+                    branchMenuOpen ? 'border-[#C8202D]/60 ring-4 ring-[#C8202D]/10' : ''
+                  }`}
                 >
-                  <span className="truncate">{selectedBranch || 'Select a branch'}</span>
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <Store className="w-4 h-4 text-[#9CA1A9] shrink-0" />
+                    <span className={`truncate ${selectedBranch ? 'font-semibold' : 'text-[#9CA1A9]'}`}>
+                      {selectedBranch || 'Select a branch'}
+                    </span>
+                  </span>
                   <ChevronDown
-                    className={`w-4 h-4 text-[#6B6F76] shrink-0 transition-transform ${
+                    className={`w-4 h-4 text-[#9CA1A9] shrink-0 transition-transform duration-200 ${
                       branchMenuOpen ? 'rotate-180' : ''
                     }`}
                   />
@@ -709,15 +736,15 @@ export const NewInspectionScreen: React.FC = () => {
                   <div
                     role="listbox"
                     aria-label="Branch"
-                    className="absolute z-30 top-[calc(100%+0.25rem)] left-0 right-0 bg-white border border-[#E6E7EB] rounded-lg shadow-lg overflow-hidden max-h-72 overflow-y-auto"
+                    className="absolute z-30 top-[calc(100%+0.375rem)] left-0 right-0 bg-white border border-[#E8E9EE] rounded-xl shadow-[0_16px_40px_-12px_rgba(16,24,40,0.25)] overflow-hidden max-h-72 overflow-y-auto p-1"
                   >
                     {branches.map((b) => {
                       const selected = b.name === selectedBranch;
                       return (
                         <div
                           key={b.id}
-                          className={`flex items-stretch border-b border-[#EFEFF2] last:border-b-0 ${
-                            selected ? 'bg-[#FDECEE]' : 'hover:bg-[#FAFAFA]'
+                          className={`flex items-stretch rounded-lg transition-colors ${
+                            selected ? 'bg-[#FDECEE]' : 'hover:bg-[#F7F8FA]'
                           }`}
                         >
                           <button
@@ -728,14 +755,14 @@ export const NewInspectionScreen: React.FC = () => {
                               setSelectedBranch(b.name);
                               setBranchMenuOpen(false);
                             }}
-                            className="flex-1 min-w-0 flex items-center gap-2 px-3 py-2.5 text-left cursor-pointer"
+                            className="flex-1 min-w-0 flex items-center gap-2.5 px-3 py-2.5 text-left cursor-pointer"
                           >
                             <span className="min-w-0 flex-1">
                               <span
                                 className={`block text-sm truncate ${
                                   selected
-                                    ? 'font-bold text-[#C8202D]'
-                                    : 'font-medium text-[#17181D]'
+                                    ? 'font-bold text-[#A81823]'
+                                    : 'font-semibold text-[#17181D]'
                                 }`}
                               >
                                 {b.name}
@@ -760,7 +787,7 @@ export const NewInspectionScreen: React.FC = () => {
                                 : `Remove ${b.name}`
                             }
                             aria-label={`Remove ${b.name}`}
-                            className="px-3 flex items-center text-[#C9CCD2] hover:text-[#C8202D] hover:bg-[#FDECEE] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#C9CCD2] transition-colors cursor-pointer shrink-0"
+                            className="px-3 my-1 mr-1 rounded-md flex items-center text-[#C9CCD2] hover:text-[#C8202D] hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#C9CCD2] transition-colors cursor-pointer shrink-0"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -783,16 +810,20 @@ export const NewInspectionScreen: React.FC = () => {
                   }}
                   aria-expanded={addingBranch}
                   title="Add a branch"
-                  className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold text-[#C8202D] bg-white border border-[#C8202D]/30 rounded-md hover:bg-[#FDECEE] transition-colors cursor-pointer shrink-0"
+                  className={`inline-flex items-center gap-1.5 h-11 px-3.5 text-xs font-bold rounded-xl border transition-all cursor-pointer shrink-0 ${
+                    addingBranch
+                      ? 'bg-[#FDECEE] border-[#C8202D]/40 text-[#A81823]'
+                      : 'bg-white border-[#E4E6EB] text-[#17181D] hover:border-[#C8202D]/40 hover:text-[#C8202D] shadow-xs'
+                  }`}
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className={`w-4 h-4 transition-transform duration-200 ${addingBranch ? 'rotate-45' : ''}`} />
                   <span className="hidden sm:inline">New branch</span>
                 </button>
               )}
             </div>
 
             {addingBranch && mayManageBranches && (
-              <div className="mt-2 p-3 rounded-md border border-[#E6E7EB] bg-[#FBFBFC] space-y-2">
+              <div className="mt-3 p-4 rounded-xl border border-[#E8E9EE] bg-[#FAFBFC] space-y-2.5">
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     autoFocus
@@ -810,7 +841,7 @@ export const NewInspectionScreen: React.FC = () => {
                       }
                       if (e.key === 'Escape') setAddingBranch(false);
                     }}
-                    className="flex-1 px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]"
+                    className={`${FIELD} h-10 flex-1`}
                   />
                   <input
                     aria-label="New branch location"
@@ -824,21 +855,21 @@ export const NewInspectionScreen: React.FC = () => {
                       }
                       if (e.key === 'Escape') setAddingBranch(false);
                     }}
-                    className="flex-1 px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]"
+                    className={`${FIELD} h-10 flex-1`}
                   />
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={handleAddBranch}
                       disabled={!newBranchName.trim()}
-                      className="px-3.5 py-2 bg-[#C8202D] hover:bg-[#A81823] disabled:bg-[#E6E7EB] disabled:text-[#6B6F76] disabled:cursor-not-allowed text-white text-xs font-bold rounded-md transition-colors cursor-pointer"
+                      className={BUTTON.primary}
                     >
                       Add
                     </button>
                     <button
                       type="button"
                       onClick={() => setAddingBranch(false)}
-                      className="px-3 py-2 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] rounded-md hover:bg-white transition-colors cursor-pointer"
+                      className="h-10 px-3 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] rounded-xl hover:bg-white transition-colors cursor-pointer"
                     >
                       Cancel
                     </button>
@@ -877,18 +908,24 @@ export const NewInspectionScreen: React.FC = () => {
                 in — the two fields below change the moment it is thrown.
               */}
               {can(user, 'settings.manage') && (
-                <div className="rounded-md border border-[#E6E7EB] bg-[#FAFAFA] p-3.5">
+                <div className="rounded-xl border border-[#E8E9EE] bg-[#FAFBFC] p-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-[#17181D] flex items-center gap-1.5">
-                        <Shuffle className="w-3.5 h-3.5 text-[#C8202D] shrink-0" />
-                        Automatic assignment
-                      </p>
-                      <p className="text-[11px] text-[#6B6F76] mt-1">
-                        {randomOn
-                          ? 'On — a visit can be left to the system, which rotates through every branch before repeating one.'
-                          : 'Off — you name the branch and the inspector on every surprise visit.'}
-                      </p>
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                          randomOn ? 'bg-[#E6F4EC] text-[#157F4B]' : 'bg-[#F0F1F4] text-[#6B6F76]'
+                        }`}
+                      >
+                        <Shuffle className="w-4 h-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-[#17181D]">Automatic assignment</p>
+                        <p className="text-[11px] text-[#6B6F76] mt-0.5 leading-relaxed">
+                          {randomOn
+                            ? 'On — a visit can be left to the system, which rotates through every branch before repeating one.'
+                            : 'Off — you name the branch and the inspector on every surprise visit.'}
+                        </p>
+                      </div>
                     </div>
 
                     <button
@@ -905,20 +942,21 @@ export const NewInspectionScreen: React.FC = () => {
                             : 'Could not save that setting — try again'
                         );
                       }}
-                      className={`shrink-0 relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                      className={`shrink-0 relative w-11 h-6 rounded-full transition-colors duration-200 cursor-pointer focus:outline-none focus-visible:ring-4 focus-visible:ring-[#157F4B]/20 ${
                         randomOn ? 'bg-[#157F4B]' : 'bg-[#C9CCD2]'
                       }`}
                     >
                       <span
-                        className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-xs transition-all ${
-                          randomOn ? 'left-[1.375rem]' : 'left-0.5'
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-[0_1px_3px_rgba(16,24,40,0.3)] transition-transform duration-200 ease-out ${
+                          randomOn ? 'translate-x-5' : 'translate-x-0'
                         }`}
                       />
                     </button>
                   </div>
 
                   {!randomOn && (
-                    <p className="text-[11px] text-[#B4740A] font-semibold mt-2">
+                    <p className="text-[11px] text-[#8A5A08] font-semibold mt-3 flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
                       Choosing by hand tends to favour the branches you already worry about,
                       which is what the rotation is for.
                     </p>
@@ -932,23 +970,23 @@ export const NewInspectionScreen: React.FC = () => {
                     switch off, when there is no draw for a clock to run.
                   */}
                   {randomOn && (
-                    <div className="mt-3 pt-3 border-t border-[#E6E7EB] flex items-start justify-between gap-3">
+                    <div className="mt-4 pt-4 border-t border-[#E8E9EE] flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <label
                           htmlFor="auto-surprise-days"
                           className="text-xs font-bold text-[#17181D] flex items-center gap-1.5"
                         >
-                          <CalendarClock className="w-3.5 h-3.5 text-[#C8202D] shrink-0" />
+                          <CalendarClock className="w-3.5 h-3.5 text-[#6B6F76] shrink-0" />
                           Raise one automatically
                         </label>
-                        <p className="text-[11px] text-[#6B6F76] mt-1">
+                        <p className="text-[11px] text-[#6B6F76] mt-1 leading-relaxed">
                           {autoDays > 0 ? (
                             <>
                               Every {autoDays} day{autoDays === 1 ? '' : 's'} a visit is drawn
                               and handed out on its own, to a branch the rotation has not been
                               to this round.
                               {autoDue && (
-                                <span className="block mt-0.5">
+                                <span className="block mt-0.5 font-semibold text-[#17181D]">
                                   Next one due {formatDate(autoDue)}.
                                 </span>
                               )}
@@ -959,7 +997,7 @@ export const NewInspectionScreen: React.FC = () => {
                         </p>
                       </div>
 
-                      <span className="shrink-0 flex items-center gap-1.5">
+                      <span className="shrink-0 flex items-center gap-2">
                         <input
                           id="auto-surprise-days"
                           type="number"
@@ -981,7 +1019,7 @@ export const NewInspectionScreen: React.FC = () => {
                               setAssignError('Could not save that setting — try again');
                             }
                           }}
-                          className="w-16 px-2 py-1.5 bg-white border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D] text-center tabular-nums focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                          className={`${FIELD} h-10 w-[4.5rem] px-2 font-semibold text-center tabular-nums`}
                         />
                         <span className="text-[11px] font-semibold text-[#6B6F76]">days</span>
                       </span>
@@ -993,40 +1031,39 @@ export const NewInspectionScreen: React.FC = () => {
               {/* Where, and who — the two halves of one decision, read together */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label
-                  htmlFor="surprise-branch-select"
-                  className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-                >
+                <label htmlFor="surprise-branch-select" className={LABEL}>
                   Branch to visit
                 </label>
-                <select
-                  id="surprise-branch-select"
-                  value={surpriseBranch}
-                  onChange={(e) => {
-                    setSurpriseBranch(e.target.value);
-                    setAssignError(null);
-                    setAssignDone(null);
-                  }}
-                  className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
-                >
-                  {randomOn ? (
-                    <option value={RANDOM}>Let the system choose</option>
-                  ) : (
-                    <option value="">Choose a branch</option>
-                  )}
-                  {branches.map((b) => {
-                    const busy = busyBranches.get(b.name);
-                    return (
-                      <option key={b.id} value={b.name} disabled={!!busy}>
-                        {b.name}
-                        {b.location ? ` — ${b.location}` : ''}
-                        {busy ? ` (${busy})` : ''}
-                      </option>
-                    );
-                  })}
-                </select>
+                <SelectShell>
+                  <select
+                    id="surprise-branch-select"
+                    value={surpriseBranch}
+                    onChange={(e) => {
+                      setSurpriseBranch(e.target.value);
+                      setAssignError(null);
+                      setAssignDone(null);
+                    }}
+                    className={SELECT}
+                  >
+                    {randomOn ? (
+                      <option value={RANDOM}>Let the system choose</option>
+                    ) : (
+                      <option value="">Choose a branch</option>
+                    )}
+                    {branches.map((b) => {
+                      const busy = busyBranches.get(b.name);
+                      return (
+                        <option key={b.id} value={b.name} disabled={!!busy}>
+                          {b.name}
+                          {b.location ? ` — ${b.location}` : ''}
+                          {busy ? ` (${busy})` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </SelectShell>
                 {surpriseBranch === RANDOM && (
-                  <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
+                  <p className={`${HINT} flex items-start gap-1.5`}>
                     <Shuffle className="w-3 h-3 mt-0.5 shrink-0" />
                     Drawn at random from the branches not yet visited this round, so
                     every branch comes up once before any comes up twice.
@@ -1035,44 +1072,43 @@ export const NewInspectionScreen: React.FC = () => {
               </div>
 
               <div>
-                <label
-                  htmlFor="surprise-inspector-select"
-                  className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-                >
+                <label htmlFor="surprise-inspector-select" className={LABEL}>
                   Inspector to send
                 </label>
-                <select
-                  id="surprise-inspector-select"
-                  value={assignTo}
-                  onChange={(e) => {
-                    setAssignTo(e.target.value);
-                    setAssignError(null);
-                    setAssignDone(null);
-                  }}
-                  className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
-                >
-                  {randomOn ? (
-                    <option value={RANDOM}>Let the system choose</option>
-                  ) : (
-                    <option value="">Choose an inspector</option>
-                  )}
-                  {availableInspectors.map((account) => {
-                    const at = busyInspectors.get(account.id);
-                    return (
-                      <option key={account.id} value={account.id} disabled={!!at}>
-                        {account.name}
-                        {at ? ` (already at ${at})` : ''}
-                      </option>
-                    );
-                  })}
-                </select>
+                <SelectShell>
+                  <select
+                    id="surprise-inspector-select"
+                    value={assignTo}
+                    onChange={(e) => {
+                      setAssignTo(e.target.value);
+                      setAssignError(null);
+                      setAssignDone(null);
+                    }}
+                    className={SELECT}
+                  >
+                    {randomOn ? (
+                      <option value={RANDOM}>Let the system choose</option>
+                    ) : (
+                      <option value="">Choose an inspector</option>
+                    )}
+                    {availableInspectors.map((account) => {
+                      const at = busyInspectors.get(account.id);
+                      return (
+                        <option key={account.id} value={account.id} disabled={!!at}>
+                          {account.name}
+                          {at ? ` (already at ${at})` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </SelectShell>
                 {assignTo === RANDOM ? (
-                  <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
+                  <p className={`${HINT} flex items-start gap-1.5`}>
                     <Shuffle className="w-3 h-3 mt-0.5 shrink-0" />
                     Drawn from the inspectors carrying the fewest outstanding visits.
                   </p>
                 ) : (
-                  <p className="mt-1.5 text-[11px] text-[#6B6F76]">
+                  <p className={HINT}>
                     They will see the branch in their own list, and nothing else.
                   </p>
                 )}
@@ -1098,11 +1134,8 @@ export const NewInspectionScreen: React.FC = () => {
                 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div>
-                    <label
-                      htmlFor="surprise-when-input"
-                      className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-                    >
-                      When <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+                    <label htmlFor="surprise-when-input" className={LABEL}>
+                      When <span className={OPTIONAL}>(optional)</span>
                     </label>
                     <div className="flex flex-wrap items-center gap-2">
                       <input
@@ -1120,7 +1153,7 @@ export const NewInspectionScreen: React.FC = () => {
                           setAssignError(null);
                           setAssignDone(null);
                         }}
-                        className="flex-1 min-w-[11rem] px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                        className={`${FIELD} flex-1 w-auto min-w-[11rem]`}
                       />
                       {scheduledAt && (
                         <button
@@ -1133,7 +1166,7 @@ export const NewInspectionScreen: React.FC = () => {
                             setAssignError(null);
                             setAssignDone(null);
                           }}
-                          className="px-3 py-2.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] border border-[#E6E7EB] rounded-md hover:bg-[#FAFAFA] transition-colors cursor-pointer whitespace-nowrap"
+                          className={CLEAR_BUTTON}
                         >
                           Clear
                         </button>
@@ -1148,11 +1181,8 @@ export const NewInspectionScreen: React.FC = () => {
                   */}
                   {scheduledAt && (
                     <div>
-                      <label
-                        htmlFor="surprise-until-input"
-                        className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-                      >
-                        Until <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+                      <label htmlFor="surprise-until-input" className={LABEL}>
+                        Until <span className={OPTIONAL}>(optional)</span>
                       </label>
                       <div className="flex flex-wrap items-center gap-2">
                         <input
@@ -1166,7 +1196,7 @@ export const NewInspectionScreen: React.FC = () => {
                             setAssignError(null);
                             setAssignDone(null);
                           }}
-                          className="flex-1 min-w-[11rem] px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
+                          className={`${FIELD} flex-1 w-auto min-w-[11rem]`}
                         />
                         {scheduledUntil && (
                           <button
@@ -1176,7 +1206,7 @@ export const NewInspectionScreen: React.FC = () => {
                               setAssignError(null);
                               setAssignDone(null);
                             }}
-                            className="px-3 py-2.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] border border-[#E6E7EB] rounded-md hover:bg-[#FAFAFA] transition-colors cursor-pointer whitespace-nowrap"
+                            className={CLEAR_BUTTON}
                           >
                             Clear
                           </button>
@@ -1186,7 +1216,7 @@ export const NewInspectionScreen: React.FC = () => {
                   )}
                 </div>
 
-                <p className="mt-1.5 text-[11px] text-[#6B6F76] flex items-start gap-1.5">
+                <p className={`${HINT} flex items-start gap-1.5`}>
                   <CalendarClock className="w-3 h-3 mt-0.5 shrink-0" />
                   {!scheduledAt
                     ? 'Left empty, the visit is due as soon as the inspector can get there.'
@@ -1200,10 +1230,12 @@ export const NewInspectionScreen: React.FC = () => {
                 <div
                   id="assign-done"
                   role="status"
-                  className="p-3 rounded-md bg-[#EAF6EF] border border-[#157F4B]/25 text-[#12643C] text-xs font-semibold flex items-start gap-2"
+                  className="px-4 py-3 rounded-xl bg-[#EAF6EF] border border-[#157F4B]/25 text-[#12643C] text-xs font-semibold flex items-start gap-2.5"
                 >
-                  <Check className="w-4 h-4 shrink-0 mt-px" />
-                  <span>{assignDone}</span>
+                  <span className="w-5 h-5 rounded-full bg-[#157F4B] text-white flex items-center justify-center shrink-0">
+                    <Check className="w-3 h-3" strokeWidth={3} />
+                  </span>
+                  <span className="pt-0.5">{assignDone}</span>
                 </div>
               )}
             </>
@@ -1211,7 +1243,7 @@ export const NewInspectionScreen: React.FC = () => {
 
           {/* Who is carrying out the visit, and why */}
           {kind === 'monday' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {!mayPickBranch ? (
               /*
                * The branch manager carries out their own round, so this is a
@@ -1219,46 +1251,38 @@ export const NewInspectionScreen: React.FC = () => {
                * the record, which is what the field is for.
                */
               <div>
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
-                  Inspector
-                </span>
-                <p
-                  id="fixed-inspector"
-                  className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D]"
-                >
+                <span className={LABEL}>Inspector</span>
+                <p id="fixed-inspector" className={READONLY}>
                   <span className="truncate">{user?.name}</span>
                   <Lock className="w-3.5 h-3.5 text-[#9CA1A9] ml-auto shrink-0" />
                 </p>
               </div>
             ) : (
             <div>
-              <label
-                htmlFor="inspector-name-input"
-                className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-              >
+              <label htmlFor="inspector-name-input" className={LABEL}>
                 Inspector
               </label>
-              <select
-                id="inspector-name-input"
-                value={inspectorChoice}
-                onChange={(e) => {
-                  setInspectorChoice(e.target.value);
-                  if (nameError) setNameError(null);
-                }}
-                aria-invalid={!!nameError}
-                aria-describedby={nameError ? 'inspector-name-error' : undefined}
-                className={`w-full px-3 py-2.5 bg-white border rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D] ${
-                  nameError ? 'border-[#C8202D]' : 'border-[#E6E7EB]'
-                }`}
-              >
-                <option value="">Select inspector…</option>
-                {INSPECTORS.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-                <option value={OTHER_INSPECTOR}>Someone else…</option>
-              </select>
+              <SelectShell>
+                <select
+                  id="inspector-name-input"
+                  value={inspectorChoice}
+                  onChange={(e) => {
+                    setInspectorChoice(e.target.value);
+                    if (nameError) setNameError(null);
+                  }}
+                  aria-invalid={!!nameError}
+                  aria-describedby={nameError ? 'inspector-name-error' : undefined}
+                  className={`${SELECT} ${nameError ? INVALID : ''}`}
+                >
+                  <option value="">Select inspector…</option>
+                  {INSPECTORS.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                  <option value={OTHER_INSPECTOR}>Someone else…</option>
+                </select>
+              </SelectShell>
 
               {inspectorChoice === OTHER_INSPECTOR && (
                 <input
@@ -1271,54 +1295,57 @@ export const NewInspectionScreen: React.FC = () => {
                   }}
                   autoFocus
                   placeholder="Name of the inspector"
-                  className={`mt-2 w-full px-3 py-2.5 bg-white border rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:ring-1 focus:ring-[#C8202D] ${
-                    nameError ? 'border-[#C8202D]' : 'border-[#E6E7EB]'
-                  }`}
+                  className={`${FIELD} mt-2 ${nameError ? INVALID : ''}`}
                 />
               )}
               {nameError && (
-                <p role="alert" id="inspector-name-error" className="text-xs font-semibold text-[#C8202D] mt-1">
+                <p role="alert" id="inspector-name-error" className="text-xs font-semibold text-[#C8202D] mt-1.5">
                   {nameError}
                 </p>
               )}
             </div>
             )}
             <div>
-              <label
-                htmlFor="inspection-type-select"
-                className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-              >
+              <label htmlFor="inspection-type-select" className={LABEL}>
                 Inspection type
               </label>
-              <select
-                id="inspection-type-select"
-                value={inspectionType}
-                onChange={(e) => setInspectionType(e.target.value as InspectionType)}
-                className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
-              >
-                {INSPECTION_TYPE_KEYS.map((key) => (
-                  <option key={key} value={key}>
-                    {INSPECTION_TYPE_LABEL[key]}
-                  </option>
-                ))}
-              </select>
+              <SelectShell>
+                <select
+                  id="inspection-type-select"
+                  value={inspectionType}
+                  onChange={(e) => setInspectionType(e.target.value as InspectionType)}
+                  className={SELECT}
+                >
+                  {INSPECTION_TYPE_KEYS.map((key) => (
+                    <option key={key} value={key}>
+                      {INSPECTION_TYPE_LABEL[key]}
+                    </option>
+                  ))}
+                </select>
+              </SelectShell>
             </div>
           </div>
           )}
+          </FormSection>
 
           {/* Checklist coverage — every branch runs every list, so there is nothing to pick */}
+          <FormSection
+            step={2}
+            title="Checklist"
+            caption="Every branch runs every list, so there is nothing to choose here."
+          >
           <div id="checklist-coverage">
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
-              Checklist
-            </span>
-            <div className="border border-[#E6E7EB] rounded-md bg-[#FAFAFA] px-3.5 py-3">
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-sm font-semibold text-[#17181D]">{FULL_CHECKLIST_LABEL}</p>
-                <p className="text-xs text-[#6B6F76] shrink-0">
+            <div className="border border-[#E8E9EE] rounded-xl overflow-hidden">
+              <div className="px-4 py-3 bg-[#FAFBFC] border-b border-[#F0F1F4] flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <p className="text-sm font-bold text-[#17181D] flex items-center gap-2 min-w-0">
+                  <ClipboardList className="w-4 h-4 text-[#6B6F76] shrink-0" />
+                  <span>{FULL_CHECKLIST_LABEL}</span>
+                </p>
+                <p className="text-xs text-[#6B6F76] shrink-0 tabular-nums">
                   {checklist.sections.length} sections • {checklist.total} items
                 </p>
               </div>
-              <ul className="mt-2.5 space-y-1">
+              <ul className="divide-y divide-[#F0F1F4]">
                 {checklist.listGroups.map((group) => {
                   const itemCount = group.sectionIndexes.reduce(
                     (n, idx) => n + checklist.sections[idx].items.length,
@@ -1327,26 +1354,33 @@ export const NewInspectionScreen: React.FC = () => {
                   return (
                     <li
                       key={group.key}
-                      className="flex items-baseline justify-between gap-3 text-xs text-[#6B6F76]"
+                      className="px-4 py-2.5 flex items-center justify-between gap-3 text-xs"
                     >
-                      <span className="font-medium text-[#17181D]">{group.label}</span>
-                      <span className="shrink-0">{itemCount} items</span>
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#C9CCD2] shrink-0" aria-hidden />
+                        <span className="font-semibold text-[#17181D] truncate">{group.label}</span>
+                      </span>
+                      <span className="shrink-0 rounded-full bg-[#F4F5F7] px-2 py-0.5 text-[11px] font-semibold text-[#6B6F76] tabular-nums">
+                        {itemCount} items
+                      </span>
                     </li>
                   );
                 })}
               </ul>
-              {/* Only the admin may change the checklist */}
-              {can(user, 'checklist.manage') && (
-                <button
-                  type="button"
-                  onClick={() => router.push('/checklist')}
-                  className="mt-3 text-xs font-bold text-[#C8202D] hover:underline cursor-pointer"
-                >
-                  Edit checklist
-                </button>
-              )}
             </div>
+            {/* Only the admin may change the checklist */}
+            {can(user, 'checklist.manage') && (
+              <button
+                type="button"
+                onClick={() => router.push('/checklist')}
+                className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-[#C8202D] hover:text-[#A81823] cursor-pointer"
+              >
+                Edit checklist
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
+          </FormSection>
 
           {/*
             Read-only date and time — when the visit is being carried out.
@@ -1354,36 +1388,45 @@ export const NewInspectionScreen: React.FC = () => {
             inspector may go tomorrow, and the record is stamped when they do.
           */}
           {kind === 'monday' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+          <FormSection
+            step={3}
+            title="Date and time"
+            caption="Stamped when the visit starts, so neither can be changed."
+          >
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
-                Date (read-only)
-              </label>
-              <input
-                id="inspection-date-input"
-                type="text"
-                value={currentDateISO}
-                readOnly
-                disabled
-                className="w-full px-3 py-2 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm text-[#6B6F76] cursor-not-allowed"
-              />
+              <label className={LABEL}>Date (read-only)</label>
+              <div className="relative">
+                <CalendarCheck className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA1A9] pointer-events-none" />
+                <input
+                  id="inspection-date-input"
+                  type="text"
+                  value={currentDateISO}
+                  readOnly
+                  disabled
+                  className={DISABLED_FIELD}
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5">
-                Time (read-only)
-              </label>
-              <input
-                id="inspection-time-input"
-                type="text"
-                value={currentTimeStr}
-                readOnly
-                disabled
-                className="w-full px-3 py-2 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm text-[#6B6F76] cursor-not-allowed"
-              />
+              <label className={LABEL}>Time (read-only)</label>
+              <div className="relative">
+                <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA1A9] pointer-events-none" />
+                <input
+                  id="inspection-time-input"
+                  type="text"
+                  value={currentTimeStr}
+                  readOnly
+                  disabled
+                  className={DISABLED_FIELD}
+                />
+              </div>
             </div>
           </div>
+          </FormSection>
           )}
 
+          <div className="px-5 sm:px-6 md:px-8 py-4 border-t border-[#F0F1F4] bg-[#FAFBFC] rounded-b-2xl space-y-3">
           {/*
             Why the button did not go ahead, said beside it. The field it is
             about can be a screen above on a phone, with the checklist and the
@@ -1402,18 +1445,19 @@ export const NewInspectionScreen: React.FC = () => {
               <p
                 role="alert"
                 id={kind === 'surprise' ? 'assign-error' : 'start-error'}
-                className="p-2.5 rounded-md bg-[#FDECEE] border border-[#C8202D]/25 text-xs font-semibold text-[#C8202D]"
+                className="px-3.5 py-2.5 rounded-xl bg-[#FDECEE] border border-[#C8202D]/25 text-xs font-semibold text-[#A81823] flex items-start gap-2"
               >
-                {problem}
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{problem}</span>
               </p>
             ) : null;
           })()}
 
-          <div className="pt-3 border-t border-[#E6E7EB] flex items-center justify-end gap-3">
+          <div className="flex items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={() => router.push('/inspections')}
-              className="px-4 py-2 border border-[#E6E7EB] rounded-md text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] transition-colors cursor-pointer"
+              className={BUTTON.secondary}
             >
               {/* Once a visit has been assigned, leaving is not cancelling */}
               {assignDone ? 'Done' : 'Cancel'}
@@ -1422,20 +1466,25 @@ export const NewInspectionScreen: React.FC = () => {
               id="start-inspection-submit-btn"
               type="submit"
               disabled={kind === 'surprise' && availableInspectors.length === 0}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] disabled:bg-[#E6E7EB] disabled:text-[#9CA1A9] disabled:cursor-not-allowed text-white text-xs font-semibold rounded-md transition-colors cursor-pointer"
+              className={`${BUTTON.primary} px-5 disabled:cursor-not-allowed`}
             >
               {kind === 'surprise' ? (
                 <>
-                  <Zap className="w-3.5 h-3.5" />
+                  <Zap className="w-4 h-4" />
                   <span>Assign surprise visit</span>
                 </>
               ) : (
-                <span>Start inspection</span>
+                <>
+                  <PlayCircle className="w-4 h-4" />
+                  <span>Start inspection</span>
+                </>
               )}
             </button>
           </div>
+          </div>
         </form>
       </div>
+      </Reveal>
 
       {pendingRemoval && (
         <RemoveBranchDialog
@@ -1448,6 +1497,62 @@ export const NewInspectionScreen: React.FC = () => {
     </div>
   );
 };
+
+// ---------------------------------------------------------------------------
+// Form furniture
+// ---------------------------------------------------------------------------
+
+/*
+ * One look for every field on the form. 44px tall so a finger finds them on a
+ * tablet, rounded to match the cards, and a soft brand-red halo on focus
+ * rather than a hard outline — clear to a keyboard user without shouting.
+ */
+const FIELD =
+  'w-full h-11 px-3.5 bg-white border border-[#E4E6EB] rounded-xl text-sm text-[#17181D] placeholder:text-[#9CA1A9] shadow-xs transition-all hover:border-[#C9CCD2] focus:outline-none focus:border-[#C8202D]/60 focus:ring-4 focus:ring-[#C8202D]/10';
+/** A select wears the field's look with the browser arrow swapped for ours. */
+const SELECT = `${FIELD} appearance-none pr-10 cursor-pointer`;
+const INVALID = 'border-[#C8202D] hover:border-[#C8202D] ring-4 ring-[#C8202D]/10';
+const READONLY =
+  'w-full h-11 flex items-center gap-2 px-3.5 bg-[#F7F8FA] border border-[#E8E9EE] rounded-xl text-sm font-semibold text-[#17181D]';
+const DISABLED_FIELD =
+  'w-full h-11 pl-10 pr-3.5 bg-[#F7F8FA] border border-[#E8E9EE] rounded-xl text-sm text-[#6B6F76] tabular-nums cursor-not-allowed';
+const LABEL = 'block text-xs font-semibold text-[#17181D] mb-1.5';
+const OPTIONAL = 'text-[#9CA1A9] font-normal';
+const HINT = 'mt-1.5 text-[11px] leading-relaxed text-[#6B6F76]';
+const CLEAR_BUTTON =
+  'h-11 px-3.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] border border-[#E4E6EB] bg-white rounded-xl hover:bg-[#F7F8FA] transition-colors cursor-pointer whitespace-nowrap';
+
+/** Wraps a `<select>` so it can carry the form's own chevron. */
+const SelectShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="relative">
+    {children}
+    <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA1A9]" />
+  </div>
+);
+
+/**
+ * A numbered part of the form, with a heading that says what it settles. The
+ * number is a reading order, not a wizard — every part is on screen at once.
+ */
+const FormSection: React.FC<{
+  step: number;
+  title: string;
+  caption: string;
+  children: React.ReactNode;
+}> = ({ step, title, caption, children }) => (
+  <section className="px-5 sm:px-6 md:px-8 py-6 border-t border-[#F0F1F4] first:border-t-0">
+    <div className="flex items-start gap-3 mb-5">
+      <span className="w-6 h-6 rounded-lg bg-[#17181D] text-white text-[11px] font-bold flex items-center justify-center shrink-0 tabular-nums">
+        {step}
+      </span>
+      <div className="min-w-0">
+        <h2 className="text-[15px] font-bold text-[#17181D] leading-6">{title}</h2>
+        <p className="text-xs text-[#6B6F76] mt-0.5">{caption}</p>
+      </div>
+    </div>
+    <div className="space-y-5">{children}</div>
+  </section>
+);
 
 /**
  * Confirms removing a branch, and says which of the two outcomes applies.
@@ -1480,7 +1585,7 @@ const RemoveBranchDialog: React.FC<{
   return (
     <div
       ref={dialogRef}
-      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 backdrop-blur-[2px] flex items-start sm:items-center justify-center p-4 overflow-y-auto"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
@@ -1489,11 +1594,11 @@ const RemoveBranchDialog: React.FC<{
         role="dialog"
         aria-modal="true"
         aria-labelledby="remove-branch-title"
-        className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-md my-8"
+        className="bg-white border border-[#E8E9EE] rounded-2xl shadow-[0_24px_60px_-16px_rgba(16,24,40,0.35)] w-full max-w-md my-8 overflow-hidden"
       >
-        <div className="px-6 py-4 border-b border-[#E6E7EB] flex items-start gap-3">
-          <span className="w-9 h-9 rounded-lg bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
-            <AlertTriangle className="w-[18px] h-[18px]" />
+        <div className="px-6 pt-6 pb-4 flex items-start gap-3.5">
+          <span className="w-10 h-10 rounded-xl bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-5 h-5" />
           </span>
           <div className="min-w-0">
             <h3 id="remove-branch-title" className="text-base font-bold text-[#17181D]">
@@ -1503,7 +1608,7 @@ const RemoveBranchDialog: React.FC<{
           </div>
         </div>
 
-        <div className="px-6 py-5 space-y-3">
+        <div className="px-6 pb-5 space-y-3">
           {willClose ? (
             <>
               <p className="text-sm text-[#17181D] leading-relaxed">
@@ -1522,19 +1627,15 @@ const RemoveBranchDialog: React.FC<{
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-[#E6E7EB] flex items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 border border-[#E6E7EB] rounded-md text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] transition-colors cursor-pointer"
-          >
+        <div className="px-6 py-4 border-t border-[#F0F1F4] bg-[#FAFBFC] flex items-center justify-end gap-2">
+          <button type="button" onClick={onCancel} className={BUTTON.secondary}>
             Cancel
           </button>
           <button
             type="button"
             id="confirm-remove-branch-btn"
             onClick={onConfirm}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-bold rounded-md transition-colors cursor-pointer"
+            className={BUTTON.primary}
           >
             <Trash2 className="w-3.5 h-3.5" />
             {willClose ? 'Close branch' : 'Delete branch'}
@@ -1565,26 +1666,35 @@ const KindCard: React.FC<{
     id={id}
     onClick={onSelect}
     aria-pressed={selected}
-    className={`p-4 rounded-md border text-left transition-colors cursor-pointer ${
+    className={`group relative w-full h-full p-5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
       selected
-        ? 'border-[#C8202D] bg-[#FDECEE] shadow-xs'
-        : 'border-[#E6E7EB] bg-white hover:border-[#C8202D]/40'
+        ? 'border-[#C8202D] bg-white ring-4 ring-[#C8202D]/10 shadow-[0_12px_24px_-14px_rgba(200,32,45,0.45)]'
+        : 'border-[#E8E9EE] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_2px_8px_-2px_rgba(16,24,40,0.06)] hover:-translate-y-0.5 hover:border-[#DADCE2] hover:shadow-[0_12px_24px_-12px_rgba(16,24,40,0.18)]'
     }`}
   >
-    <span className="flex items-center gap-2.5">
+    <span className="flex items-center justify-between gap-3">
       <span
-        className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
-          selected ? 'bg-[#C8202D] text-white' : 'bg-[#F6F6F8] text-[#6B6F76]'
+        className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+          selected ? 'bg-[#C8202D] text-white' : 'bg-[#F4F5F7] text-[#6B6F76] group-hover:text-[#17181D]'
         }`}
       >
-        <Icon className="w-4 h-4" />
+        <Icon className="w-[18px] h-[18px]" />
       </span>
+      {/* A radio's dot, so the chosen card reads as chosen without the colour */}
       <span
-        className={`text-[13px] font-bold ${selected ? 'text-[#C8202D]' : 'text-[#17181D]'}`}
+        aria-hidden
+        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
+          selected ? 'border-[#C8202D]' : 'border-[#D5D8DE]'
+        }`}
       >
-        {title}
+        <span
+          className={`w-2.5 h-2.5 rounded-full bg-[#C8202D] transition-transform duration-200 ${
+            selected ? 'scale-100' : 'scale-0'
+          }`}
+        />
       </span>
     </span>
-    <span className="block mt-2 text-[11px] text-[#6B6F76] leading-relaxed">{blurb}</span>
+    <span className="block mt-4 text-sm font-bold text-[#17181D]">{title}</span>
+    <span className="block mt-1 text-xs text-[#6B6F76] leading-relaxed">{blurb}</span>
   </button>
 );

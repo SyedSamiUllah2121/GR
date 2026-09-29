@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
   ArrowLeft,
+  BarChart3,
   Building2,
   Calendar,
   CalendarCheck,
@@ -18,16 +19,19 @@ import {
   Clock,
   Edit3,
   FileSpreadsheet,
+  FileText,
   Hash,
   History,
   Lock,
   Minus,
   MessageSquare,
   PenLine,
+  PieChart,
   Printer,
   ShieldCheck,
   StickyNote,
   Timer,
+  TrendingUp,
   User,
   Wrench,
   X,
@@ -65,6 +69,16 @@ import { PriorityBadge } from './PriorityBadge';
 import { StatusPill } from './MaintenanceStatusPill';
 import { ScorePill } from './ScorePill';
 import { DonutChart } from './DonutChart';
+import { BUTTON, CARD } from './ui';
+import { CountUp, Reveal, Stagger, StaggerItem } from './motion';
+import {
+  BarList,
+  CHART_COLORS,
+  ScoreDial,
+  StackedMeter,
+  TrendChart,
+  TrendPoint,
+} from './charts';
 import { canEditInspection, canViewInspection } from '../services/permissions';
 import { AccessNotice, NOT_YOURS } from './AccessNotice';
 import { getUserById } from '../services/userStore';
@@ -137,17 +151,19 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
 
   if (!inspection || !model) {
     return (
-      <div className="p-8 max-w-xl mx-auto text-center">
-        <h2 className="text-xl font-bold text-[#17181D]">Report not found</h2>
-        <p className="text-sm text-[#6B6F76] mt-2">
-          The requested inspection report does not exist or has been removed.
-        </p>
-        <button
-          onClick={() => router.push('/inspections')}
-          className="mt-4 px-4 py-2 bg-[#C8202D] text-white text-sm font-medium rounded-md cursor-pointer"
-        >
-          Back to records
-        </button>
+      <div className="p-5 sm:p-8 max-w-xl mx-auto w-full">
+        <div className={`${CARD} px-6 py-14 text-center`}>
+          <span className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FDECEE] to-[#FBDCDF] text-[#C8202D] flex items-center justify-center shadow-inner">
+            <FileText className="w-7 h-7" />
+          </span>
+          <h2 className="mt-5 text-base font-bold text-[#17181D]">Report not found</h2>
+          <p className="text-[13px] text-[#6B6F76] mt-1.5">
+            The requested inspection report does not exist or has been removed.
+          </p>
+          <button onClick={() => router.push('/inspections')} className={`${BUTTON.primary} mt-6`}>
+            Back to records
+          </button>
+        </div>
       </div>
     );
   }
@@ -209,53 +225,87 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
     { key: 'history', label: 'History', count: model.branchHistory.length },
   ];
 
+  /*
+   * The branch's submitted visits oldest to newest, for the trend in the rail.
+   * The model keeps them newest first, which is how the History tab lists them.
+   */
+  const history: TrendPoint[] = [...model.branchHistory].reverse().map((visit) => ({
+    label: formatDate(visit.date),
+    shortLabel: shortDate(visit.date),
+    value: visit.score,
+    detail: visit.isThis ? 'This visit' : `${visit.failed} flagged`,
+  }));
+
+  // Weakest sections first — where the branch needs attention
+  const weakest = [...model.sections].sort((a, b) => a.rate - b.rate).slice(0, 6);
+
+  const outcomeSegments = [
+    { key: 'passed', label: 'Passed', value: model.passed, color: OUTCOME_COLOR.passed },
+    { key: 'failed', label: 'Failed', value: model.failed, color: OUTCOME_COLOR.failed },
+    {
+      key: 'unanswered',
+      label: 'Not answered',
+      value: model.unanswered,
+      color: OUTCOME_COLOR.unanswered,
+    },
+    // Only on a visit that had checks held back — otherwise it is a row of zeros
+    ...(model.held > 0
+      ? [{ key: 'held', label: 'With maintenance', value: model.held, color: OUTCOME_COLOR.held }]
+      : []),
+  ];
+
   return (
-    <div className="p-4 md:p-6 lg:p-8 w-full max-w-[1400px] mx-auto">
+    <div className="p-5 sm:p-6 md:p-8 lg:p-10 w-full max-w-[1440px] mx-auto">
       {/* Breadcrumb */}
-      <nav className="no-print text-xs text-[#6B6F76] mb-3 flex items-center gap-1.5">
+      <nav className="no-print text-xs text-[#6B6F76] mb-4 flex items-center gap-1.5">
         <button
           type="button"
           onClick={() => router.push('/inspections')}
-          className="hover:text-[#17181D] transition-colors cursor-pointer"
+          className="font-semibold hover:text-[#17181D] transition-colors cursor-pointer"
         >
           Inspections
         </button>
-        <ChevronRight className="w-3 h-3" />
+        <ChevronRight className="w-3 h-3 text-[#C9CCD2]" />
         <span className="text-[#17181D] font-semibold">Inspection details</span>
       </nav>
 
       {/* Title row */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[#17181D]">
-            Inspection <span className="font-mono text-[0.9em]">#{inspection.id}</span>
-          </h1>
-          {isLocked ? (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#E6F4EC] text-[#157F4B] border border-[#157F4B]/25">
-              <Lock className="w-3 h-3" />
-              Locked
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FDF3E2] text-[#B4740A] border border-[#B4740A]/25">
-              <PenLine className="w-3 h-3" />
-              Draft
-            </span>
-          )}
+      <Reveal className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 mb-6">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9CA1A9]">
+            Inspection report · {inspection.branchName}
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-3">
+            <h1 className="text-[24px] md:text-[28px] leading-tight font-bold tracking-tight text-[#17181D]">
+              Inspection <span className="font-mono text-[0.8em] text-[#6B6F76]">#{inspection.id}</span>
+            </h1>
+            {isLocked ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#E6F4EC] text-[#12643C] ring-1 ring-inset ring-[#157F4B]/20">
+                <Lock className="w-3 h-3" />
+                Locked
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FDF3E2] text-[#8A5A08] ring-1 ring-inset ring-[#B4740A]/25">
+                <PenLine className="w-3 h-3" />
+                Draft
+              </span>
+            )}
 
-          {/* Which kind of visit this was — it decides who could edit it */}
-          <span
-            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-              kind === 'surprise'
-                ? 'bg-[#FFF6E5] text-[#8A5A08] border-[#B4740A]/25'
-                : 'bg-[#F6F6F8] text-[#6B6F76] border-[#E6E7EB]'
-            }`}
-          >
-            {kind === 'surprise' ? <Zap className="w-3 h-3" /> : <CalendarCheck className="w-3 h-3" />}
-            {INSPECTION_KIND_SHORT[kind]}
-          </span>
+            {/* Which kind of visit this was — it decides who could edit it */}
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ring-1 ring-inset ${
+                kind === 'surprise'
+                  ? 'bg-[#FFF6E5] text-[#8A5A08] ring-[#B4740A]/25'
+                  : 'bg-[#F4F5F7] text-[#6B6F76] ring-[#E4E6EB]'
+              }`}
+            >
+              {kind === 'surprise' ? <Zap className="w-3 h-3" /> : <CalendarCheck className="w-3 h-3" />}
+              {INSPECTION_KIND_SHORT[kind]}
+            </span>
+          </div>
         </div>
 
-        <div className="no-print flex flex-wrap items-center gap-2">
+        <div className="no-print flex flex-wrap items-center gap-2 shrink-0">
           {/*
             "Only the Main Admin can edit the submitted results if necessary"
             — so for everyone else on a submitted record this button is not
@@ -266,25 +316,21 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
             <button
               type="button"
               onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer shadow-xs"
+              className={BUTTON.secondary}
             >
               <Edit3 className="w-3.5 h-3.5 text-[#C8202D]" />
               <span>{isLocked ? 'Reopen answers' : 'Edit answers'}</span>
             </button>
           )}
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer shadow-xs"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-[#C8202D]" />
+          <button type="button" onClick={handleExportCsv} className={BUTTON.secondary}>
+            <FileSpreadsheet className="w-3.5 h-3.5 text-[#157F4B]" />
             <span>Export CSV</span>
           </button>
           <button
             id="download-pdf-btn"
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
+            className={BUTTON.primary}
           >
             <Printer className="w-3.5 h-3.5" />
             <span>Export PDF</span>
@@ -292,16 +338,16 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
           <button
             type="button"
             onClick={() => router.push('/inspections')}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer shadow-xs"
+            className={BUTTON.secondary}
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to list</span>
           </button>
         </div>
-      </div>
+      </Reveal>
 
       {(model.missingCount > 0 || model.scoreMismatch) && (
-        <div className="mb-5 p-4 rounded-lg bg-[#FDF3E2] border border-[#B4740A]/30 flex items-start gap-3 page-break-inside-avoid">
+        <div className="mb-5 p-4 rounded-2xl bg-[#FDF3E2] border border-[#B4740A]/30 flex items-start gap-3 page-break-inside-avoid">
           <AlertTriangle className="w-4 h-4 text-[#B4740A] shrink-0 mt-0.5" />
           <div className="text-xs text-[#17181D] space-y-1">
             <p className="font-bold">This record does not line up with the current checklist</p>
@@ -322,14 +368,99 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
         </div>
       )}
 
+      {/*
+        The two columns. Nothing around this grid moves: the rail inside it
+        sticks on a wide screen, and a transform on any ancestor of a sticky
+        element is what un-sticks it. The cards inside rise in on their own.
+      */}
       <div className="print-container grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 items-start">
         {/* ---------------------------------------------------------------- */}
         {/* Main column                                                       */}
         {/* ---------------------------------------------------------------- */}
         <div className="min-w-0 space-y-5">
+          {/*
+            The result, first: the score, what the checks came to, and how
+            serious the findings are. At the top of the page on purpose — the
+            dial and the meter draw themselves once they are seen, and this is
+            the part of the page that is on screen when Export PDF is pressed.
+          */}
+          <Reveal delay={0.05}>
+            <section className={`${CARD} p-5 sm:p-6 page-break-inside-avoid`}>
+              <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex items-center gap-5 md:w-[16rem] shrink-0">
+                  <div className="relative">
+                    <ScoreDial value={model.score} size={124} stroke={11} />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-[32px] leading-none font-bold tracking-tight text-[#17181D]">
+                        <CountUp value={model.score} />
+                        <span className="text-lg font-semibold text-[#9CA1A9]">%</span>
+                      </span>
+                      <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9CA1A9]">
+                        Score
+                      </span>
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold text-[#17181D]">Inspection score</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[#6B6F76]">
+                      {model.passed} of {model.total} checks passed
+                      {model.held > 0 ? `, ${model.held} held by maintenance` : ''}.
+                    </p>
+                    <div className="mt-2.5">
+                      <ScorePill score={model.score} size="sm" showLabel />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-0 md:pl-6 md:border-l border-[#F0F1F4]">
+                  <div className="grid grid-cols-3 gap-3">
+                    <Figure label="Passed" value={model.passed} dot={OUTCOME_COLOR.passed} />
+                    <Figure label="Failed" value={model.failed} dot={OUTCOME_COLOR.failed} />
+                    <Figure
+                      label="Not answered"
+                      value={model.unanswered}
+                      dot={OUTCOME_COLOR.unanswered}
+                    />
+                  </div>
+
+                  <div className="mt-5">
+                    <p className="text-[13px] font-bold text-[#17181D]">Findings by severity</p>
+                    <p className="text-xs text-[#6B6F76] mt-0.5 mb-3.5">
+                      {model.issues.length === 0
+                        ? 'Nothing was flagged on this visit.'
+                        : `${model.issues.length} finding${model.issues.length === 1 ? '' : 's'}, ranked by the priority rules`}
+                    </p>
+                    {model.issues.length > 0 && (
+                      <StackedMeter
+                        label="Findings by severity"
+                        unit="finding"
+                        parts={SEVERITY_ORDER.map((severity) => ({
+                          key: severity,
+                          label: SEVERITY_LABEL[severity],
+                          value: model.severityCounts[severity],
+                          color: CHART_COLORS.severity[severity],
+                        }))}
+                      />
+                    )}
+                    {model.repeats.length > 0 && (
+                      <p className="mt-3.5 text-[11px] font-semibold text-[#8A5A08] flex items-start gap-1.5">
+                        <History className="w-3.5 h-3.5 shrink-0 mt-px" />
+                        <span>
+                          {model.repeats.length} repeat issue
+                          {model.repeats.length === 1 ? '' : 's'} carried over from earlier visits
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </Reveal>
+
           {/* Header card */}
-          <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden page-break-inside-avoid">
-            <div className="p-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-5">
+          <Reveal delay={0.08}>
+          <section className={`${CARD} overflow-hidden page-break-inside-avoid`}>
+            <div className="p-5 sm:p-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-5">
               <MetaField icon={Building2} label="Branch" prominent>
                 {inspection.branchName}
               </MetaField>
@@ -369,7 +500,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
               </MetaField>
             </div>
 
-            <div className="border-t border-[#E6E7EB] bg-[#FAFAFA] p-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-5">
+            <div className="border-t border-[#F0F1F4] bg-[#FAFBFC] p-5 sm:p-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-x-6 gap-y-5">
               <MetaField icon={ClipboardList} label="Checklist">
                 {FULL_CHECKLIST_LABEL}
                 <span className="block text-[11px] font-normal text-[#6B6F76] mt-0.5">
@@ -379,7 +510,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                 </span>
               </MetaField>
               <MetaField icon={ShieldCheck} label="Status">
-                <span className={isLocked ? 'text-[#157F4B]' : 'text-[#B4740A]'}>
+                <span className={isLocked ? 'text-[#12643C]' : 'text-[#8A5A08]'}>
                   {isLocked ? 'Submitted & locked' : 'Draft — in progress'}
                 </span>
               </MetaField>
@@ -398,28 +529,30 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
               </MetaField>
             </div>
           </section>
+          </Reveal>
 
           {/* Tabs */}
-          <div className="no-print border-b border-[#E6E7EB] flex gap-1 overflow-x-auto">
+          <div className="no-print flex gap-1 overflow-x-auto p-1 rounded-xl bg-[#EEF0F3]/70 border border-[#E8E9EE]">
             {tabs.map(({ key, label, count }) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setTab(key)}
-                className={`px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors cursor-pointer ${
+                aria-pressed={tab === key}
+                className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer ${
                   tab === key
-                    ? 'border-[#C8202D] text-[#C8202D]'
-                    : 'border-transparent text-[#6B6F76] hover:text-[#17181D]'
+                    ? 'bg-white text-[#17181D] shadow-[0_1px_2px_rgba(16,24,40,0.08),0_2px_6px_-2px_rgba(16,24,40,0.1)]'
+                    : 'text-[#6B6F76] hover:text-[#17181D] hover:bg-white/60'
                 }`}
               >
                 {label}
                 {count !== undefined && (
                   <span
-                    className={`ml-1.5 tabular-nums ${
-                      tab === key ? 'text-[#C8202D]' : 'text-[#6B6F76]'
+                    className={`min-w-5 h-5 px-1.5 rounded-full text-[10px] font-bold tabular-nums flex items-center justify-center transition-colors ${
+                      tab === key ? 'bg-[#FDECEE] text-[#A81823]' : 'bg-[#E4E6EB] text-[#6B6F76]'
                     }`}
                   >
-                    ({count})
+                    {count}
                   </span>
                 )}
               </button>
@@ -429,22 +562,27 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
           {/* Every panel stays in the DOM so printing lays out the whole report,
               not just whichever tab happened to be open. */}
           <Panel active={tab === 'checklist'} title="Inspection checklist">
-            <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden">
-              <div className="px-4 py-3 border-b border-[#E6E7EB] flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-sm font-bold text-[#17181D]">Inspection checklist</h2>
+            <section className={`${CARD} overflow-hidden`}>
+              <div className="px-5 py-4 border-b border-[#F0F1F4] flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-[15px] font-bold text-[#17181D]">Inspection checklist</h2>
+                  <p className="text-xs text-[#6B6F76] mt-0.5">
+                    Sections with a failure or a gap open on arrival
+                  </p>
+                </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <OutcomeLegend model={model} />
                   <button
                     type="button"
                     onClick={toggleAllSections}
-                    className="no-print px-2.5 py-1.5 text-[11px] font-semibold text-[#17181D] border border-[#E6E7EB] rounded-md hover:bg-[#F6F6F8] transition-colors cursor-pointer"
+                    className="no-print h-8 px-3 text-[11px] font-bold text-[#17181D] bg-[#F4F5F7] rounded-lg hover:bg-[#EBEDF0] transition-colors cursor-pointer"
                   >
                     {allOpen ? 'Collapse all' : 'Expand all'}
                   </button>
                 </div>
               </div>
 
-              <div className="divide-y divide-[#E6E7EB]">
+              <div className="divide-y divide-[#F0F1F4]">
                 {model.sections.map((section) => {
                   const key = `${section.listKey}::${section.key}`;
                   const isOpen = open.has(key);
@@ -453,10 +591,10 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                       <button
                         type="button"
                         onClick={() => toggleSection(key)}
-                        className="print-keep w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-[#FAFAFA] transition-colors cursor-pointer"
+                        className="print-keep w-full px-5 py-3.5 flex items-center gap-3 text-left hover:bg-[#FAFBFC] transition-colors cursor-pointer"
                       >
                         <ChevronDown
-                          className={`no-print w-4 h-4 text-[#6B6F76] shrink-0 transition-transform ${
+                          className={`no-print w-4 h-4 text-[#9CA1A9] shrink-0 transition-transform duration-200 ${
                             isOpen ? '' : '-rotate-90'
                           }`}
                         />
@@ -464,25 +602,45 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                           <span className="text-sm font-semibold text-[#17181D]">
                             {section.index}. {section.title}
                           </span>
-                          <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mt-0.5">
+                          <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA1A9] mt-0.5">
                             {section.listLabel}
                           </span>
                         </div>
+                        {/* The section's pass share, as a short bar beside the count */}
+                        <span className="hidden sm:block w-20 h-1.5 rounded-full bg-[#EEF0F3] overflow-hidden shrink-0" aria-hidden>
+                          <span
+                            className="block h-full rounded-full"
+                            style={{
+                              width: `${section.rate}%`,
+                              background:
+                                section.failed > 0
+                                  ? OUTCOME_COLOR.failed
+                                  : section.unanswered > 0
+                                    ? OUTCOME_COLOR.held
+                                    : OUTCOME_COLOR.passed,
+                            }}
+                          />
+                        </span>
                         <span
-                          className={`text-xs font-bold tabular-nums shrink-0 ${
-                            section.failed > 0
-                              ? 'text-[#D9542B]'
-                              : section.unanswered > 0
-                                ? 'text-[#B4740A]'
-                                : 'text-[#157F4B]'
+                          className={`inline-flex items-center gap-1.5 text-xs font-bold tabular-nums shrink-0 ${
+                            section.failed > 0 || section.unanswered > 0
+                              ? 'text-[#17181D]'
+                              : 'text-[#12643C]'
                           }`}
                         >
+                          {section.failed > 0 ? (
+                            <X className="w-3.5 h-3.5 text-[#D9542B]" />
+                          ) : section.unanswered > 0 ? (
+                            <Minus className="w-3.5 h-3.5 text-[#B4740A]" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5 text-[#157F4B]" />
+                          )}
                           {section.passed} / {section.total} passed
                         </span>
                       </button>
 
                       <div className={`collapsible ${isOpen ? '' : 'hidden'}`}>
-                        <div className="divide-y divide-[#EFEFF2] border-t border-[#EFEFF2]">
+                        <div className="divide-y divide-[#F0F1F4] border-t border-[#F0F1F4]">
                           {section.rows.map((row) => (
                             <ChecklistRow
                               key={row.item.id}
@@ -524,100 +682,97 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
         {/* Right rail                                                        */}
         {/* ---------------------------------------------------------------- */}
         <aside className="space-y-5 xl:sticky xl:top-[5.5rem]">
-          <RailCard title="Inspection summary">
+          <Stagger className="space-y-5">
+          <StaggerItem>
+          <RailCard title="Inspection summary" icon={PieChart}>
             <div className="flex items-center gap-4">
-              {/* The score sits in the middle because it is what differs from
-                  one visit to the next; the item count is the same on every
-                  inspection of this checklist. */}
+              {/* The middle carries the passed count, because the score is
+                  already the headline above and is not worth saying twice; the
+                  count still differs from one visit to the next. */}
               <DonutChart
-                centerValue={model.score}
-                centerSuffix="%"
-                centerLabel={`of ${model.total} items`}
-                segments={[
-                  {
-                    key: 'passed',
-                    label: 'Passed',
-                    value: model.passed,
-                    color: OUTCOME_COLOR.passed,
-                  },
-                  {
-                    key: 'failed',
-                    label: 'Failed',
-                    value: model.failed,
-                    color: OUTCOME_COLOR.failed,
-                  },
-                  {
-                    key: 'unanswered',
-                    label: 'Not answered',
-                    value: model.unanswered,
-                    color: OUTCOME_COLOR.unanswered,
-                  },
-                ]}
+                centerValue={model.passed}
+                centerLabel={`of ${model.total} passed`}
+                size={124}
+                segments={outcomeSegments}
               />
               <ul className="flex-1 min-w-0 space-y-2.5">
-                <LegendRow
-                  color={OUTCOME_COLOR.passed}
-                  label="Passed"
-                  value={model.passed}
-                  total={model.total}
-                />
-                <LegendRow
-                  color={OUTCOME_COLOR.failed}
-                  label="Failed"
-                  value={model.failed}
-                  total={model.total}
-                />
-                <LegendRow
-                  color={OUTCOME_COLOR.unanswered}
-                  label="Not answered"
-                  value={model.unanswered}
-                  total={model.total}
-                />
+                {outcomeSegments.map((segment) => (
+                  <LegendRow
+                    key={segment.key}
+                    color={segment.color}
+                    label={segment.label}
+                    value={segment.value}
+                    total={model.total}
+                  />
+                ))}
               </ul>
             </div>
           </RailCard>
+          </StaggerItem>
 
-          <RailCard title="Priority summary">
-            {model.issues.length === 0 ? (
-              <p className="text-xs text-[#6B6F76]">Nothing was flagged on this visit.</p>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {SEVERITY_ORDER.map((severity) => (
-                  <div
-                    key={severity}
-                    className={`border rounded-md p-2.5 ${
-                      model.severityCounts[severity] > 0
-                        ? 'border-[#E6E7EB] bg-white'
-                        : 'border-[#EFEFF2] bg-[#FAFAFA]'
-                    }`}
-                  >
-                    <PriorityBadge severity={severity} size="sm" />
-                    <p
-                      className={`text-xl font-bold tabular-nums mt-1.5 ${
-                        model.severityCounts[severity] > 0
-                          ? 'text-[#17181D]'
-                          : 'text-[#6B6F76]/45'
-                      }`}
-                    >
-                      {model.severityCounts[severity]}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-            {model.repeats.length > 0 && (
-              <p className="mt-3 text-[11px] font-semibold text-[#B4740A] flex items-start gap-1.5">
-                <History className="w-3.5 h-3.5 shrink-0 mt-px" />
-                <span>
-                  {model.repeats.length} repeat issue
-                  {model.repeats.length === 1 ? '' : 's'} carried over from earlier visits
-                </span>
+          {/*
+            Two charts for the screen only. Each draws itself once it is
+            scrolled into view, so a print taken before then would show empty
+            axes — and both say again what the printed page already carries in
+            full: the History tab lists every visit, and every section heading
+            in the checklist gives its passed count.
+          */}
+          {history.length > 0 && (
+            <StaggerItem className="print:hidden">
+            <RailCard title="Score history" icon={TrendingUp}>
+              <p className="text-xs text-[#6B6F76] -mt-1 mb-3">
+                {history.length === 1
+                  ? 'The first submitted visit at this branch'
+                  : `${history.length} submitted visits at this branch, oldest to newest`}
               </p>
-            )}
-          </RailCard>
+              <TrendChart
+                points={history}
+                seriesLabel="Score"
+                suffix="%"
+                height={180}
+                min={trendFloor(history)}
+                max={100}
+              />
+            </RailCard>
+            </StaggerItem>
+          )}
 
+          <StaggerItem className="print:hidden">
+          <RailCard
+            title="Section pass rates"
+            icon={BarChart3}
+            action={
+              model.sections.length > weakest.length ? (
+                <button
+                  type="button"
+                  onClick={() => setTab('checklist')}
+                  className="no-print text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
+                >
+                  All {model.sections.length}
+                </button>
+              ) : undefined
+            }
+          >
+            <p className="text-xs text-[#6B6F76] -mt-1 mb-3.5">Weakest first</p>
+            <BarList
+              label="Pass rate by section"
+              max={100}
+              rows={weakest.map((section) => ({
+                key: `${section.listKey}::${section.key}`,
+                label: section.title,
+                sub: section.listLabel,
+                value: section.rate,
+                display: `${section.rate}%`,
+                detail: `${section.passed} of ${section.total} checks passed`,
+              }))}
+            />
+          </RailCard>
+          </StaggerItem>
+
+          <StaggerItem>
           <RailCard
             title="Top findings"
+            icon={AlertTriangle}
             action={
               model.issues.length > 3 ? (
                 <button
@@ -633,19 +788,19 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
             {model.issues.length === 0 ? (
               <p className="text-xs text-[#6B6F76]">No findings — every item passed.</p>
             ) : (
-              <ul className="space-y-3">
+              <ul className="space-y-3.5">
                 {model.issues.slice(0, 3).map(({ item, answer, priority }) => (
                   <li key={item.id} className="flex gap-3">
                     {answer.photo ? (
                       <img
                         src={answer.photo}
                         alt=""
-                        className="w-12 h-12 rounded-md object-cover border border-[#E6E7EB] bg-[#F6F6F8] shrink-0"
+                        className="w-12 h-12 rounded-xl object-cover border border-[#E8E9EE] bg-[#F4F5F7] shrink-0"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-md border border-[#E6E7EB] bg-[#F6F6F8] shrink-0 flex items-center justify-center">
-                        <AlertTriangle className="w-4 h-4 text-[#6B6F76]" />
+                      <div className="w-12 h-12 rounded-xl border border-[#E8E9EE] bg-[#F4F5F7] shrink-0 flex items-center justify-center">
+                        <AlertTriangle className="w-4 h-4 text-[#9CA1A9]" />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
@@ -660,7 +815,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                       <p className="text-[11px] text-[#6B6F76] mt-0.5 leading-snug">
                         {reasonText(answer)}
                       </p>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mt-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA1A9] mt-1">
                         {effectiveReasonGroup(item, answer)}
                       </p>
                     </div>
@@ -669,8 +824,10 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
               </ul>
             )}
           </RailCard>
+          </StaggerItem>
 
-          <RailCard title={`Photos (${model.photos.length})`}>
+          <StaggerItem>
+          <RailCard title={`Photos (${model.photos.length})`} icon={Camera}>
             {model.photos.length === 0 ? (
               <p className="text-xs text-[#6B6F76]">No photo evidence was attached.</p>
             ) : (
@@ -681,15 +838,17 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                     src={row.answer!.photo as string}
                     alt={`Evidence for item ${row.number}: ${row.item.text}`}
                     title={`${row.number} ${row.item.text}`}
-                    className="w-full aspect-square rounded-md object-cover border border-[#E6E7EB] bg-[#F6F6F8]"
+                    className="w-full aspect-square rounded-lg object-cover border border-[#E8E9EE] bg-[#F4F5F7] transition-transform duration-200 hover:scale-[1.04]"
                     referrerPolicy="no-referrer"
                   />
                 ))}
               </div>
             )}
           </RailCard>
+          </StaggerItem>
 
-          <RailCard title="Inspection information">
+          <StaggerItem>
+          <RailCard title="Inspection information" icon={FileText}>
             <dl className="space-y-2.5">
               <InfoRow label="Inspection ID" mono>
                 {inspection.id}
@@ -727,6 +886,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
               </InfoRow>
             </dl>
           </RailCard>
+          </StaggerItem>
 
           {/*
             The override trail. Absent on the overwhelming majority of
@@ -735,7 +895,8 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
             afterwards, and this says by whom and what the score had been.
           */}
           {overrides.length > 0 && (
-            <RailCard title="Reopened after sign-off">
+            <StaggerItem>
+            <RailCard title="Reopened after sign-off" icon={History}>
               <ol className="space-y-2.5">
                 {overrides
                   .slice()
@@ -757,7 +918,9 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
                 here.
               </p>
             </RailCard>
+            </StaggerItem>
           )}
+          </Stagger>
         </aside>
       </div>
     </div>
@@ -768,6 +931,19 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({ inspectionId }) => {
 // Pieces
 // ---------------------------------------------------------------------------
 
+/** One count in the headline card, in ink, with its outcome's swatch. */
+const Figure: React.FC<{ label: string; value: number; dot: string }> = ({ label, value, dot }) => (
+  <div className="rounded-xl border border-[#F0F1F4] bg-[#FAFBFC] px-3.5 py-3">
+    <p className="flex items-center gap-1.5 text-[11px] font-semibold text-[#6B6F76] truncate">
+      <span className="w-2 h-2 rounded-[3px] shrink-0" style={{ background: dot }} aria-hidden />
+      {label}
+    </p>
+    <p className="mt-1.5 text-[24px] leading-none font-bold tracking-tight text-[#17181D]">
+      <CountUp value={value} />
+    </p>
+  </div>
+);
+
 const MetaField: React.FC<{
   icon: React.ComponentType<{ className?: string }>;
   label: string;
@@ -775,26 +951,30 @@ const MetaField: React.FC<{
   children: React.ReactNode;
 }> = ({ icon: Icon, label, prominent = false, children }) => (
   <div className="min-w-0">
-    <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#6B6F76]">
+    <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA1A9]">
       <Icon className="w-3.5 h-3.5 shrink-0" />
       <span className="truncate">{label}</span>
     </div>
     <div
-      className={`mt-1 font-semibold text-[#17181D] ${prominent ? 'text-base' : 'text-sm'}`}
+      className={`mt-1.5 font-semibold text-[#17181D] ${prominent ? 'text-base' : 'text-sm'}`}
     >
       {children}
     </div>
   </div>
 );
 
+/*
+ * The outcomes in words, each beside its icon. Ink text rather than the
+ * outcome colour: the icon carries the colour, so the label stays readable.
+ */
 const OutcomeLegend: React.FC<{ model: ReportModel }> = ({ model }) => (
-  <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold">
-    <span className="inline-flex items-center gap-1.5 text-[#157F4B]">
-      <Check className="w-3.5 h-3.5" />
+  <div className="flex flex-wrap items-center gap-3 text-[11px] font-semibold text-[#17181D]">
+    <span className="inline-flex items-center gap-1.5">
+      <Check className="w-3.5 h-3.5 text-[#157F4B]" />
       Passed ({model.passed})
     </span>
-    <span className="inline-flex items-center gap-1.5 text-[#D9542B]">
-      <X className="w-3.5 h-3.5" />
+    <span className="inline-flex items-center gap-1.5">
+      <X className="w-3.5 h-3.5 text-[#D9542B]" />
       Failed ({model.failed})
     </span>
     <span className="inline-flex items-center gap-1.5 text-[#6B6F76]">
@@ -812,13 +992,13 @@ const LegendRow: React.FC<{
 }> = ({ color, label, value, total }) => (
   <li className="flex items-center gap-2">
     <span
-      className="w-2.5 h-2.5 rounded-full shrink-0"
+      className="w-2.5 h-2.5 rounded-[3px] shrink-0"
       style={{ backgroundColor: color }}
       aria-hidden
     />
-    <span className="text-xs text-[#17181D] flex-1 min-w-0">{label}</span>
-    <span className="text-sm font-bold text-[#17181D] tabular-nums">{value}</span>
-    <span className="text-[11px] text-[#6B6F76] tabular-nums w-8 text-right">
+    <span className="text-xs text-[#6B6F76] flex-1 min-w-0 truncate">{label}</span>
+    <span className="text-xs font-semibold text-[#17181D] tabular-nums">{value}</span>
+    <span className="text-[11px] text-[#9CA1A9] tabular-nums w-8 text-right">
       {total > 0 ? Math.round((value / total) * 100) : 0}%
     </span>
   </li>
@@ -834,15 +1014,15 @@ const ChecklistRow: React.FC<{
 
   return (
     <div className={outcome === 'failed' ? 'bg-[#FDECEE]/25' : ''}>
-      <div className="px-4 py-2.5 flex items-start gap-3">
-        <span className="text-xs font-semibold text-[#6B6F76] tabular-nums shrink-0 w-8 pt-0.5">
+      <div className="px-5 py-3 flex items-start gap-3">
+        <span className="text-xs font-semibold text-[#9CA1A9] tabular-nums shrink-0 w-8 pt-0.5">
           {number}
         </span>
 
         <div className="flex-1 min-w-0">
           <p className="text-sm text-[#17181D] leading-snug">{item.text}</p>
-          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] bg-[#F6F6F8] border border-[#E6E7EB] px-1.5 py-0.5 rounded">
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#6B6F76] bg-[#F4F5F7] px-1.5 py-0.5 rounded-md">
               {effectiveReasonGroup(item, answer)}
             </span>
             {priority && (
@@ -859,12 +1039,12 @@ const ChecklistRow: React.FC<{
           <OutcomePill outcome={outcome} />
           {answer?.note && (
             <MessageSquare
-              className="w-4 h-4 text-[#6B6F76]"
+              className="w-4 h-4 text-[#9CA1A9]"
               aria-label="Has a note"
             />
           )}
           {answer?.photo && (
-            <Camera className="w-4 h-4 text-[#6B6F76]" aria-label="Has photo evidence" />
+            <Camera className="w-4 h-4 text-[#9CA1A9]" aria-label="Has photo evidence" />
           )}
           {hasDetail && (
             <button
@@ -872,10 +1052,10 @@ const ChecklistRow: React.FC<{
               onClick={onToggle}
               aria-expanded={expanded}
               aria-label={expanded ? 'Hide detail' : 'Show detail'}
-              className="no-print p-0.5 text-[#6B6F76] hover:text-[#17181D] transition-colors cursor-pointer"
+              className="no-print w-7 h-7 rounded-lg flex items-center justify-center text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F4F5F7] transition-colors cursor-pointer"
             >
               <ChevronDown
-                className={`w-4 h-4 transition-transform ${expanded ? '' : '-rotate-90'}`}
+                className={`w-4 h-4 transition-transform duration-200 ${expanded ? '' : '-rotate-90'}`}
               />
             </button>
           )}
@@ -884,11 +1064,11 @@ const ChecklistRow: React.FC<{
 
       {hasDetail && (
         <div className={`collapsible ${expanded ? '' : 'hidden'}`}>
-          <div className="px-4 pb-3.5 pl-15">
-            <div className="rounded-md border border-[#D9542B]/30 bg-[#FDECEE]/50 p-3 space-y-2">
+          <div className="px-5 pb-4 pl-16">
+            <div className="rounded-xl border border-[#F0D9DC] bg-white p-3.5 space-y-2.5">
               {outcome === 'failed' && (
                 <p className="text-xs">
-                  <span className="font-bold text-[#C8202D]">Reason: </span>
+                  <span className="font-bold text-[#A81823]">Reason: </span>
                   <span className="text-[#17181D] font-semibold">{reasonText(answer)}</span>
                 </p>
               )}
@@ -900,7 +1080,7 @@ const ChecklistRow: React.FC<{
               )}
               {priority && priority.factors.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA1A9] mb-1">
                     How this priority was reached
                   </p>
                   <ul className="text-[11px] text-[#6B6F76] space-y-0.5 list-disc list-inside">
@@ -912,13 +1092,13 @@ const ChecklistRow: React.FC<{
               )}
               {answer?.photo && (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA1A9] mb-1">
                     Attached evidence
                   </p>
                   <img
                     src={answer.photo}
                     alt={`Evidence for item ${number}`}
-                    className="w-28 h-28 object-cover rounded-md border border-[#E6E7EB] bg-white"
+                    className="w-28 h-28 object-cover rounded-lg border border-[#E8E9EE] bg-white"
                     referrerPolicy="no-referrer"
                   />
                 </div>
@@ -934,7 +1114,7 @@ const ChecklistRow: React.FC<{
 const OutcomePill: React.FC<{ outcome: Outcome }> = ({ outcome }) => {
   if (outcome === 'passed') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E6F4EC] text-[#157F4B]">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#E6F4EC] text-[#12643C]">
         <Check className="w-3.5 h-3.5" />
         Yes
       </span>
@@ -942,7 +1122,7 @@ const OutcomePill: React.FC<{ outcome: Outcome }> = ({ outcome }) => {
   }
   if (outcome === 'failed') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FDECEE] text-[#C8202D]">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FDECEE] text-[#A81823]">
         <X className="w-3.5 h-3.5" />
         No
       </span>
@@ -955,14 +1135,14 @@ const OutcomePill: React.FC<{ outcome: Outcome }> = ({ outcome }) => {
    */
   if (outcome === 'held') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FDF3E2] text-[#B4740A]">
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FDF3E2] text-[#8A5A08]">
         <Wrench className="w-3.5 h-3.5" />
         With maintenance
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F6F6F8] text-[#6B6F76] border border-[#E6E7EB]">
+    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F4F5F7] text-[#6B6F76] ring-1 ring-inset ring-[#E4E6EB]">
       <Minus className="w-3.5 h-3.5" />
       Not answered
     </span>
@@ -985,15 +1165,23 @@ const Panel: React.FC<{ active: boolean; title: string; children: React.ReactNod
 
 const RailCard: React.FC<{
   title: string;
+  icon?: React.ComponentType<{ className?: string }>;
   action?: React.ReactNode;
   children: React.ReactNode;
-}> = ({ title, action, children }) => (
-  <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs page-break-inside-avoid">
-    <div className="px-4 py-3 border-b border-[#E6E7EB] flex items-center justify-between gap-2">
-      <h2 className="text-sm font-bold text-[#17181D]">{title}</h2>
+}> = ({ title, icon: Icon, action, children }) => (
+  <section className={`${CARD} page-break-inside-avoid`}>
+    <div className="px-5 pt-4 pb-3 flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2.5 min-w-0">
+        {Icon && (
+          <span className="w-8 h-8 rounded-lg bg-[#F4F5F7] text-[#17181D] flex items-center justify-center shrink-0">
+            <Icon className="w-4 h-4" />
+          </span>
+        )}
+        <h2 className="text-sm font-bold text-[#17181D] truncate">{title}</h2>
+      </div>
       {action}
     </div>
-    <div className="p-4">{children}</div>
+    <div className="px-5 pb-5 pt-1">{children}</div>
   </section>
 );
 
@@ -1002,7 +1190,7 @@ const InfoRow: React.FC<{ label: string; mono?: boolean; children: React.ReactNo
   mono = false,
   children,
 }) => (
-  <div className="flex items-baseline justify-between gap-3">
+  <div className="flex items-baseline justify-between gap-3 pb-2.5 border-b border-[#F0F1F4] last:border-b-0 last:pb-0">
     <dt className="text-[11px] text-[#6B6F76] shrink-0">{label}</dt>
     <dd
       className={`text-[11px] font-semibold text-[#17181D] text-right min-w-0 truncate ${
@@ -1019,12 +1207,33 @@ const EmptyState: React.FC<{
   title: string;
   children: React.ReactNode;
 }> = ({ icon: Icon, title, children }) => (
-  <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs p-8 text-center">
-    <Icon className="w-8 h-8 text-[#9CA1A9] mx-auto mb-2.5" />
-    <p className="text-sm font-bold text-[#17181D]">{title}</p>
+  <div className={`${CARD} px-8 py-12 text-center`}>
+    <span className="mx-auto w-12 h-12 rounded-2xl bg-[#F4F5F7] text-[#9CA1A9] flex items-center justify-center">
+      <Icon className="w-6 h-6" />
+    </span>
+    <p className="mt-3 text-sm font-bold text-[#17181D]">{title}</p>
     <p className="text-xs text-[#6B6F76] mt-1">{children}</p>
   </div>
 );
+
+/** "23 Sep", for a chart axis where the full date will not fit. */
+function shortDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+/**
+ * The trend axis floor: ten below the lowest score, to the nearest ten. A
+ * line is read by its slope, and a few points near the top are invisible on
+ * an axis pinned at zero.
+ */
+function trendFloor(points: TrendPoint[]): number {
+  if (points.length === 0) return 0;
+  const low = Math.min(...points.map((p) => p.value));
+  return Math.max(0, Math.min(80, Math.floor((low - 10) / 10) * 10));
+}
 
 // ---------------------------------------------------------------------------
 // Tab panels
@@ -1050,13 +1259,13 @@ const FindingsPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
               {model.severityCounts[severity] === 1 ? '' : 's'}
             </span>
           </div>
-          <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs divide-y divide-[#E6E7EB] overflow-hidden">
+          <div className={`${CARD} divide-y divide-[#F0F1F4] overflow-hidden`}>
             {model.issues
               .filter((issue) => issue.priority.severity === severity)
               .map(({ item, answer, priority }) => {
                 const row = model.rows.find((r) => r.item.id === item.id);
                 return (
-                  <article key={item.id} className="p-4 flex items-start gap-4">
+                  <article key={item.id} className="px-5 py-4 flex items-start gap-4 hover:bg-[#FAFBFC] transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-semibold text-[#6B6F76] tabular-nums">
@@ -1098,7 +1307,7 @@ const FindingsPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
                       <img
                         src={answer.photo}
                         alt={`Evidence for item ${row?.number}`}
-                        className="w-20 h-20 rounded-md object-cover border border-[#E6E7EB] bg-[#F6F6F8] shrink-0"
+                        className="w-20 h-20 rounded-xl object-cover border border-[#E8E9EE] bg-[#F6F6F8] shrink-0"
                         referrerPolicy="no-referrer"
                       />
                     )}
@@ -1139,16 +1348,16 @@ const MaintenancePanel: React.FC<{ model: ReportModel }> = ({ model }) => {
   }
 
   return (
-    <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden">
-      <div className="px-4 py-3 border-b border-[#E6E7EB]">
-        <h2 className="text-sm font-bold text-[#17181D]">Repair &amp; service actions</h2>
+    <section className={`${CARD} overflow-hidden`}>
+      <div className="px-5 py-4 border-b border-[#F0F1F4]">
+        <h2 className="text-[15px] font-bold text-[#17181D]">Repair &amp; service actions</h2>
         <p className="text-xs text-[#6B6F76] mt-0.5">
           Findings whose cause is a broken, damaged or unserviced item — the work the
           branch has to raise with maintenance. The ones marked as needing repair carry
           the job they opened on the board.
         </p>
       </div>
-      <div className="divide-y divide-[#E6E7EB]">
+      <div className="divide-y divide-[#F0F1F4]">
         {model.maintenance.map(({ item, answer, priority }) => {
           const row = model.rows.find((r) => r.item.id === item.id);
           const marked = needsMaintenance(item, answer);
@@ -1200,7 +1409,7 @@ const MaintenancePanel: React.FC<{ model: ReportModel }> = ({ model }) => {
                   </div>
                 )}
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] bg-[#F6F6F8] border border-[#E6E7EB] px-1.5 py-0.5 rounded shrink-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#6B6F76] bg-[#F4F5F7] px-1.5 py-0.5 rounded-md shrink-0">
                 {effectiveReasonGroup(item, answer)}
               </span>
             </div>
@@ -1221,7 +1430,7 @@ const NotesPanel: React.FC<{ model: ReportModel }> = ({ model }) => {
   }
 
   return (
-    <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs divide-y divide-[#E6E7EB] overflow-hidden">
+    <section className={`${CARD} divide-y divide-[#F0F1F4] overflow-hidden`}>
       {model.notes.map((row) => (
         <div key={row.item.id} className="p-4 flex items-start gap-3">
           <StickyNote className="w-4 h-4 text-[#6B6F76] shrink-0 mt-0.5" />
@@ -1259,16 +1468,16 @@ const HistoryPanel: React.FC<{
 
   return (
     <div className="space-y-5">
-      <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#E6E7EB]">
-          <h2 className="text-sm font-bold text-[#17181D]">
+      <section className={`${CARD} overflow-hidden`}>
+        <div className="px-5 py-4 border-b border-[#F0F1F4]">
+          <h2 className="text-[15px] font-bold text-[#17181D]">
             Score history — {model.inspection.branchName}
           </h2>
           <p className="text-xs text-[#6B6F76] mt-0.5">
             Every submitted visit at this branch, newest first.
           </p>
         </div>
-        <div className="divide-y divide-[#E6E7EB]">
+        <div className="divide-y divide-[#F0F1F4]">
           {branchHistory.map((visit) => (
             <div
               key={visit.id}
@@ -1286,12 +1495,12 @@ const HistoryPanel: React.FC<{
                 * being read is emphasised and the rest recede — the colour
                 * tracks which record this is, never how it ranks.
                 */}
-              <div className="flex-1 min-w-0 h-2 bg-[#EFEFF2] rounded-full overflow-hidden">
+              <div className="flex-1 min-w-0 h-2 bg-[#F1F2F5] rounded-r-[4px] overflow-hidden">
                 <div
-                  className="h-full rounded-full"
+                  className="h-full rounded-r-[4px]"
                   style={{
                     width: `${Math.max(visit.score, 2)}%`,
-                    backgroundColor: visit.isThis ? OUTCOME_COLOR.passed : '#8FBFA4',
+                    backgroundColor: visit.isThis ? CHART_COLORS.data : '#A8C6EC',
                   }}
                 />
               </div>
@@ -1322,7 +1531,7 @@ const HistoryPanel: React.FC<{
       </section>
 
       {model.repeats.length > 0 && (
-        <section className="bg-[#FDF3E2] border border-[#B4740A]/30 rounded-lg p-4 page-break-inside-avoid">
+        <section className="bg-[#FDF3E2] border border-[#B4740A]/30 rounded-2xl p-5 page-break-inside-avoid">
           <h2 className="text-sm font-bold text-[#17181D] flex items-center gap-2">
             <History className="w-4 h-4 text-[#B4740A]" />
             Repeat issues at this branch
@@ -1354,8 +1563,8 @@ const HistoryPanel: React.FC<{
 const SignOffCard: React.FC<{ model: ReportModel }> = ({ model }) => {
   const { inspection } = model;
   return (
-    <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs p-5 page-break-inside-avoid">
-      <h2 className="text-sm font-bold text-[#17181D]">
+    <section className={`${CARD} p-5 sm:p-6 page-break-inside-avoid`}>
+      <h2 className="text-[15px] font-bold text-[#17181D]">
         Manager verification &amp; acknowledgment
       </h2>
       <p className="text-xs text-[#6B6F76] mt-0.5">
@@ -1368,7 +1577,7 @@ const SignOffCard: React.FC<{ model: ReportModel }> = ({ model }) => {
             Signed by
           </span>
           {inspection.signature ? (
-            <div className="w-60 h-24 border border-[#E6E7EB] bg-[#FAFAFA] rounded-md flex items-center justify-center p-2">
+            <div className="w-60 h-24 border border-[#E8E9EE] bg-[#FAFBFC] rounded-xl flex items-center justify-center p-2">
               <img
                 src={inspection.signature}
                 alt="Branch manager signature"
@@ -1376,7 +1585,7 @@ const SignOffCard: React.FC<{ model: ReportModel }> = ({ model }) => {
               />
             </div>
           ) : (
-            <div className="w-60 h-24 border border-dashed border-[#E6E7EB] bg-[#FAFAFA] rounded-md flex items-center justify-center text-xs text-[#6B6F76] italic">
+            <div className="w-60 h-24 border border-dashed border-[#E4E6EB] bg-[#FAFBFC] rounded-xl flex items-center justify-center text-xs text-[#6B6F76] italic">
               Not signed yet
             </div>
           )}

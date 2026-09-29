@@ -4,9 +4,11 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   ArrowLeft,
   CheckCircle,
+  ChevronRight,
   AlertTriangle,
   FileCheck,
   Eraser,
+  ListChecks,
   PenTool,
   Wrench,
 } from 'lucide-react';
@@ -17,6 +19,9 @@ import { numberingFor } from '../services/checklistStore';
 import { useChecklist } from '../hooks/useChecklist';
 import { ScorePill } from './ScorePill';
 import { PriorityBadge } from './PriorityBadge';
+import { BUTTON, CARD, PageHeader } from './ui';
+import { CountUp, Reveal, Stagger, StaggerItem } from './motion';
+import { CHART_COLORS, ScoreDial, StackedMeter } from './charts';
 import {
   getInspectionById,
   getInspections,
@@ -26,7 +31,7 @@ import {
 import {
   EMPTY_HISTORY,
   RankedIssue,
-
+  SEVERITY_LABEL,
   buildFailureHistory,
   computePriority,
   countBySeverity,
@@ -237,14 +242,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
 
   if (!inspection) {
     return (
-      <div className="p-8 max-w-2xl mx-auto text-center">
-        <h2 className="text-xl font-bold text-[#17181D]">Inspection not found</h2>
-        <button
-          onClick={() => router.push('/inspections')}
-          className="mt-4 px-4 py-2 bg-[#C8202D] text-white text-sm font-medium rounded-[6px]"
-        >
-          Return to records
-        </button>
+      <div className="p-5 sm:p-8 max-w-xl mx-auto w-full">
+        <div className={`${CARD} px-6 py-14 text-center`}>
+          <h2 className="text-base font-bold text-[#17181D]">Inspection not found</h2>
+          <button onClick={() => router.push('/inspections')} className={`${BUTTON.primary} mt-5`}>
+            Return to records
+          </button>
+        </div>
       </div>
     );
   }
@@ -504,115 +508,164 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
     router.push(`/inspections/${inspection.id}/summary`);
   };
 
+  /*
+   * What still stands between this record and submitting, for the bar at the
+   * foot. Read off the same conditions `handleSubmitInspection` checks, in the
+   * same order, so the bar can never call a record ready that submit refuses.
+   */
+  const readiness = [
+    { key: 'answers', label: 'Every check answered', done: unansweredItems.length === 0 },
+    { key: 'evidence', label: 'Critical photos attached', done: needEvidence.length === 0 },
+    {
+      key: 'signatory',
+      label: 'Name and designation',
+      done: !!signatoryName.trim() && !!signatoryRole.trim(),
+    },
+    { key: 'signature', label: 'Signed', done: hasDrawn },
+  ];
+  const readyCount = readiness.filter((r) => r.done).length;
+
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto w-full">
-      {/* Back button */}
-      <button
-        type="button"
-        onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6B6F76] hover:text-[#17181D] transition cursor-pointer mb-4"
-      >
-        <ArrowLeft className="w-3.5 h-3.5" />
-        <span>Return to checklist</span>
-      </button>
-
-      {/* Header */}
-      <div className="mb-6 border-b border-[#E6E7EB] pb-4">
-        <h1 className="text-xl font-bold tracking-tight text-[#17181D]">
-          Review before submitting
-        </h1>
-        <p className="text-xs font-medium text-[#6B6F76] mt-1">
-          {flaggedItems.length === 0
-            ? 'Every item passed'
-            : `${flaggedItems.length} item${flaggedItems.length === 1 ? '' : 's'} flagged` +
-              (severityCounts.critical > 0
-                ? `, ${severityCounts.critical} critical`
-                : severityCounts.high > 0
-                  ? `, ${severityCounts.high} high priority`
-                  : '')}
-          {' '}• {inspection.branchName} ({FULL_CHECKLIST_LABEL})
-        </p>
-      </div>
-
-      {/* Score Preview Banner */}
-      <div className="mb-6 p-4 rounded-md bg-white border border-[#E6E7EB] flex items-center justify-between shadow-xs">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76]">
-            Calculated score
-          </p>
-          <p className="text-xs text-[#6B6F76] mt-0.5">
-            {yesCount} of {totalItemsCount} items passed standards
-          </p>
-        </div>
-        <div className="text-right">
-          <ScorePill score={calculatedScore} />
-        </div>
-      </div>
-
-      {/* Priority breakdown of everything flagged */}
-      {flaggedItems.length > 0 && (
-        <div
-          id="review-priority-summary"
-          className="mb-6 p-4 rounded-md bg-white border border-[#E6E7EB] shadow-xs"
+    <div className="p-5 sm:p-6 md:p-8 max-w-4xl mx-auto w-full">
+      <Reveal className="mb-6">
+        {/* Back button */}
+        <button
+          type="button"
+          onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
+          className="group inline-flex items-center gap-1.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] transition-colors cursor-pointer mb-4"
         >
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-2.5">
-            Priority breakdown
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(['critical', 'high', 'medium', 'low'] as const).map((severity) => (
-              <span
-                key={severity}
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-semibold ${
-                  severityCounts[severity] === 0
-                    ? 'border-[#E6E7EB] bg-[#FAFAFA] text-[#6B6F76]/60'
-                    : 'border-[#E6E7EB] bg-white text-[#17181D]'
-                }`}
-              >
-                <PriorityBadge severity={severity} size="sm" />
-                <span className="tabular-nums">{severityCounts[severity]}</span>
-              </span>
-            ))}
+          <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
+          <span>Return to checklist</span>
+        </button>
+
+        {/* Header */}
+        <PageHeader
+          eyebrow="Final step · sign-off"
+          title="Review before submitting"
+          subtitle={
+            <>
+              {flaggedItems.length === 0
+                ? 'Every item passed'
+                : `${flaggedItems.length} item${flaggedItems.length === 1 ? '' : 's'} flagged` +
+                  (severityCounts.critical > 0
+                    ? `, ${severityCounts.critical} critical`
+                    : severityCounts.high > 0
+                      ? `, ${severityCounts.high} high priority`
+                      : '')}
+              {' '}• {inspection.branchName} ({FULL_CHECKLIST_LABEL})
+            </>
+          }
+        />
+      </Reveal>
+
+      {/* Score Preview, with the priority breakdown of everything flagged beside it */}
+      <Reveal delay={0.05} className="mb-5">
+        <div className={`${CARD} p-5 sm:p-6 flex flex-col sm:flex-row gap-6`}>
+          <div className="flex items-center gap-5 sm:w-[15rem] shrink-0">
+            <div className="relative">
+              <ScoreDial value={calculatedScore} size={112} stroke={10} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-[28px] leading-none font-bold tracking-tight text-[#17181D]">
+                  <CountUp value={calculatedScore} />
+                  <span className="text-base font-semibold text-[#9CA1A9]">%</span>
+                </span>
+              </div>
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9CA1A9]">
+                Calculated score
+              </p>
+              <p className="text-xs text-[#6B6F76] mt-1 leading-relaxed">
+                {yesCount} of {totalItemsCount} items passed standards
+              </p>
+              <div className="mt-2.5">
+                <ScorePill score={calculatedScore} size="sm" showLabel />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0 sm:pl-6 sm:border-l border-[#F0F1F4]">
+            {flaggedItems.length > 0 ? (
+              <div id="review-priority-summary">
+                <p className="text-[13px] font-bold text-[#17181D]">Priority breakdown</p>
+                <p className="text-xs text-[#6B6F76] mt-0.5 mb-4">
+                  {flaggedItems.length} finding{flaggedItems.length === 1 ? '' : 's'}, most serious
+                  first below
+                </p>
+                <StackedMeter
+                  label="Findings by priority"
+                  unit="finding"
+                  parts={(['critical', 'high', 'medium', 'low'] as const).map((severity) => ({
+                    key: severity,
+                    label: SEVERITY_LABEL[severity],
+                    value: severityCounts[severity],
+                    color: CHART_COLORS.severity[severity],
+                  }))}
+                />
+              </div>
+            ) : (
+              <div className="h-full flex items-center gap-3">
+                <span className="w-10 h-10 rounded-xl bg-[#E6F4EC] text-[#157F4B] flex items-center justify-center shrink-0">
+                  <CheckCircle className="w-5 h-5" />
+                </span>
+                <div>
+                  <p className="text-[13px] font-bold text-[#17181D]">Nothing flagged</p>
+                  <p className="text-xs text-[#6B6F76] mt-0.5">
+                    Every check on this visit passed.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </Reveal>
 
+      <Stagger className="space-y-4 mb-8">
       {/* What goes to maintenance, said before signing rather than after */}
       {repairItems.length > 0 && (
+        <StaggerItem>
         <div
           id="review-maintenance-summary"
-          className="mb-6 p-4 rounded-md bg-white border border-[#E6E7EB] shadow-xs flex items-start gap-3"
+          className={`${CARD} p-4 sm:p-5 flex items-start gap-3.5`}
         >
-          <Wrench className="w-5 h-5 text-[#B4740A] shrink-0 mt-0.5" />
+          <span className="w-10 h-10 rounded-xl bg-[#FDF3E2] text-[#B4740A] flex items-center justify-center shrink-0">
+            <Wrench className="w-5 h-5" />
+          </span>
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-[#17181D]">
+            <p className="text-sm font-bold text-[#17181D]">
               {repairItems.length} repair job{repairItems.length === 1 ? '' : 's'} raised on submit
             </p>
-            <p className="text-xs text-[#6B6F76] mt-0.5">
+            <p className="text-xs text-[#6B6F76] mt-0.5 leading-relaxed">
               Each opens on the maintenance board as Reported, waiting to be picked up. The
               findings below are marked with the trade they go to.
             </p>
             <button
               type="button"
               onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-              className="mt-2 text-xs font-bold text-[#C8202D] hover:underline cursor-pointer"
+              className={LINK_BUTTON}
             >
               Change on the checklist
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
+        </StaggerItem>
       )}
 
       {/* Critical issues lacking photo evidence — blocks submit */}
       {needEvidence.length > 0 && (
+        <StaggerItem>
         <div
           id="review-evidence-banner"
-          className="mb-6 p-4 rounded-md bg-[#FDECEE] border border-[#C8202D]/40 shadow-xs"
+          className="p-4 sm:p-5 rounded-2xl bg-[#FDECEE] border border-[#C8202D]/30"
           role="alert"
         >
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-[#C8202D] shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3.5">
+            <span className="w-10 h-10 rounded-xl bg-white/70 text-[#C8202D] flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </span>
             <div>
-              <p className="text-sm font-semibold text-[#17181D]">
+              <p className="text-sm font-bold text-[#17181D]">
                 {needEvidence.length} critical issue{needEvidence.length === 1 ? '' : 's'} need
                 {needEvidence.length === 1 ? 's' : ''} photo evidence
               </p>
@@ -626,43 +679,50 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
               <button
                 type="button"
                 onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-                className="mt-2 text-xs font-bold text-[#C8202D] hover:underline cursor-pointer"
+                className={LINK_BUTTON}
               >
                 Return to checklist
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </div>
+        </StaggerItem>
       )}
 
       {/* Unanswered items — blocks submit until every item is marked */}
       {unansweredItems.length > 0 && (
+        <StaggerItem>
         <div
           id="review-unanswered-banner"
-          className="mb-6 p-4 rounded-md bg-[#FDF3E2] border border-[#B4740A]/30 shadow-xs"
+          className="p-4 sm:p-5 rounded-2xl bg-[#FDF3E2] border border-[#B4740A]/30"
           role="alert"
         >
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-[#B4740A] shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3.5">
+            <span className="w-10 h-10 rounded-xl bg-white/70 text-[#B4740A] flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </span>
             <div>
-              <p className="text-sm font-semibold text-[#17181D]">
+              <p className="text-sm font-bold text-[#17181D]">
                 {unansweredItems.length} item{unansweredItems.length === 1 ? '' : 's'} still
                 unanswered
               </p>
-              <p className="text-xs text-[#6B6F76] mt-0.5">
+              <p className="text-xs text-[#6B6F76] mt-0.5 leading-relaxed">
                 Mark item{unansweredItems.length === 1 ? '' : 's'}{' '}
                 {unansweredItems.map((item) => displayNumber(item.id)).join(', ')} before submitting.
               </p>
               <button
                 type="button"
                 onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-                className="mt-2 text-xs font-bold text-[#C8202D] hover:underline cursor-pointer"
+                className={LINK_BUTTON}
               >
                 Return to checklist
+                <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </div>
+        </StaggerItem>
       )}
 
       {/*
@@ -672,18 +732,21 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
         it is how a report stops being trusted.
       */}
       {heldItems.length > 0 && (
+        <StaggerItem>
         <div
           id="review-held-banner"
-          className="mb-6 p-4 rounded-md bg-white border border-[#E6E7EB] shadow-xs"
+          className={`${CARD} p-4 sm:p-5`}
         >
-          <div className="flex items-start gap-3">
-            <Wrench className="w-5 h-5 text-[#B4740A] shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3.5">
+            <span className="w-10 h-10 rounded-xl bg-[#FDF3E2] text-[#B4740A] flex items-center justify-center shrink-0">
+              <Wrench className="w-5 h-5" />
+            </span>
             <div>
-              <p className="text-sm font-semibold text-[#17181D]">
+              <p className="text-sm font-bold text-[#17181D]">
                 {heldItems.length} check{heldItems.length === 1 ? '' : 's'} already with
                 maintenance
               </p>
-              <p className="text-xs text-[#6B6F76] mt-0.5">
+              <p className="text-xs text-[#6B6F76] mt-0.5 leading-relaxed">
                 Item{heldItems.length === 1 ? '' : 's'}{' '}
                 {heldItems.map((item) => displayNumber(item.id)).join(', ')} could not be
                 answered, because the fault is already on the board. They are scored out — this
@@ -693,24 +756,38 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
             </div>
           </div>
         </div>
+        </StaggerItem>
       )}
 
       {/* Flagged items list */}
-      <div className="mb-8">
-        <h2 className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-3">
-          Non-compliant items ({flaggedItems.length}) — most serious first
-        </h2>
+      <StaggerItem>
+      <section className={`${CARD} overflow-hidden`}>
+        <div className="px-5 sm:px-6 py-4 flex items-center gap-3 border-b border-[#F0F1F4]">
+          <span className="w-9 h-9 rounded-xl bg-[#F4F5F7] text-[#17181D] flex items-center justify-center shrink-0">
+            <ListChecks className="w-[18px] h-[18px]" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-[15px] font-bold text-[#17181D]">
+              Non-compliant items ({flaggedItems.length}) — most serious first
+            </h2>
+            <p className="text-xs text-[#6B6F76] mt-0.5">
+              What the manager is signing for, with the reason given for each
+            </p>
+          </div>
+        </div>
 
         {flaggedItems.length === 0 ? (
-          <div className="p-6 bg-[#E6F4EC]/60 border border-[#157F4B]/20 rounded-md text-center">
-            <CheckCircle className="w-8 h-8 text-[#157F4B] mx-auto mb-2" />
-            <p className="text-sm font-bold text-[#157F4B]">Every item passed</p>
-            <p className="text-xs text-[#157F4B]/80 mt-1">
+          <div className="px-6 py-10 text-center">
+            <span className="mx-auto w-12 h-12 rounded-2xl bg-[#E6F4EC] text-[#157F4B] flex items-center justify-center">
+              <CheckCircle className="w-6 h-6" />
+            </span>
+            <p className="mt-3 text-sm font-bold text-[#17181D]">Every item passed</p>
+            <p className="text-xs text-[#6B6F76] mt-1">
               All checklist points conform to inspection guidelines.
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-[#F0F1F4]">
             {flaggedItems.map(({ item, answer, priority }) => {
               const displayReason =
                 answer.reason === 'Other'
@@ -722,18 +799,22 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                 <div
                   key={item.id}
                   id={`review-flagged-item-${item.id}`}
-                  className={`bg-[#FDECEE]/40 border rounded-md p-4 text-[#17181D] ${
-                    priority.severity === 'critical'
-                      ? 'border-[#C8202D] border-l-4'
-                      : 'border-[#C8202D]/30'
+                  className={`relative px-5 sm:px-6 py-4 text-[#17181D] ${
+                    priority.severity === 'critical' ? 'bg-[#FDECEE]/30' : ''
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-2.5">
-                      <span className="text-xs font-bold text-[#C8202D] bg-white border border-[#C8202D]/30 min-w-5 h-5 px-1 rounded flex items-center justify-center shrink-0 mt-0.5 tabular-nums">
+                  {/* The priority down the leading edge, in the severity ramp */}
+                  <span
+                    aria-hidden
+                    className="absolute inset-y-0 left-0 w-1"
+                    style={{ background: CHART_COLORS.severity[priority.severity] }}
+                  />
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span className="text-[11px] font-bold text-[#C8202D] bg-[#FDECEE] min-w-7 h-7 px-1.5 rounded-lg flex items-center justify-center shrink-0 tabular-nums">
                         {displayNumber(item.id)}
                       </span>
-                      <div>
+                      <div className="min-w-0 pt-0.5">
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-sm font-semibold text-[#17181D]">{item.text}</p>
                           <PriorityBadge
@@ -743,13 +824,13 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                           />
                         </div>
                         <div className="mt-1.5 text-xs">
-                          <span className="font-semibold text-[#C8202D]">Reason: </span>
+                          <span className="font-semibold text-[#A81823]">Reason: </span>
                           <span className="text-[#17181D]">{displayReason}</span>
                         </div>
                         {/* The trade this one lands on, when it is repair work */}
                         {toMaintenance && (
-                          <div className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-[#B4740A]">
-                            <Wrench className="w-3.5 h-3.5 shrink-0" />
+                          <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#FDF3E2] text-[11px] font-semibold text-[#8A5A08]">
+                            <Wrench className="w-3 h-3 shrink-0" />
                             <span>
                               Repair job — {categoryLabel(suggestCategory(item, answer))}
                             </span>
@@ -762,7 +843,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                           </div>
                         )}
                         {priority.repeatCount > 0 && (
-                          <div className="mt-1 text-xs font-semibold text-[#B4740A]">
+                          <div className="mt-1 text-xs font-semibold text-[#8A5A08]">
                             Repeat issue — flagged in {priority.repeatCount} of the last{' '}
                             {priority.historyVisits} visit
                             {priority.historyVisits === 1 ? '' : 's'} to this branch
@@ -776,7 +857,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                         <img
                           src={answer.photo}
                           alt={`Evidence item ${item.id}`}
-                          className="w-14 h-14 object-cover rounded-md border border-[#E6E7EB] bg-white"
+                          className="w-16 h-16 object-cover rounded-xl border border-[#E8E9EE] bg-white"
                           referrerPolicy="no-referrer"
                         />
                       </div>
@@ -787,27 +868,38 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
             })}
           </div>
         )}
-      </div>
+      </section>
+      </StaggerItem>
+      </Stagger>
 
-      {/* Signature Pad Section */}
-      <div className="bg-white border border-[#E6E7EB] rounded-md p-6 mb-8 shadow-xs">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <label
-              htmlFor="signature-canvas"
-              className="block text-sm font-bold text-[#17181D]"
-            >
-              Sign-off <span className="text-[#C8202D]">*</span>
-            </label>
-            <p className="text-xs text-[#6B6F76] mt-0.5">
-              Whoever is on site signs. Record their name and designation, then sign below.
-            </p>
+      {/*
+        Signature Pad Section. Left out of the animated wrappers above: the
+        pad sizes its drawing surface from where it sits on the first frame,
+        and it should be measured standing still.
+      */}
+      <div className={`${CARD} p-5 sm:p-6 mb-5`}>
+        <div className="flex items-start justify-between gap-3 mb-5">
+          <div className="flex items-start gap-3">
+            <span className="w-9 h-9 rounded-xl bg-[#F4F5F7] text-[#17181D] flex items-center justify-center shrink-0">
+              <PenTool className="w-[18px] h-[18px]" />
+            </span>
+            <div>
+              <label
+                htmlFor="signature-canvas"
+                className="block text-[15px] font-bold text-[#17181D]"
+              >
+                Sign-off <span className="text-[#C8202D]">*</span>
+              </label>
+              <p className="text-xs text-[#6B6F76] mt-0.5">
+                Whoever is on site signs. Record their name and designation, then sign below.
+              </p>
+            </div>
           </div>
 
           <button
             type="button"
             onClick={handleClearSignature}
-            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#6B6F76] hover:text-[#C8202D] border border-[#E6E7EB] rounded-md hover:bg-[#F6F6F8] transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs font-semibold text-[#6B6F76] hover:text-[#C8202D] border border-[#E4E6EB] bg-white rounded-lg hover:bg-[#FDECEE] hover:border-[#C8202D]/25 transition-colors cursor-pointer shrink-0"
           >
             <Eraser className="w-3.5 h-3.5" />
             <span>Clear</span>
@@ -818,12 +910,9 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
           Who is actually signing. A signature on its own does not say whose
           it is, and the branch manager is often not the person on site.
         */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div>
-            <label
-              htmlFor="signatory-name-input"
-              className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-            >
+            <label htmlFor="signatory-name-input" className={LABEL}>
               Name of person signing <span className="text-[#C8202D]">*</span>
             </label>
             <input
@@ -835,15 +924,12 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                 setSignError(null);
               }}
               placeholder="e.g. A. Rahman"
-              className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] transition-colors"
+              className={FIELD}
             />
           </div>
 
           <div>
-            <label
-              htmlFor="signatory-role-input"
-              className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-            >
+            <label htmlFor="signatory-role-input" className={LABEL}>
               Designation <span className="text-[#C8202D]">*</span>
             </label>
             <input
@@ -856,7 +942,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
                 setSignError(null);
               }}
               placeholder="e.g. Shift supervisor"
-              className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] transition-colors"
+              className={FIELD}
             />
             {/* Suggestions, not a fixed list — a branch can title people anything */}
             <datalist id="signatory-role-options">
@@ -867,57 +953,118 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({ inspectionId }) => {
           </div>
         </div>
 
-        <div className="relative border-2 border-dashed border-[#E6E7EB] rounded-md bg-[#FAFAFA] overflow-hidden touch-none">
+        <div
+          className={`relative border-2 border-dashed rounded-xl overflow-hidden touch-none transition-colors ${
+            hasDrawn ? 'border-[#C9CCD2] bg-white' : 'border-[#E4E6EB] bg-[#FAFBFC]'
+          }`}
+        >
           <canvas
             id="signature-canvas"
             ref={canvasRef}
             className="w-full h-36 md:h-44 cursor-crosshair block"
           />
           {!hasDrawn && (
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-xs text-[#6B6F76]/50">
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-xs text-[#9CA1A9]">
               <PenTool className="w-4 h-4 mr-1.5 opacity-60" />
               Sign here using mouse or finger
             </div>
           )}
+          {/* A baseline to sign along, as on a paper form */}
+          <div
+            aria-hidden
+            className="absolute left-6 right-6 bottom-8 border-b border-[#E4E6EB] pointer-events-none"
+          />
         </div>
       </div>
 
-      {/*
-        Beside the button that raised it. At the top of the sign-off card it
-        sat above the fields and the pad, off screen on a phone, and pressing
-        Submit looked like it did nothing.
-      */}
-      {signError && (
-        <div
-          id="signature-error-msg"
-          role="alert"
-          className="-mt-4 mb-3 p-2.5 rounded-md bg-[#FDECEE] border border-[#C8202D]/30 text-[#C8202D] text-xs font-semibold flex items-center gap-1.5"
-        >
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>{signError}</span>
+      {/* Action Buttons, with what is still outstanding before submit will go through */}
+      <div className={`${CARD} p-4 sm:p-5`}>
+        {/*
+          Beside the button that raised it. At the top of the sign-off card it
+          sat above the fields and the pad, off screen on a phone, and pressing
+          Submit looked like it did nothing.
+        */}
+        {signError && (
+          <div
+            id="signature-error-msg"
+            role="alert"
+            className="mb-4 px-3.5 py-2.5 rounded-xl bg-[#FDECEE] border border-[#C8202D]/30 text-[#A81823] text-xs font-semibold flex items-center gap-2"
+          >
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{signError}</span>
+          </div>
+        )}
+
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline justify-between gap-3 text-xs mb-2">
+              <span className="font-semibold text-[#17181D]">
+                {readyCount === readiness.length
+                  ? 'Ready to submit'
+                  : `${readyCount} of ${readiness.length} ready`}
+              </span>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5" aria-hidden>
+              {readiness.map((r) => (
+                <span
+                  key={r.key}
+                  className={`h-1.5 rounded-full transition-colors duration-300 ${
+                    r.done ? 'bg-[#157F4B]' : 'bg-[#EEF0F3]'
+                  }`}
+                />
+              ))}
+            </div>
+            <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1">
+              {readiness.map((r) => (
+                <li
+                  key={r.key}
+                  className={`inline-flex items-center gap-1.5 text-[11px] ${
+                    r.done ? 'text-[#12643C] font-semibold' : 'text-[#6B6F76]'
+                  }`}
+                >
+                  {r.done ? (
+                    <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                  ) : (
+                    <span className="w-3.5 h-3.5 rounded-full border-[1.5px] border-[#C9CCD2] shrink-0" />
+                  )}
+                  {r.label}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex items-center justify-between md:justify-end gap-2.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
+              className={BUTTON.secondary}
+            >
+              Edit checklist
+            </button>
+
+            <button
+              id="submit-inspection-btn"
+              type="button"
+              onClick={handleSubmitInspection}
+              className={`${BUTTON.primary} h-11 px-5`}
+            >
+              <FileCheck className="w-4 h-4" />
+              <span>Submit inspection</span>
+            </button>
+          </div>
         </div>
-      )}
-
-      {/* Action Buttons */}
-      <div className="flex items-center justify-between gap-4 pt-2">
-        <button
-          type="button"
-          onClick={() => router.push(`/inspections/${inspection.id}/checklist`)}
-          className="px-4 py-2.5 border border-[#E6E7EB] rounded-md text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] bg-white hover:bg-[#F6F6F8] transition-colors cursor-pointer"
-        >
-          Edit checklist
-        </button>
-
-        <button
-          id="submit-inspection-btn"
-          type="button"
-          onClick={handleSubmitInspection}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md text-xs font-semibold bg-[#C8202D] text-white hover:bg-[#A81823] transition-colors shadow-xs cursor-pointer"
-        >
-          <FileCheck className="w-4 h-4" />
-          <span>Submit inspection</span>
-        </button>
       </div>
     </div>
   );
 };
+
+// ---------------------------------------------------------------------------
+// Pieces
+// ---------------------------------------------------------------------------
+
+/* The same field look as the checklist and the new-inspection form. */
+const FIELD =
+  'w-full h-11 px-3.5 bg-white border border-[#E4E6EB] rounded-xl text-sm text-[#17181D] placeholder:text-[#9CA1A9] shadow-xs transition-all hover:border-[#C9CCD2] focus:outline-none focus:border-[#C8202D]/60 focus:ring-4 focus:ring-[#C8202D]/10';
+const LABEL = 'block text-xs font-semibold text-[#17181D] mb-1.5';
+const LINK_BUTTON =
+  'mt-2.5 inline-flex items-center gap-1 text-xs font-bold text-[#C8202D] hover:text-[#A81823] cursor-pointer';

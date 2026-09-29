@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import { TEMPO } from './motion';
 
 export interface DonutSegment {
   key: string;
@@ -21,7 +22,7 @@ interface DonutChartProps {
 }
 
 /** How long the ring takes to draw itself, in milliseconds. */
-const SWEEP_MS = 900;
+const SWEEP_MS = 900 * TEMPO;
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 
@@ -92,7 +93,8 @@ function useCountUp(target: number, duration: number, enabled: boolean): number 
  * and each arc has a tooltip of its own.
  *
  * Slices are separated by a 2px gap in the surface colour rather than by an
- * outline, so nothing draws a border around the data.
+ * outline, so nothing draws a border around the data. Pointing at a slice
+ * brings it forward and recedes the rest, the way the dashboard's meters do.
  */
 export const DonutChart: React.FC<DonutChartProps> = ({
   segments,
@@ -100,9 +102,10 @@ export const DonutChart: React.FC<DonutChartProps> = ({
   centerSuffix = '',
   centerLabel,
   size = 132,
-  thickness = 16,
+  thickness = 14,
 }) => {
   const reducedMotion = usePrefersReducedMotion();
+  const [hover, setHover] = useState<string | null>(null);
   const animate = !reducedMotion;
 
   const radius = (size - thickness) / 2;
@@ -182,13 +185,15 @@ export const DonutChart: React.FC<DonutChartProps> = ({
             strokeDasharray={`${drawnIn ? arc.length : 0} ${circumference}`}
             strokeDashoffset={arc.offset}
             strokeLinecap="butt"
-            style={
-              animate
-                ? {
-                    transition: `stroke-dasharray ${arc.duration}ms ease-out ${arc.delay}ms`,
-                  }
-                : undefined
-            }
+            opacity={hover && hover !== arc.key ? 0.35 : 1}
+            onPointerEnter={() => setHover(arc.key)}
+            onPointerLeave={() => setHover(null)}
+            className="cursor-default"
+            style={{
+              transition: animate
+                ? `stroke-dasharray ${arc.duration}ms ease-out ${arc.delay}ms, opacity 150ms ease-out`
+                : 'opacity 150ms ease-out',
+            }}
           >
             <title>{`${arc.label}: ${arc.value} of ${total} (${arc.percent}%)`}</title>
           </circle>
@@ -201,7 +206,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({
         textAnchor="middle"
         dominantBaseline="middle"
         className="fill-[#17181D] font-bold tabular-nums"
-        style={{ fontSize: 30 }}
+        style={{ fontSize: Math.round(size * 0.22), letterSpacing: '-0.02em' }}
       >
         {shownValue}
         {centerSuffix}
@@ -211,8 +216,8 @@ export const DonutChart: React.FC<DonutChartProps> = ({
         y={size / 2 + 20}
         textAnchor="middle"
         dominantBaseline="middle"
-        className="fill-[#6B6F76] font-semibold uppercase"
-        style={{ fontSize: 9, letterSpacing: '0.08em' }}
+        className="fill-[#9CA1A9] font-semibold uppercase"
+        style={{ fontSize: 9, letterSpacing: '0.12em' }}
       >
         {centerLabel}
       </text>

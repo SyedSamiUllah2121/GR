@@ -92,7 +92,7 @@ export const UnitPicker: React.FC<{
 }> = ({ id, assets, selectedId, onChange, disabled }) => {
   if (assets.length === 0) {
     return (
-      <p className="text-[11px] text-[#6B6F76]">
+      <p className="px-3 py-2.5 rounded-xl bg-[#F4F5F7] text-[11px] text-[#6B6F76]">
         Nothing is on the register for this branch yet, so there is no unit to name.
       </p>
     );
@@ -110,7 +110,7 @@ export const UnitPicker: React.FC<{
           // leaving the last unit named on a finding that is no longer about it
           onChange(asset ? detailsForAsset(asset) : []);
         }}
-        className="w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] disabled:bg-[#F6F6F8] disabled:text-[#6B6F76]"
+        className="w-full h-10 px-3 bg-white border border-[#E4E6EB] rounded-xl text-sm text-[#17181D] shadow-xs focus:outline-none focus:border-[#C8202D] focus:ring-4 focus:ring-[#C8202D]/10 transition-[border-color,box-shadow] cursor-pointer disabled:cursor-default disabled:bg-[#F4F5F7] disabled:text-[#6B6F76]"
       >
         <option value="">Not about a particular unit</option>
         {/*

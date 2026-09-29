@@ -21,7 +21,7 @@ import {
   User,
   Wrench,
 } from 'lucide-react';
-import { MaintenanceJob, jobKindOf } from '../types';
+import { MaintenanceJob, MaintenanceStatus, jobKindOf } from '../types';
 import { categoryLabel } from '../services/categoryStore';
 import { getEquipmentById } from '../services/equipmentStore';
 import { getPlanById } from '../services/maintenancePlanStore';
@@ -41,6 +41,10 @@ import { formatMinutes, formatTurnaround } from '../services/maintenanceReport';
 import { formatDateTime } from '../services/reportModel';
 import { PriorityBadge } from './PriorityBadge';
 import { StatusPill } from './MaintenanceStatusPill';
+import { motion } from 'motion/react';
+import { EASE_OUT, Reveal, t } from './motion';
+import { BUTTON, Card, PanelHeader } from './ui';
+import { CHART_COLORS } from './charts';
 import { EndMaintenanceDialog } from './EndMaintenanceDialog';
 import { JobTimesDialog } from './JobTimesDialog';
 import { useToast } from './ToastProvider';
@@ -104,17 +108,19 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
 
   if (!job) {
     return (
-      <div className="p-8 max-w-xl mx-auto text-center">
+      <div className="p-5 sm:p-8 md:p-10 max-w-xl w-full mx-auto">
+        <Card className="px-6 py-12 text-center">
+        <span className="w-12 h-12 rounded-2xl bg-[#F4F5F7] text-[#6B6F76] flex items-center justify-center mx-auto mb-4">
+          <Wrench className="w-6 h-6" />
+        </span>
         <h2 className="text-xl font-bold text-[#17181D]">Job not found</h2>
         <p className="text-sm text-[#6B6F76] mt-2">
           This maintenance job does not exist or has been removed.
         </p>
-        <Link
-          href={backHref}
-          className="inline-block mt-4 px-4 py-2 bg-[#C8202D] text-white text-sm font-medium rounded-md"
-        >
+        <Link href={backHref} className={`${BUTTON.primary} mt-6`}>
           {backLabel}
         </Link>
+        </Card>
       </div>
     );
   }
@@ -128,8 +134,9 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
    */
   if (!canViewJob(user, job)) {
     return (
-      <div className="p-8 max-w-md mx-auto text-center">
-        <span className="w-12 h-12 rounded-xl bg-[#FDECEE] text-[#C8202D] flex items-center justify-center mx-auto">
+      <div className="p-5 sm:p-8 md:p-10 max-w-lg w-full mx-auto">
+        <Card className="px-6 py-12 text-center">
+        <span className="w-12 h-12 rounded-2xl bg-[#FDECEE] text-[#C8202D] flex items-center justify-center mx-auto">
           <Lock className="w-6 h-6" />
         </span>
         <h2 className="mt-4 text-xl font-bold text-[#17181D]">
@@ -140,12 +147,10 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
             ? 'It was raised at a branch outside your own. You can see the repairs raised at the branches you cover, and report anything new you find there.'
             : 'Maintenance jobs are not part of what this account covers.'}
         </p>
-        <Link
-          href={backHref}
-          className="inline-block mt-5 px-4 py-2 bg-[#C8202D] text-white text-xs font-bold rounded-md"
-        >
+        <Link href={backHref} className={`${BUTTON.primary} mt-6`}>
           {backLabel}
         </Link>
+        </Card>
       </div>
     );
   }
@@ -193,332 +198,375 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
     router.push('/maintenance/jobs');
   };
 
-  return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto w-full">
-      {/* Breadcrumb */}
-      <nav className="no-print text-xs text-[#6B6F76] mb-3 flex items-center gap-1.5">
-        <Link href="/maintenance/jobs" className="hover:text-[#17181D] transition-colors">
-          Maintenance
-        </Link>
-        <ChevronRight className="w-3 h-3" />
-        <span className="text-[#17181D] font-semibold">Job details</span>
-      </nav>
+  const tone = STATUS_TONE[status];
 
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-5">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[#17181D]">
+  return (
+    <div className="p-5 sm:p-6 md:p-8 lg:p-10 flex-1 space-y-6 max-w-[1280px] w-full mx-auto">
+      <Reveal className="space-y-3">
+        {/* Breadcrumb */}
+        <nav className="no-print text-xs text-[#6B6F76] flex items-center gap-1.5">
+          <Link href="/maintenance/jobs" className="hover:text-[#17181D] transition-colors">
+            Maintenance
+          </Link>
+          <ChevronRight className="w-3 h-3" />
+          <span className="text-[#17181D] font-semibold">Job details</span>
+        </nav>
+
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-[22px] md:text-[28px] leading-tight font-bold tracking-tight text-[#17181D]">
               {job.title}
             </h1>
-            <PriorityBadge severity={job.priority} />
-            <StatusPill status={status} />
-            {jobKindOf(job) === 'scheduled' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#EEF2FB] text-[#33499B]">
-                <CalendarClock className="w-3 h-3" />
-                Scheduled
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <PriorityBadge severity={job.priority} />
+              <StatusPill status={status} />
+              {jobKindOf(job) === 'scheduled' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#EEF2FB] text-[#33499B]">
+                  <CalendarClock className="w-3 h-3" />
+                  Scheduled
+                </span>
+              )}
+              <span className="text-[13px] text-[#6B6F76]">
+                {job.branchName} • {categoryLabel(job.category)}
+                {job.equipment ? ` • ${job.equipment}` : ''}
               </span>
-            )}
+            </div>
           </div>
-          <p className="text-xs text-[#6B6F76] mt-1.5">
-            {job.branchName} • {categoryLabel(job.category)}
-            {job.equipment ? ` • ${job.equipment}` : ''}
-          </p>
-        </div>
 
-        <Link
-          href="/maintenance/jobs"
-          className="no-print inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors shadow-xs shrink-0"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to list</span>
-        </Link>
-      </div>
+          <Link href="/maintenance/jobs" className={`no-print ${BUTTON.secondary} shrink-0 self-start`}>
+            <ArrowLeft className="w-4 h-4 text-[#6B6F76]" />
+            <span>Back to list</span>
+          </Link>
+        </div>
+      </Reveal>
 
       {/* The action that moves the job forward, front and centre */}
-      <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs p-5 mb-5">
-        {status === 'reported' && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-bold text-[#17181D]">Not started</p>
-              <p className="text-xs text-[#6B6F76] mt-0.5">
-                Reported {formatDateTime(job.reportedAt)}
-                {waiting > 0 && ` — waiting ${waiting} day${waiting === 1 ? '' : 's'}`}
-              </p>
+      <Reveal delay={0.05}>
+        <Card className="overflow-hidden">
+          <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+            <div className="flex items-start gap-4 min-w-0">
+              <span
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${tone.soft}`}
+              >
+                <tone.Icon className="w-6 h-6" />
+              </span>
+
+              {status === 'reported' && (
+                <div>
+                  <p className="text-[15px] font-bold text-[#17181D]">Not started</p>
+                  <p className="text-xs text-[#6B6F76] mt-0.5">
+                    Reported {formatDateTime(job.reportedAt)}
+                    {waiting > 0 && ` — waiting ${waiting} day${waiting === 1 ? '' : 's'}`}
+                  </p>
+                </div>
+              )}
+
+              {status === 'in-progress' && (
+                <div>
+                  <p className="text-[15px] font-bold text-[#8A5A08]">Work in progress</p>
+                  <p className="text-xs text-[#6B6F76] mt-0.5">
+                    Started {formatDateTime(job.startedAt)} • running{' '}
+                    {formatMinutes(elapsedMinutes(job))}
+                  </p>
+                  {mayManage && (
+                    <button
+                      id="adjust-times-btn"
+                      type="button"
+                      onClick={() => setEditingTimes(true)}
+                      className="no-print mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
+                    >
+                      <Clock className="w-3 h-3" />
+                      Adjust start time
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {status === 'completed' && (
+                <div>
+                  <p className="text-[15px] font-bold text-[#12643C]">Completed</p>
+                  <p className="text-xs text-[#6B6F76] mt-0.5">
+                    Started {formatDateTime(job.startedAt)} • finished{' '}
+                    {formatDateTime(job.completedAt)}
+                  </p>
+                  {mayManage && (
+                    <button
+                      id="adjust-times-btn"
+                      type="button"
+                      onClick={() => setEditingTimes(true)}
+                      className="no-print mt-2 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
+                    >
+                      <Clock className="w-3 h-3" />
+                      Adjust times
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-            {mayManage && (
+
+            {mayManage && status === 'reported' && (
               <button
                 id="start-maintenance-btn"
                 type="button"
                 onClick={() => setEditingTimes(true)}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer shrink-0"
+                className={`${BUTTON.primary} shrink-0`}
               >
                 <Play className="w-4 h-4" />
                 <span>Start maintenance</span>
               </button>
             )}
-          </div>
-        )}
 
-        {status === 'in-progress' && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-bold text-[#B4740A]">Work in progress</p>
-              <p className="text-xs text-[#6B6F76] mt-0.5">
-                Started {formatDateTime(job.startedAt)} • running{' '}
-                {formatMinutes(elapsedMinutes(job))}
-              </p>
-              {mayManage && (
-                <button
-                  id="adjust-times-btn"
-                  type="button"
-                  onClick={() => setEditingTimes(true)}
-                  className="no-print mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
-                >
-                  <Clock className="w-3 h-3" />
-                  Adjust start time
-                </button>
-              )}
-            </div>
-            {mayManage && (
-              <div className="flex items-center gap-2 shrink-0">
+            {mayManage && status === 'in-progress' && (
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={handleReopen}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#6B6F76] rounded-md transition-colors cursor-pointer"
+                  className={BUTTON.secondary}
                   title="Undo the start time"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
+                  <RotateCcw className="w-4 h-4 text-[#6B6F76]" />
                   <span>Undo start</span>
                 </button>
                 <button
                   id="end-maintenance-btn"
                   type="button"
                   onClick={() => setEnding(true)}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer"
+                  className={BUTTON.primary}
                 >
                   <Square className="w-4 h-4" />
                   <span>End maintenance</span>
                 </button>
               </div>
             )}
-          </div>
-        )}
 
-        {status === 'completed' && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <CheckCircle2 className="w-5 h-5 text-[#157F4B] shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-bold text-[#157F4B]">Completed</p>
-                <p className="text-xs text-[#6B6F76] mt-0.5">
-                  Started {formatDateTime(job.startedAt)} • finished{' '}
-                  {formatDateTime(job.completedAt)}
-                </p>
-                {mayManage && (
-                  <button
-                    id="adjust-times-btn"
-                    type="button"
-                    onClick={() => setEditingTimes(true)}
-                    className="no-print mt-1.5 inline-flex items-center gap-1.5 text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer"
-                  >
-                    <Clock className="w-3 h-3" />
-                    Adjust times
-                  </button>
-                )}
-              </div>
-            </div>
-            {mayManage && (
+            {mayManage && status === 'completed' && (
               <button
                 type="button"
                 onClick={handleReopen}
-                className="no-print inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#6B6F76] rounded-md transition-colors cursor-pointer shrink-0"
+                className={`no-print ${BUTTON.secondary} shrink-0`}
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <RotateCcw className="w-4 h-4 text-[#6B6F76]" />
                 <span>Reopen</span>
               </button>
             )}
           </div>
-        )}
-      </section>
 
-      {/* Timeline — the record of what happened when */}
-      <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs mb-5">
-        <div className="px-5 py-3.5 border-b border-[#E6E7EB]">
-          <h2 className="text-sm font-bold text-[#17181D]">Timeline</h2>
-        </div>
-        <ol className="p-5 space-y-4">
-          <TimelineStep
-            icon={ClipboardList}
-            title="Reported"
-            when={job.reportedAt}
-            by={job.reportedBy}
-            done
-          />
-          <TimelineStep
-            icon={Wrench}
-            title="Maintenance started"
-            when={job.startedAt}
-            done={!!job.startedAt}
-          />
-          <TimelineStep
-            icon={CheckCircle2}
-            title="Maintenance ended"
-            when={job.completedAt}
-            by={job.attendedBy ?? undefined}
-            done={!!job.completedAt}
-            last
-          />
-        </ol>
-
-        {(workMinutes(job) !== null || turnaroundHours(job) !== null) && (
-          <div className="px-5 py-3.5 border-t border-[#E6E7EB] bg-[#FAFAFA] flex flex-wrap gap-x-8 gap-y-3">
-            <Metric icon={Timer} label="Time on the job">
-              {formatMinutes(workMinutes(job))}
-            </Metric>
-            <Metric icon={Timer} label="Report to fix">
-              {formatTurnaround(turnaroundHours(job))}
-            </Metric>
-            {typeof job.cost === 'number' && (
-              <Metric icon={Tag} label="Cost">
-                {job.cost.toLocaleString()}
-              </Metric>
-            )}
+          {/*
+            How far along the job is, as three steps filled in the colour of
+            where it stands. The words above say the same thing; this is what
+            reads from across the room.
+          */}
+          <div className="px-5 sm:px-6 pb-5 grid grid-cols-3 gap-1.5" aria-hidden>
+            {[
+              { label: 'Reported', done: true },
+              { label: 'Started', done: !!job.startedAt },
+              { label: 'Completed', done: !!job.completedAt },
+            ].map((step, i) => (
+              <div key={step.label}>
+                <div className="h-1.5 rounded-full bg-[#F1F2F5] overflow-hidden">
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: tone.bar, transformOrigin: 'left' }}
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: step.done ? 1 : 0 }}
+                    transition={{ duration: t(0.5), ease: EASE_OUT, delay: t(0.15 + i * 0.12) }}
+                  />
+                </div>
+                <p
+                  className={`mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                    step.done ? 'text-[#17181D]' : 'text-[#9CA1A9]'
+                  }`}
+                >
+                  {step.label}
+                </p>
+              </div>
+            ))}
           </div>
-        )}
-      </section>
+        </Card>
+      </Reveal>
 
-      {/* What was reported */}
-      <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs mb-5">
-        <div className="px-5 py-3.5 border-b border-[#E6E7EB]">
-          <h2 className="text-sm font-bold text-[#17181D]">The problem</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="lg:col-span-8 space-y-5 min-w-0">
+          {/* What was reported */}
+          <Reveal delay={0.1}>
+            <Card>
+              <PanelHeader icon={ClipboardList} title="The problem" />
+              <div className="px-5 sm:px-6 pb-6 pt-1 space-y-4">
+                <p className="text-sm text-[#17181D] whitespace-pre-wrap leading-relaxed">
+                  {job.details}
+                </p>
+
+                <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t border-[#F0F1F4]">
+                  <Field icon={Building2} label="Branch">
+                    {job.branchName}
+                  </Field>
+                  <Field icon={Wrench} label="Unit or area">
+                    {job.equipment || '—'}
+                  </Field>
+                  <Field icon={Tag} label="Category">
+                    {categoryLabel(job.category)}
+                  </Field>
+                  <Field icon={User} label="Reported by">
+                    {job.reportedBy}
+                  </Field>
+                </dl>
+
+                {/*
+                  What this is an occurrence of. Worth saying on the job itself: a
+                  technician looking at "Printer service — Counter printer" should
+                  not have to go to another screen to learn that it comes round every
+                  three months and is not something that has gone wrong.
+                */}
+                {jobKindOf(job) === 'scheduled' && plan && (
+                  <div className="bg-[#F5F7FD] border border-[#33499B]/15 rounded-xl px-4 py-3">
+                    <p className="text-xs font-bold text-[#33499B] flex items-center gap-1.5">
+                      <CalendarClock className="w-3.5 h-3.5" />
+                      Planned work, not a breakdown
+                    </p>
+                    <p className="text-xs text-[#6B6F76] mt-1 leading-relaxed">
+                      {plan.task} falls due every {plan.everyMonths} month
+                      {plan.everyMonths === 1 ? '' : 's'}
+                      {job.dueOn ? `, and this one was due on ${job.dueOn}` : ''}.
+                      {asset ? ' The next is counted from the day this one is finished.' : ''}
+                    </p>
+                  </div>
+                )}
+
+                {asset && (
+                  <Link
+                    href="/maintenance/equipment"
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C8202D] hover:underline"
+                  >
+                    <Wrench className="w-3.5 h-3.5" />
+                    {asset.name}
+                    {asset.serialNumber ? ` · serial ${asset.serialNumber}` : ''}
+                    {asset.location ? ` · ${asset.location}` : ''}
+                  </Link>
+                )}
+
+                {/*
+                  Offered only to someone who may open the record at the other end,
+                  asked of the record itself rather than of the role — a link that
+                  bounces the reader to a refusal reads as the app being broken
+                  rather than as a boundary. A maintenance manager passes for the record
+                  that raised this job, which is the whole point of the link.
+                */}
+                {/*
+                  The fault itself. Carried onto the job when an inspection raised it
+                  and, until now, stored and shown nowhere — which left whoever was
+                  being sent out with the inspector's words and none of the picture
+                  the inspector thought worth taking.
+                */}
+                {job.photo && <PhotoStrip photos={[job.photo]} alt="The reported fault" />}
+
+                {sourceInspection && canViewInspection(user, sourceInspection) && (
+                  <Link
+                    href={`/inspections/${sourceInspection.id}`}
+                    className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C8202D] hover:underline"
+                  >
+                    <ClipboardList className="w-3.5 h-3.5" />
+                    Raised from an inspection finding
+                  </Link>
+                )}
+              </div>
+            </Card>
+          </Reveal>
+
+          {/* What was done, once it is done */}
+          {status === 'completed' && (
+            <Reveal delay={0.14}>
+              <Card>
+                <PanelHeader icon={CheckCircle2} title="The work done" />
+                <div className="px-5 sm:px-6 pb-6 pt-1 space-y-4">
+                  {job.resolutionNote ? (
+                    <p className="text-sm text-[#17181D] whitespace-pre-wrap leading-relaxed">
+                      {job.resolutionNote}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-[#6B6F76] italic">No note was recorded.</p>
+                  )}
+                  {/*
+                    The receipt and the finished work. What turns a typed-in cost
+                    into a figure that can be checked, so it sits with the cost
+                    rather than in a gallery of its own.
+                  */}
+                  {(job.completionPhotos?.length ?? 0) > 0 && (
+                    <PhotoStrip
+                      photos={job.completionPhotos ?? []}
+                      alt="Photo of the completed work or its receipt"
+                    />
+                  )}
+
+                  <dl className="grid grid-cols-2 md:grid-cols-3 gap-3 pt-4 border-t border-[#F0F1F4]">
+                    <Field icon={User} label="Attended by">
+                      {job.attendedBy || '—'}
+                    </Field>
+                    <Field icon={Timer} label="Time on the job">
+                      {formatMinutes(workMinutes(job))}
+                    </Field>
+                    <Field icon={Tag} label="Cost">
+                      {typeof job.cost === 'number' ? job.cost.toLocaleString() : '—'}
+                    </Field>
+                  </dl>
+                </div>
+              </Card>
+            </Reveal>
+          )}
         </div>
-        <div className="p-5 space-y-4">
-          <p className="text-sm text-[#17181D] whitespace-pre-wrap leading-relaxed">
-            {job.details}
-          </p>
 
-          <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4 pt-4 border-t border-[#EFEFF2]">
-            <Field icon={Building2} label="Branch">
-              {job.branchName}
-            </Field>
-            <Field icon={Wrench} label="Unit or area">
-              {job.equipment || '—'}
-            </Field>
-            <Field icon={Tag} label="Category">
-              {categoryLabel(job.category)}
-            </Field>
-            <Field icon={User} label="Reported by">
-              {job.reportedBy}
-            </Field>
-          </dl>
-
-          {/*
-            What this is an occurrence of. Worth saying on the job itself: a
-            technician looking at "Printer service — Counter printer" should
-            not have to go to another screen to learn that it comes round every
-            three months and is not something that has gone wrong.
-          */}
-          {jobKindOf(job) === 'scheduled' && plan && (
-            <div className="bg-[#F7F9FD] border border-[#33499B]/20 rounded-md px-4 py-3">
-              <p className="text-xs font-bold text-[#33499B] flex items-center gap-1.5">
-                <CalendarClock className="w-3.5 h-3.5" />
-                Planned work, not a breakdown
-              </p>
-              <p className="text-xs text-[#6B6F76] mt-1 leading-relaxed">
-                {plan.task} falls due every {plan.everyMonths} month
-                {plan.everyMonths === 1 ? '' : 's'}
-                {job.dueOn ? `, and this one was due on ${job.dueOn}` : ''}.
-                {asset ? ' The next is counted from the day this one is finished.' : ''}
-              </p>
-            </div>
-          )}
-
-          {asset && (
-            <Link
-              href="/maintenance/equipment"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C8202D] hover:underline"
-            >
-              <Wrench className="w-3.5 h-3.5" />
-              {asset.name}
-              {asset.serialNumber ? ` · serial ${asset.serialNumber}` : ''}
-              {asset.location ? ` · ${asset.location}` : ''}
-            </Link>
-          )}
-
-          {/*
-            Offered only to someone who may open the record at the other end,
-            asked of the record itself rather than of the role — a link that
-            bounces the reader to a refusal reads as the app being broken
-            rather than as a boundary. A maintenance manager passes for the record
-            that raised this job, which is the whole point of the link.
-          */}
-          {/*
-            The fault itself. Carried onto the job when an inspection raised it
-            and, until now, stored and shown nowhere — which left whoever was
-            being sent out with the inspector's words and none of the picture
-            the inspector thought worth taking.
-          */}
-          {job.photo && <PhotoStrip photos={[job.photo]} alt="The reported fault" />}
-
-          {sourceInspection && canViewInspection(user, sourceInspection) && (
-            <Link
-              href={`/inspections/${sourceInspection.id}`}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#C8202D] hover:underline"
-            >
-              <ClipboardList className="w-3.5 h-3.5" />
-              Raised from an inspection finding
-            </Link>
-          )}
-        </div>
-      </section>
-
-      {/* What was done, once it is done */}
-      {status === 'completed' && (
-        <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs mb-5">
-          <div className="px-5 py-3.5 border-b border-[#E6E7EB]">
-            <h2 className="text-sm font-bold text-[#17181D]">The work done</h2>
-          </div>
-          <div className="p-5 space-y-4">
-            {job.resolutionNote ? (
-              <p className="text-sm text-[#17181D] whitespace-pre-wrap leading-relaxed">
-                {job.resolutionNote}
-              </p>
-            ) : (
-              <p className="text-sm text-[#6B6F76] italic">No note was recorded.</p>
-            )}
-            {/*
-              The receipt and the finished work. What turns a typed-in cost
-              into a figure that can be checked, so it sits with the cost
-              rather than in a gallery of its own.
-            */}
-            {(job.completionPhotos?.length ?? 0) > 0 && (
-              <PhotoStrip
-                photos={job.completionPhotos ?? []}
-                alt="Photo of the completed work or its receipt"
+        {/* Timeline — the record of what happened when */}
+        <Reveal delay={0.12} className="lg:col-span-4 min-w-0">
+          <Card>
+            <PanelHeader icon={Clock} title="Timeline" />
+            <ol className="px-5 sm:px-6 pb-5 pt-1">
+              <TimelineStep
+                icon={ClipboardList}
+                title="Reported"
+                when={job.reportedAt}
+                by={job.reportedBy}
+                done
               />
-            )}
+              <TimelineStep
+                icon={Wrench}
+                title="Maintenance started"
+                when={job.startedAt}
+                done={!!job.startedAt}
+              />
+              <TimelineStep
+                icon={CheckCircle2}
+                title="Maintenance ended"
+                when={job.completedAt}
+                by={job.attendedBy ?? undefined}
+                done={!!job.completedAt}
+                last
+              />
+            </ol>
 
-            <dl className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-4 pt-4 border-t border-[#EFEFF2]">
-              <Field icon={User} label="Attended by">
-                {job.attendedBy || '—'}
-              </Field>
-              <Field icon={Timer} label="Time on the job">
-                {formatMinutes(workMinutes(job))}
-              </Field>
-              <Field icon={Tag} label="Cost">
-                {typeof job.cost === 'number' ? job.cost.toLocaleString() : '—'}
-              </Field>
-            </dl>
-          </div>
-        </section>
-      )}
+            {(workMinutes(job) !== null || turnaroundHours(job) !== null) && (
+              <div className="px-5 sm:px-6 py-4 border-t border-[#F0F1F4] bg-[#FAFBFC] rounded-b-2xl grid grid-cols-2 gap-x-6 gap-y-3">
+                <Metric icon={Timer} label="Time on the job">
+                  {formatMinutes(workMinutes(job))}
+                </Metric>
+                <Metric icon={Timer} label="Report to fix">
+                  {formatTurnaround(turnaroundHours(job))}
+                </Metric>
+                {typeof job.cost === 'number' && (
+                  <Metric icon={Tag} label="Cost">
+                    {job.cost.toLocaleString()}
+                  </Metric>
+                )}
+              </div>
+            )}
+          </Card>
+        </Reveal>
+      </div>
 
       {mayManage && (
         <div className="no-print flex justify-end">
           <button
             type="button"
             onClick={handleDelete}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#C8202D] border border-[#C8202D]/30 rounded-md hover:bg-[#FDECEE] transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 h-9 px-3.5 text-xs font-bold text-[#C8202D] border border-[#C8202D]/25 bg-white rounded-xl hover:bg-[#FDECEE] transition-colors cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5" />
             <span>Delete job</span>
@@ -526,6 +574,7 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
         </div>
       )}
 
+      {/* Outside every Reveal: a transform would re-parent these fixed dialogs */}
       {editingTimes && (
         <JobTimesDialog
           job={job}
@@ -559,6 +608,19 @@ export const MaintenanceJobScreen: React.FC<MaintenanceJobScreenProps> = ({ jobI
 // ---------------------------------------------------------------------------
 
 /**
+ * Where the job stands, as the hero card's tile and the fill of its progress
+ * steps — the status colours the board and the dashboard use.
+ */
+const STATUS_TONE: Record<
+  MaintenanceStatus,
+  { soft: string; bar: string; Icon: React.ComponentType<{ className?: string }> }
+> = {
+  reported: { soft: 'bg-[#FDECEE] text-[#C8202D]', bar: CHART_COLORS.status.notStarted, Icon: Wrench },
+  'in-progress': { soft: 'bg-[#FDF3E2] text-[#B4740A]', bar: CHART_COLORS.status.inProgress, Icon: Timer },
+  completed: { soft: 'bg-[#E6F4EC] text-[#157F4B]', bar: CHART_COLORS.status.completed, Icon: CheckCircle2 },
+};
+
+/**
  * A row of photographs, each opening full size in its own tab.
  *
  * A thumbnail is enough to see that a receipt is there; it is nowhere near
@@ -576,7 +638,7 @@ const PhotoStrip: React.FC<{ photos: string[]; alt: string }> = ({ photos, alt }
           target="_blank"
           rel="noreferrer"
           title="Open this photo full size"
-          className="block rounded-md border border-[#E6E7EB] overflow-hidden hover:border-[#C8202D] transition-colors"
+          className="block rounded-xl border border-[#E8E9EE] overflow-hidden shadow-xs transition-all hover:-translate-y-0.5 hover:border-[#C8202D] hover:shadow-md"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -601,20 +663,18 @@ const TimelineStep: React.FC<{
   <li className="flex gap-3.5">
     <div className="flex flex-col items-center shrink-0">
       <span
-        className={`w-7 h-7 rounded-full border flex items-center justify-center ${
-          done
-            ? 'bg-[#E6F4EC] border-[#157F4B]/30 text-[#157F4B]'
-            : 'bg-[#FAFAFA] border-[#E6E7EB] text-[#6B6F76]/50'
+        className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+          done ? 'bg-[#E6F4EC] text-[#157F4B]' : 'bg-[#F4F5F7] text-[#C9CCD2]'
         }`}
       >
-        <Icon className="w-3.5 h-3.5" />
+        <Icon className="w-4 h-4" />
       </span>
       {!last && (
-        <span className={`w-px flex-1 mt-1 ${done ? 'bg-[#157F4B]/25' : 'bg-[#E6E7EB]'}`} />
+        <span className={`w-0.5 flex-1 min-h-5 my-1 rounded-full ${done ? 'bg-[#157F4B]/25' : 'bg-[#EEF0F3]'}`} />
       )}
     </div>
-    <div className="pb-1">
-      <p className={`text-sm font-semibold ${done ? 'text-[#17181D]' : 'text-[#6B6F76]/70'}`}>
+    <div className={last ? 'pt-1' : 'pt-1 pb-5'}>
+      <p className={`text-[13px] font-semibold ${done ? 'text-[#17181D]' : 'text-[#9CA1A9]'}`}>
         {title}
       </p>
       <p className="text-xs text-[#6B6F76] mt-0.5">
@@ -630,12 +690,12 @@ const Field: React.FC<{
   label: string;
   children: React.ReactNode;
 }> = ({ icon: Icon, label, children }) => (
-  <div className="min-w-0">
-    <dt className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#6B6F76]">
+  <div className="min-w-0 rounded-xl bg-[#FAFBFC] border border-[#F0F1F4] px-3.5 py-3">
+    <dt className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA1A9]">
       <Icon className="w-3.5 h-3.5 shrink-0" />
       <span className="truncate">{label}</span>
     </dt>
-    <dd className="text-sm font-semibold text-[#17181D] mt-1">{children}</dd>
+    <dd className="text-[13px] font-semibold text-[#17181D] mt-1 break-words">{children}</dd>
   </div>
 );
 
@@ -645,10 +705,10 @@ const Metric: React.FC<{
   children: React.ReactNode;
 }> = ({ icon: Icon, label, children }) => (
   <div>
-    <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[#6B6F76]">
+    <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA1A9]">
       <Icon className="w-3.5 h-3.5" />
       {label}
     </p>
-    <p className="text-sm font-bold text-[#17181D] mt-0.5 tabular-nums">{children}</p>
+    <p className="text-lg font-bold tracking-tight text-[#17181D] mt-0.5">{children}</p>
   </div>
 );

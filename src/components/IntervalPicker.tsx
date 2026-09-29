@@ -5,7 +5,7 @@ import { Interval, IntervalUnit } from '../types';
 import { DAY_INTERVAL_CHOICES, INTERVAL_CHOICES } from '../services/maintenancePlanStore';
 
 const inputClass =
-  'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
+  'w-full h-10 px-3 bg-white border border-[#E4E6EB] rounded-xl text-sm text-[#17181D] placeholder:text-[#9CA1A9] shadow-xs focus:outline-none focus:border-[#C8202D] focus:ring-4 focus:ring-[#C8202D]/10 transition-[border-color,box-shadow] cursor-pointer';
 
 /**
  * How often something recurs: a number, and whether it is counted in days or
@@ -31,7 +31,7 @@ export const IntervalPicker: React.FC<{
 
   return (
     <div className="grid grid-cols-[auto_1fr_1fr] gap-3 items-center">
-      <span className="text-xs text-[#6B6F76]">Every</span>
+      <span className="text-xs font-semibold text-[#6B6F76]">Every</span>
       <input
         id={id}
         type="number"

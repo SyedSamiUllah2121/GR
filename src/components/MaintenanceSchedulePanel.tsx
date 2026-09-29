@@ -48,13 +48,16 @@ import { useCategories } from '../hooks/useCategories';
 import { useDialog } from '../hooks/useDialog';
 import { PriorityBadge } from './PriorityBadge';
 import { useToast } from './ToastProvider';
+import { motion } from 'motion/react';
+import { EASE_OUT, Reveal, t } from './motion';
+import { BUTTON, CARD } from './ui';
 import { useConfirm } from './ConfirmProvider';
 
 const inputClass =
-  'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
+  'w-full px-3.5 py-2.5 bg-white border border-[#E4E6EB] rounded-xl text-sm text-[#17181D] placeholder:text-[#9CA1A9] shadow-xs transition-colors focus:outline-none focus:border-[#C8202D] focus:ring-2 focus:ring-[#C8202D]/15';
 
 const labelClass =
-  'block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5';
+  'block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6B6F76] mb-1.5';
 
 /** Which plan the editor is open on, if it is open at all. */
 export type PlanBeingEdited = MaintenancePlan | 'new' | null;
@@ -215,9 +218,16 @@ export const MaintenanceSchedulePanel: React.FC<{
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border border-[#E6E7EB] rounded-lg px-5 py-3.5 flex items-start gap-3">
-        <CalendarClock className="w-4 h-4 text-[#6B6F76] shrink-0 mt-0.5" />
-        <p className="text-xs text-[#6B6F76] leading-relaxed">
+      {/*
+        Each section rises on its own, never the whole panel: the plan editor
+        at the bottom is a `position: fixed` dialog, and a transform around it
+        would become its containing block while it plays.
+      */}
+      <Reveal className={`${CARD} px-5 sm:px-6 py-4 flex items-start gap-3.5`}>
+        <span className="w-9 h-9 rounded-xl bg-[#F4F5F7] text-[#17181D] flex items-center justify-center shrink-0">
+          <CalendarClock className="w-[18px] h-[18px]" />
+        </span>
+        <p className="text-xs text-[#6B6F76] leading-relaxed self-center">
           A plan applies to every asset in the{' '}
           <Link
             href="/maintenance/equipment"
@@ -229,12 +239,14 @@ export const MaintenanceSchedulePanel: React.FC<{
           dated the day it was due rather than the day anybody noticed. An individual
           asset that needs a different interval carries an override on its own record.
         </p>
-      </div>
+      </Reveal>
 
       {/* The plans themselves, grouped by the trade they belong to */}
       {byCategory.length === 0 ? (
-        <div className="bg-white border border-[#E6E7EB] rounded-lg p-10 text-center shadow-xs">
-          <CalendarClock className="w-8 h-8 text-[#9CA1A9] mx-auto mb-2.5" />
+        <Reveal delay={0.05} className={`${CARD} px-6 py-14 text-center`}>
+          <span className="mx-auto mb-4 w-12 h-12 rounded-2xl bg-[#F4F5F7] text-[#6B6F76] flex items-center justify-center">
+            <CalendarClock className="w-6 h-6" />
+          </span>
           <p className="text-sm font-bold text-[#17181D]">No plans yet</p>
           <p className="text-xs text-[#6B6F76] mt-1">
             Add one and servicing raises itself on this board as it falls due.
@@ -242,45 +254,45 @@ export const MaintenanceSchedulePanel: React.FC<{
           <button
             type="button"
             onClick={() => onEditing('new')}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer"
+            className={`${BUTTON.primary} mt-5`}
           >
             <Plus className="w-4 h-4" />
             <span>Add a plan</span>
           </button>
-        </div>
+        </Reveal>
       ) : (
-        <div className="space-y-4">
+        <Reveal delay={0.05} className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
           {byCategory.map(({ category, label, plans: list }) => (
             <section
               key={category}
-              className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden"
+              className={`${CARD} overflow-hidden`}
             >
-              <div className="px-5 py-3 border-b border-[#E6E7EB] flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-bold text-[#17181D]">{label}</h3>
-                <span className="text-[11px] text-[#6B6F76]">
+              <div className="px-5 sm:px-6 py-3.5 border-b border-[#F0F1F4] flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-[15px] font-bold text-[#17181D]">{label}</h3>
+                <span className="inline-flex items-center rounded-full bg-[#F4F5F7] px-2.5 py-0.5 text-[11px] font-semibold text-[#6B6F76] tabular-nums">
                   {coverage.get(category) ?? 0} asset
                   {(coverage.get(category) ?? 0) === 1 ? '' : 's'} in the register
                 </span>
               </div>
 
-              <ul className="divide-y divide-[#EFEFF2]">
+              <ul className="divide-y divide-[#F0F1F4]">
                 {list.map((plan) => (
                   <li
                     key={plan.id}
-                    className={`px-5 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 ${
-                      plan.active ? '' : 'bg-[#FAFAFA]'
+                    className={`px-5 sm:px-6 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 transition-colors ${
+                      plan.active ? 'hover:bg-[#FAFBFC]' : 'bg-[#FAFBFC]'
                     }`}
                   >
                     <div className="flex-1 min-w-[12rem]">
                       <p className="text-sm font-semibold text-[#17181D] flex flex-wrap items-center gap-2">
                         {plan.task}
                         {isGeneralPlan(plan) && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FDECEE] text-[#C8202D]">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FDECEE] text-[#A81823]">
                             Every asset
                           </span>
                         )}
                         {!plan.active && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#F1F1F4] text-[#6B6F76]">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#EEF0F3] text-[#6B6F76]">
                             Off
                           </span>
                         )}
@@ -298,7 +310,7 @@ export const MaintenanceSchedulePanel: React.FC<{
                         type="button"
                         onClick={() => onEditing(plan)}
                         aria-label={`Edit ${plan.task}`}
-                        className="p-2 text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F1F1F4] rounded-md transition-colors cursor-pointer"
+                        className="p-2 text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F4F5F7] rounded-lg transition-colors cursor-pointer"
                       >
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -316,9 +328,9 @@ export const MaintenanceSchedulePanel: React.FC<{
                         }}
                         aria-label={plan.active ? `Turn off ${plan.task}` : `Turn on ${plan.task}`}
                         title={plan.active ? 'Stop raising this' : 'Start raising this again'}
-                        className={`p-2 rounded-md transition-colors cursor-pointer ${
+                        className={`p-2 rounded-lg transition-colors cursor-pointer ${
                           plan.active
-                            ? 'text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F1F1F4]'
+                            ? 'text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F4F5F7]'
                             : 'text-[#157F4B] hover:bg-[#E6F4EC]'
                         }`}
                       >
@@ -335,7 +347,7 @@ export const MaintenanceSchedulePanel: React.FC<{
                           type="button"
                           onClick={() => remove(plan)}
                           aria-label={`Delete ${plan.task}`}
-                          className="p-2 text-[#C8202D] hover:bg-[#FDECEE] rounded-md transition-colors cursor-pointer"
+                          className="p-2 text-[#C8202D] hover:bg-[#FDECEE] rounded-lg transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -346,32 +358,54 @@ export const MaintenanceSchedulePanel: React.FC<{
               </ul>
             </section>
           ))}
-        </div>
+        </Reveal>
       )}
 
       {/* What those intervals actually mean, in dates */}
-      <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-[#E6E7EB]">
-          <h3 className="text-sm font-bold text-[#17181D]">What is coming</h3>
-          <p className="text-xs text-[#6B6F76] mt-0.5">
-            Every asset and plan together, soonest first.
-          </p>
+      <Reveal delay={0.1} as="section" className={`${CARD} overflow-hidden`}>
+        <div className="px-5 sm:px-6 py-4 border-b border-[#F0F1F4] flex flex-wrap items-center gap-3">
+          <span className="w-9 h-9 rounded-xl bg-[#F4F5F7] text-[#17181D] flex items-center justify-center shrink-0">
+            <CalendarClock className="w-[18px] h-[18px]" />
+          </span>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-[15px] font-bold text-[#17181D]">What is coming</h3>
+            <p className="text-xs text-[#6B6F76] mt-0.5">
+              Every asset and plan together, soonest first.
+            </p>
+          </div>
+          {/* The two numbers worth reading before the list: what is due, and what is next */}
+          {upcoming.length > 0 && (
+            <div className="flex items-center gap-2 shrink-0">
+              {overdue.length > 0 && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FDECEE] px-2.5 py-1 text-[11px] font-bold text-[#A81823] tabular-nums">
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                  {overdue.length} due now
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#F4F5F7] px-2.5 py-1 text-[11px] font-bold text-[#6B6F76] tabular-nums">
+                {/* Counted from the whole list: `soon` is only its nearest 25 */}
+                {upcoming.length - overdue.length} coming up
+              </span>
+            </div>
+          )}
         </div>
 
         {upcoming.length === 0 ? (
-          <div className="p-8 text-center">
-            <CheckCircle2 className="w-7 h-7 text-[#157F4B] mx-auto mb-2" />
+          <div className="p-10 text-center">
+            <span className="mx-auto mb-3 w-10 h-10 rounded-xl bg-[#E6F4EC] text-[#157F4B] flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5" />
+            </span>
             <p className="text-sm font-bold text-[#17181D]">Nothing scheduled</p>
             <p className="text-xs text-[#6B6F76] mt-1">
               No asset in the register falls under a plan that is running.
             </p>
           </div>
         ) : (
-          <ul className="divide-y divide-[#EFEFF2] max-h-[28rem] overflow-y-auto">
+          <ul className="divide-y divide-[#F0F1F4] max-h-[28rem] overflow-y-auto">
             {[...overdue, ...soon].map((service) => (
               <li
                 key={`${service.plan.id}::${service.equipment.id}`}
-                className="px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-1.5"
+                className="px-5 sm:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 hover:bg-[#FAFBFC] transition-colors"
               >
                 <span className="flex-1 min-w-[14rem]">
                   <span className="block text-xs font-semibold text-[#17181D]">
@@ -384,15 +418,17 @@ export const MaintenanceSchedulePanel: React.FC<{
                 </span>
 
                 {service.job ? (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#B4740A]">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#8A5A08]">
                     <AlertTriangle className="w-3 h-3" />
                     On the board
                   </span>
                 ) : null}
 
                 <span
-                  className={`text-[11px] font-semibold tabular-nums ${
-                    service.daysOverdue >= 0 ? 'text-[#C8202D]' : 'text-[#6B6F76]'
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold tabular-nums ${
+                    service.daysOverdue >= 0
+                      ? 'bg-[#FDECEE] text-[#A81823]'
+                      : 'bg-[#F4F5F7] text-[#6B6F76]'
                   }`}
                 >
                   {service.daysOverdue >= 0
@@ -401,12 +437,12 @@ export const MaintenanceSchedulePanel: React.FC<{
                         Math.abs(service.daysOverdue) === 1 ? '' : 's'
                       }`}
                 </span>
-                <ChevronRight className="w-3.5 h-3.5 text-[#9CA1A9] shrink-0" />
+                <ChevronRight className="w-3.5 h-3.5 text-[#C9CCD2] shrink-0" />
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </Reveal>
 
       {editing && (
         <PlanDialog
@@ -473,10 +509,19 @@ const PlanDialog: React.FC<{
       role="dialog"
       aria-modal="true"
       aria-labelledby="maintenanceschedulepanel-dialog-1-title"
-      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-[#17181D]/45 backdrop-blur-[2px] flex items-start sm:items-center justify-center p-4 overflow-y-auto"
     >
-      <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-lg my-8">
-        <div className="px-6 py-4 border-b border-[#E6E7EB]">
+      {/*
+        The panel settles in; the fixed backdrop around it does not move, so
+        nothing positioned inside it is re-parented by the transform.
+      */}
+      <motion.div
+        className="bg-white border border-[#E8E9EE] rounded-2xl shadow-[0_24px_48px_-12px_rgba(16,24,40,0.28)] w-full max-w-lg my-8"
+        initial={{ opacity: 0, y: 8, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: t(0.25), ease: EASE_OUT }}
+      >
+        <div className="px-6 py-5 border-b border-[#F0F1F4]">
           <h3 id="maintenanceschedulepanel-dialog-1-title" className="text-base font-bold text-[#17181D]">
             {plan ? 'Edit plan' : 'Add a plan'}
           </h3>
@@ -497,7 +542,7 @@ const PlanDialog: React.FC<{
                 onChange={(e) => set('category', e.target.value as MaintenanceCategory)}
                 disabled={general}
                 title={general ? 'General maintenance belongs to its category' : undefined}
-                className={`${inputClass} disabled:bg-[#F6F6F8] disabled:text-[#6B6F76]`}
+                className={`${inputClass} disabled:bg-[#F4F5F7] disabled:text-[#6B6F76]`}
               >
                 {activeCategories(categories).map((c) => (
                   <option key={c.id} value={c.id}>
@@ -518,7 +563,7 @@ const PlanDialog: React.FC<{
                 autoFocus={!general}
                 disabled={general}
                 placeholder="e.g. Service, Toner refill"
-                className={`${inputClass} disabled:bg-[#F6F6F8] disabled:text-[#6B6F76]`}
+                className={`${inputClass} disabled:bg-[#F4F5F7] disabled:text-[#6B6F76]`}
               />
             </div>
           </div>
@@ -578,10 +623,10 @@ const PlanDialog: React.FC<{
                   type="button"
                   onClick={() => set('priority', s as Severity)}
                   aria-pressed={draft.priority === s}
-                  className={`px-3 py-2 rounded-md border text-[11px] font-bold transition-colors cursor-pointer ${
+                  className={`h-9 px-3 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
                     draft.priority === s
-                      ? 'border-[#C8202D] bg-[#FDECEE] text-[#C8202D]'
-                      : 'border-[#E6E7EB] bg-white text-[#6B6F76] hover:bg-[#F6F6F8]'
+                      ? 'border-[#C8202D] bg-[#FDECEE] text-[#A81823] shadow-[0_0_0_3px_rgba(200,32,45,0.10)]'
+                      : 'border-[#E4E6EB] bg-white text-[#6B6F76] hover:text-[#17181D] hover:border-[#D5D8DE]'
                   }`}
                 >
                   {SEVERITY_LABEL[s]}
@@ -605,29 +650,29 @@ const PlanDialog: React.FC<{
           </div>
 
           {error && (
-            <p role="alert" className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
+            <p role="alert" className="text-xs font-semibold text-[#A81823] bg-[#FDECEE] border border-[#C8202D]/20 rounded-xl px-3.5 py-2.5">
               {error}
             </p>
           )}
 
-          <div className="pt-3 border-t border-[#E6E7EB] flex items-center justify-end gap-3">
+          <div className="pt-3 border-t border-[#F0F1F4] flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-[#E6E7EB] rounded-md text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] transition-colors cursor-pointer"
+              className={BUTTON.secondary}
             >
               Cancel
             </button>
             <button
               id="plan-save-btn"
               type="submit"
-              className="px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer"
+              className={BUTTON.primary}
             >
               Save plan
             </button>
           </div>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 };

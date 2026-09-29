@@ -1,8 +1,10 @@
 'use client';
 
 import React from 'react';
-import { Lock } from 'lucide-react';
+import { ArrowLeft, FileText, Lock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { BUTTON, Card } from './ui';
+import { Reveal } from './motion';
 
 /**
  * What a screen shows instead of a record you may not have.
@@ -28,30 +30,28 @@ export const AccessNotice: React.FC<{
   const router = useRouter();
 
   return (
-    <div className="p-8 max-w-md mx-auto text-center">
-      <span className="w-12 h-12 rounded-xl bg-[#FDECEE] text-[#C8202D] flex items-center justify-center mx-auto">
-        <Lock className="w-6 h-6" />
-      </span>
-      <h2 className="mt-4 text-xl font-bold text-[#17181D]">{title}</h2>
-      <p className="text-sm text-[#6B6F76] mt-2 leading-relaxed">{detail}</p>
-      <div className="mt-5 flex flex-wrap gap-2 justify-center">
-        {reportHref && (
-          <button
-            type="button"
-            onClick={() => router.push(reportHref)}
-            className="px-4 py-2 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-bold rounded-md transition-colors cursor-pointer"
-          >
-            View the report
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => router.push('/inspections')}
-          className="px-4 py-2 border border-[#E6E7EB] text-xs font-bold text-[#17181D] rounded-md hover:bg-[#F6F6F8] transition-colors cursor-pointer"
-        >
-          Back to records
-        </button>
-      </div>
+    <div className="p-5 sm:p-8 flex-1 flex items-start sm:items-center justify-center">
+      <Reveal className="w-full max-w-md">
+        <Card className="px-6 sm:px-8 py-10 text-center">
+          <span className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FDECEE] to-[#FBDCDF] text-[#C8202D] flex items-center justify-center shadow-inner">
+            <Lock className="w-6 h-6" />
+          </span>
+          <h2 className="mt-5 text-lg font-bold tracking-tight text-[#17181D]">{title}</h2>
+          <p className="text-[13px] text-[#6B6F76] mt-2 leading-relaxed">{detail}</p>
+          <div className="mt-6 flex flex-wrap gap-2 justify-center">
+            {reportHref && (
+              <button type="button" onClick={() => router.push(reportHref)} className={BUTTON.primary}>
+                <FileText className="w-4 h-4" />
+                View the report
+              </button>
+            )}
+            <button type="button" onClick={() => router.push('/inspections')} className={BUTTON.secondary}>
+              <ArrowLeft className="w-4 h-4" />
+              Back to records
+            </button>
+          </div>
+        </Card>
+      </Reveal>
     </div>
   );
 };

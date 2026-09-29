@@ -9,10 +9,13 @@ import {
   EyeOff,
   Lock,
   Mail,
+  ShieldCheck,
   TrendingUp,
   Wrench,
 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { BrandLogo } from './BrandLogo';
+import { EASE_OUT, MotionProvider, t } from './motion';
 import { ORGANISATION } from '../data/user';
 import { USER_ROLE_BLURB, USER_ROLE_KEYS, USER_ROLE_LABEL, User, branchesOf } from '../types';
 import { DEMO_SIGN_IN_ENABLED, signIn, signInAs } from '../services/session';
@@ -68,16 +71,37 @@ const LoginBackdrop: React.FC = () => {
      * No photograph on disk. A near-black panel reads as a page that failed
      * to load, so the ground is a deep warm gradient instead — deliberate on
      * its own, and completely covered the moment an image is dropped in.
+     *
+     * Two quiet layers over it give the ground some depth: a fine dot grid
+     * that fades out down the panel, and a low warm glow in the far corner.
+     * Neither is drawn over a photograph — that already has depth of its own.
      */
     return (
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(130% 110% at 18% -5%, #7E2A22 0%, #4A1A1C 38%, #241417 68%, #0E0B0C 100%)',
-        }}
-      />
+      <>
+        <div
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            background:
+              'radial-gradient(130% 110% at 18% -5%, #7E2A22 0%, #4A1A1C 38%, #241417 68%, #0E0B0C 100%)',
+          }}
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-[0.09]"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(255,255,255,0.9) 1px, transparent 1px)',
+            backgroundSize: '22px 22px',
+            maskImage: 'linear-gradient(to bottom, black 0%, transparent 70%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 0%, transparent 70%)',
+          }}
+        />
+        <div
+          aria-hidden
+          className="absolute -bottom-48 -right-40 w-[36rem] h-[36rem] rounded-full blur-3xl opacity-40"
+          style={{ background: 'radial-gradient(closest-side, #C8202D, transparent)' }}
+        />
+      </>
     );
   }
 
@@ -204,73 +228,118 @@ export const LoginScreen: React.FC = () => {
   };
 
   const fieldClass =
-    'w-full pl-11 pr-4 py-3 bg-[#F6F6F8] border border-[#E6E7EB] rounded-xl text-sm text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:bg-white focus:border-[#C8202D] focus:ring-2 focus:ring-[#C8202D]/15 transition-colors';
+    'w-full h-11 pl-11 pr-4 bg-white border border-[#E4E6EB] rounded-xl text-sm text-[#17181D] placeholder:text-[#9CA1A9] shadow-xs hover:border-[#D5D8DE] focus:outline-none focus:border-[#C8202D] focus:ring-4 focus:ring-[#C8202D]/10 transition-[border-color,box-shadow] duration-200';
 
   return (
+    /*
+     * This screen sits outside the app shell, so it brings its own motion
+     * settings: the same reduced-motion rule the shell applies, which turns
+     * the entrance below into a plain appearance for anyone who asked their
+     * device for less movement.
+     */
+    <MotionProvider>
     <div className="min-h-screen flex bg-white">
       {/* Brand half */}
       <div className="hidden lg:flex lg:w-[46%] xl:w-1/2 relative bg-[#0C0B0C] text-white flex-col justify-between gap-10 p-10 xl:p-14 overflow-hidden">
         <LoginBackdrop />
 
-        <div className="relative">
+        {/*
+          The entrance here is CSS, not motion. This page is rendered on the
+          server, and a motion entrance starts at opacity 0 until the script
+          runs — a blank sign-in page on a slow first load. A keyframe runs as
+          soon as the stylesheet does, and is off for reduced motion.
+        */}
+        <div className="relative animate-rise">
           <BrandLogo variant="knockout" className="w-[13rem]" />
         </div>
 
         <div className="relative max-w-md">
-          <h2 className="text-[2.1rem] xl:text-[2.5rem] font-bold leading-[1.15] tracking-tight">
+          <p
+            style={{ animationDelay: `${t(0.06)}s` }}
+            className="animate-rise inline-flex items-center gap-2 h-8 px-3 rounded-full bg-white/10 ring-1 ring-inset ring-white/15 backdrop-blur-sm text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Inspection Log
+          </p>
+
+          <h2
+            style={{ animationDelay: `${t(0.12)}s` }}
+            className="animate-rise mt-6 text-[2.1rem] xl:text-[2.6rem] font-bold leading-[1.12] tracking-tight"
+          >
             Every branch.
             <br />
             Every week.
             <br />
-            <span className="text-white/70">On record.</span>
+            <span className="text-white/60">On record.</span>
           </h2>
 
-          <ul className="mt-9 space-y-4">
-            {HIGHLIGHTS.map((item) => (
-              <li key={item.text} className="flex items-start gap-3.5">
-                <span className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+          <ul className="mt-10 space-y-3">
+            {HIGHLIGHTS.map((item, i) => (
+              <li
+                key={item.text}
+                style={{ animationDelay: `${t(0.18 + i * 0.06)}s` }}
+                className="animate-rise flex items-center gap-3.5 rounded-2xl bg-white/[0.06] ring-1 ring-inset ring-white/10 backdrop-blur-sm px-4 py-3"
+              >
+                <span className="w-9 h-9 rounded-xl bg-white/[0.12] ring-1 ring-inset ring-white/15 flex items-center justify-center shrink-0">
                   <item.icon className="w-[18px] h-[18px]" />
                 </span>
-                <span className="text-sm text-white/80 leading-relaxed pt-1.5">{item.text}</span>
+                <span className="text-[13px] text-white/85 leading-relaxed">{item.text}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <p className="relative text-[11px] font-semibold uppercase tracking-[0.16em] text-white/50">
+        <p
+          style={{ animationDelay: `${t(0.35)}s` }}
+          className="animate-rise relative text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45"
+        >
           {ORGANISATION.name} — {ORGANISATION.tagline}
         </p>
       </div>
 
       {/* Form half */}
-      <div className="flex-1 min-w-0 flex flex-col justify-center items-center px-5 sm:px-8 py-12">
-        <div className="w-full max-w-[24rem]">
-          {/* The brand panel is gone at this width, so the mark comes inline */}
-          <div className="lg:hidden mb-8">
-            <BrandLogo className="w-[15rem] border border-[#E6E7EB]" />
+      <div className="relative flex-1 min-w-0 flex flex-col justify-center items-center px-5 sm:px-8 py-12 bg-[radial-gradient(90%_60%_at_100%_0%,#FBF3F4_0%,rgba(255,255,255,0)_60%)]">
+        <div className="w-full max-w-[24rem] animate-rise" style={{ animationDelay: `${t(0.08)}s` }}>
+          {/*
+            The brand panel is gone at this width, so the mark comes inline —
+            reversed out of the rail's own red, so a phone signs in to the
+            same brand it will see across the top of every screen after.
+          */}
+          <div className="lg:hidden mb-8 inline-flex rounded-2xl px-4 py-3.5 bg-[radial-gradient(140%_80%_at_0%_0%,rgba(255,255,255,0.14),transparent_70%),linear-gradient(160deg,#B51C28_0%,#8E141D_100%)] shadow-[0_12px_28px_-14px_rgba(142,20,29,0.7)]">
+            <BrandLogo variant="knockout" className="w-[9.5rem]" />
           </div>
 
-          <h1 className="text-[1.7rem] font-bold tracking-tight text-[#17181D]">Sign in</h1>
-          <p className="text-sm text-[#6B6F76] mt-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9CA1A9]">
+            Welcome back
+          </p>
+          <h1 className="mt-1.5 text-[1.85rem] leading-tight font-bold tracking-tight text-[#17181D]">
+            Sign in
+          </h1>
+          <p className="text-[13px] text-[#6B6F76] mt-1.5">
             Inspection Log — food safety &amp; quality
           </p>
 
           {errorMessage && (
-            <div
+            <motion.div
               id="login-error-banner"
               role="alert"
-              className="mt-6 p-3 rounded-xl bg-[#FDECEE] border border-[#C8202D]/25 text-[#C8202D] text-sm font-semibold flex items-center gap-2"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: t(0.25), ease: EASE_OUT }}
+              className="mt-6 px-3.5 py-3 rounded-xl bg-[#FDECEE] border border-[#C8202D]/20 text-[#A81823] text-[13px] font-semibold flex items-center gap-2.5"
             >
-              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="w-7 h-7 rounded-lg bg-white/70 text-[#C8202D] flex items-center justify-center shrink-0">
+                <AlertCircle className="w-4 h-4" />
+              </span>
               <span>{errorMessage}</span>
-            </div>
+            </motion.div>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
             <div>
               <label
                 htmlFor="email-input"
-                className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
+                className="block text-xs font-semibold text-[#17181D] mb-2"
               >
                 Email or username
               </label>
@@ -296,7 +365,7 @@ export const LoginScreen: React.FC = () => {
             <div>
               <label
                 htmlFor="password-input"
-                className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
+                className="block text-xs font-semibold text-[#17181D] mb-2"
               >
                 Password
               </label>
@@ -319,7 +388,7 @@ export const LoginScreen: React.FC = () => {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-[#9CA1A9] hover:text-[#17181D] hover:bg-[#EFEFF2] transition-colors cursor-pointer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-[#9CA1A9] hover:text-[#17181D] hover:bg-[#F4F5F7] transition-colors cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -329,10 +398,10 @@ export const LoginScreen: React.FC = () => {
             <button
               id="login-submit-btn"
               type="submit"
-              className="w-full mt-2 py-3.5 px-4 bg-[#C8202D] hover:bg-[#A81823] active:scale-[0.99] text-white text-sm font-bold rounded-xl transition-all cursor-pointer inline-flex items-center justify-center gap-2 shadow-sm"
+              className="group w-full mt-2 h-11 px-4 bg-[#C8202D] hover:bg-[#A81823] text-white text-sm font-bold rounded-xl shadow-[0_8px_20px_-8px_rgba(200,32,45,0.65)] hover:shadow-[0_12px_24px_-10px_rgba(200,32,45,0.7)] hover:-translate-y-px active:translate-y-0 transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2"
             >
               Sign in
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
             </button>
           </form>
 
@@ -348,15 +417,15 @@ export const LoginScreen: React.FC = () => {
             the shortcut itself is one of the two doors.
           */}
           {DEMO_SIGN_IN_ENABLED && (
-          <div className="mt-7 pt-6 border-t border-[#EFEFF2]">
+          <div className="mt-8 pt-6 border-t border-[#F0F1F4]">
             <div className="flex items-baseline justify-between gap-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9CA1A9]">
                 Or sign in as
               </p>
               <button
                 type="button"
                 onClick={fillDemo}
-                className="text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer whitespace-nowrap"
+                className="text-[11px] font-bold text-[#C8202D] hover:text-[#A81823] hover:underline underline-offset-2 cursor-pointer whitespace-nowrap"
               >
                 Use 123 / 123
               </button>
@@ -369,55 +438,80 @@ export const LoginScreen: React.FC = () => {
               disagree. So nothing account-shaped is rendered until the client
               has mounted, and the rows below hold the space until it has.
             */}
-            <div className="mt-3 space-y-2">
-              {!mounted &&
-                USER_ROLE_KEYS.map((role) => (
+            {!mounted && (
+              <div className="mt-3 space-y-2">
+                {USER_ROLE_KEYS.map((role) => (
                   <div
                     key={role}
                     aria-hidden="true"
-                    className="w-full p-3 rounded-xl border border-[#E6E7EB] bg-white flex items-center gap-3"
+                    className="w-full h-[3.75rem] px-3 rounded-xl border border-[#E8E9EE] bg-white flex items-center gap-3"
                   >
-                    <span className="w-9 h-9 rounded-full bg-[#F6F6F8] shrink-0" />
+                    <span className="w-9 h-9 rounded-lg bg-[#F4F5F7] shrink-0 animate-pulse motion-reduce:animate-none" />
                     <span className="min-w-0 flex-1 space-y-1.5">
-                      <span className="block h-3 w-24 rounded bg-[#F6F6F8]" />
-                      <span className="block h-2.5 w-40 rounded bg-[#F6F6F8]" />
+                      <span className="block h-3 w-24 rounded bg-[#F4F5F7] animate-pulse motion-reduce:animate-none" />
+                      <span className="block h-2.5 w-40 rounded bg-[#F4F5F7] animate-pulse motion-reduce:animate-none" />
                     </span>
                   </div>
                 ))}
+              </div>
+            )}
 
-              {mounted &&
-                demoAccounts.map((account) => (
-                <button
-                  key={account.id}
-                  type="button"
-                  id={`login-as-${account.role}`}
-                  onClick={() => enterAs(account.id)}
-                  className="w-full p-3 rounded-xl border border-[#E6E7EB] bg-white hover:border-[#C8202D]/40 hover:bg-[#FDF7F8] transition-colors cursor-pointer flex items-center gap-3 text-left group"
-                >
-                  <span className="w-9 h-9 rounded-full bg-[#F6F6F8] text-[#C8202D] text-[11px] font-bold flex items-center justify-center shrink-0 group-hover:bg-[#C8202D] group-hover:text-white transition-colors">
-                    {account.initials}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-bold text-[#17181D] truncate">
-                      {USER_ROLE_LABEL[account.role]}
-                      {branchesOf(account).length > 0 ? ` — ${branchesOf(account).join(' & ')}` : ''}
+            {mounted && (
+              <motion.div
+                className="mt-3 space-y-2"
+                variants={enterGroup}
+                initial="hidden"
+                animate="shown"
+              >
+                {demoAccounts.map((account) => (
+                  <motion.button
+                    key={account.id}
+                    variants={enterItem}
+                    type="button"
+                    id={`login-as-${account.role}`}
+                    onClick={() => enterAs(account.id)}
+                    className="w-full h-[3.75rem] px-3 rounded-xl border border-[#E8E9EE] bg-white shadow-xs hover:border-[#E3B7BC] hover:shadow-[0_8px_18px_-10px_rgba(16,24,40,0.2)] hover:-translate-y-px transition-[border-color,box-shadow,translate] duration-200 cursor-pointer flex items-center gap-3 text-left group"
+                  >
+                    <span className="w-9 h-9 rounded-lg bg-[#F4F5F7] text-[#C8202D] text-[11px] font-bold flex items-center justify-center shrink-0 group-hover:bg-[#C8202D] group-hover:text-white transition-colors duration-200">
+                      {account.initials}
                     </span>
-                    <span className="block text-[11px] text-[#6B6F76] truncate">
-                      {USER_ROLE_BLURB[account.role]}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-bold text-[#17181D] truncate">
+                        {USER_ROLE_LABEL[account.role]}
+                        {branchesOf(account).length > 0 ? ` — ${branchesOf(account).join(' & ')}` : ''}
+                      </span>
+                      <span className="block text-[11px] text-[#6B6F76] truncate">
+                        {USER_ROLE_BLURB[account.role]}
+                      </span>
                     </span>
-                  </span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[#9CA1A9] shrink-0 group-hover:text-[#C8202D] transition-colors" />
-                </button>
-              ))}
-            </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-[#C9CCD2] shrink-0 group-hover:text-[#C8202D] group-hover:translate-x-0.5 transition-all duration-200" />
+                  </motion.button>
+                ))}
+              </motion.div>
+            )}
           </div>
           )}
 
-          <p className="mt-7 text-center text-[11px] text-[#9CA1A9]">
+          <p className="mt-8 text-center text-[11px] text-[#9CA1A9]">
             Internal weekly restaurant inspection system
           </p>
         </div>
       </div>
     </div>
+    </MotionProvider>
   );
+};
+
+/*
+ * The entrance: the brand copy and the account list arrive one line after
+ * another, quickly, so the page reads top to bottom as it settles rather than
+ * landing all at once.
+ */
+const enterGroup = {
+  hidden: {},
+  shown: { transition: { staggerChildren: t(0.06), delayChildren: t(0.12) } },
+};
+const enterItem = {
+  hidden: { opacity: 0, y: 10 },
+  shown: { opacity: 1, y: 0, transition: { duration: t(0.4), ease: EASE_OUT } },
 };

@@ -31,7 +31,7 @@ export const DetailFields: React.FC<{
       // these props, so positional keys stay correct.
       <div
         key={index}
-        className="group/chip relative w-[10.5rem] rounded-lg border border-[#E6E7EB] bg-white pl-2.5 pr-5 py-1.5 focus-within:border-[#C8202D] focus-within:ring-1 focus-within:ring-[#C8202D] transition-colors"
+        className="group/chip relative w-[10.5rem] rounded-xl border border-[#E4E6EB] bg-white pl-3 pr-6 py-2 shadow-xs hover:border-[#D0D3D9] focus-within:border-[#C8202D] focus-within:ring-4 focus-within:ring-[#C8202D]/10 transition-[border-color,box-shadow]"
       >
         {/*
           The chip carries the focus ring for both fields. Left to itself the
@@ -56,13 +56,13 @@ export const DetailFields: React.FC<{
           onChange={(e) =>
             onChange(details.map((d, i) => (i === index ? { ...d, value: e.target.value } : d)))
           }
-          className="w-full bg-transparent border-0 border-t border-t-[#C8202D]/35 rounded-none mt-1 pt-1 px-0 pb-0 text-[13px] font-semibold leading-5 text-[#17181D] placeholder:text-[#AEB3BA] placeholder:font-normal focus:outline-none focus-visible:outline-none"
+          className="w-full bg-transparent border-0 border-t border-t-[#F0F1F4] rounded-none mt-1 pt-1 px-0 pb-0 text-[13px] font-semibold leading-5 text-[#17181D] placeholder:text-[#AEB3BA] placeholder:font-normal focus:outline-none focus-visible:outline-none"
         />
         <button
           type="button"
           onClick={() => onChange(details.filter((_, i) => i !== index))}
           disabled={disabled}
-          className="absolute top-1 right-1 p-0.5 rounded text-[#C9CCD2] hover:text-[#C8202D] focus-visible:text-[#C8202D] transition-colors cursor-pointer"
+          className="absolute top-1.5 right-1.5 w-5 h-5 rounded-md flex items-center justify-center text-[#C9CCD2] hover:text-[#C8202D] hover:bg-[#FDECEE] focus-visible:text-[#C8202D] transition-colors cursor-pointer"
           title="Remove this detail"
         >
           <X className="w-3 h-3" />
@@ -74,7 +74,7 @@ export const DetailFields: React.FC<{
       type="button"
       onClick={() => onChange([...details, { label: '', value: '' }])}
       disabled={disabled}
-      className="w-[10.5rem] flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#C8202D]/40 text-xs font-bold text-[#C8202D] hover:bg-[#FDECEE] hover:border-[#C8202D] transition-colors cursor-pointer"
+      className="w-[10.5rem] min-h-[3.25rem] flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#D0D3D9] text-xs font-bold text-[#6B6F76] hover:text-[#C8202D] hover:bg-[#FFF7F8] hover:border-[#C8202D]/50 transition-colors cursor-pointer"
     >
       <Plus className="w-3.5 h-3.5" />
       {details.length === 0 ? addLabel : 'Add another'}

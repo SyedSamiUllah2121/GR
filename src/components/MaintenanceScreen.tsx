@@ -18,6 +18,8 @@ import {
   Search,
   Square,
   Store,
+  Timer,
+  Wrench,
   X,
 } from 'lucide-react';
 import {
@@ -44,6 +46,9 @@ import { RepeatGroup, buildBoard, buildRepeats, formatMinutes } from '../service
 import { formatDateTime } from '../services/reportModel';
 import { PriorityBadge } from './PriorityBadge';
 import { StatusPill } from './MaintenanceStatusPill';
+import { motion } from 'motion/react';
+import { EASE_OUT, Reveal, t } from './motion';
+import { BUTTON, CARD, PageHeader } from './ui';
 import { EndMaintenanceDialog } from './EndMaintenanceDialog';
 import { JobTimesDialog } from './JobTimesDialog';
 import { useToast } from './ToastProvider';
@@ -293,92 +298,89 @@ export const MaintenanceScreen: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col min-w-0">
-      <header className="min-h-[5rem] bg-white border-b border-[#E6E7EB] flex flex-col sm:flex-row sm:items-center justify-between px-6 md:px-10 shrink-0 gap-4 py-4 sm:py-0">
-        <div className="min-w-0">
-          {/*
-            Arrived from an appliance's History button, the board is that
-            appliance's history — so it says so, and says how to get back to the
-            whole of it. A filtered list that looks like the unfiltered one is
-            how somebody concludes there is no other work on the board.
-          */}
-          {equipmentFilter && (
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#9CA1A9]">
-              History
-            </p>
-          )}
-          <h2 className="text-xl font-bold text-[#17181D] truncate">
-            {filteredAsset
-              ? [filteredAsset.assetNo, filteredAsset.name].filter(Boolean).join(' — ')
-              : 'Maintenance'}
-          </h2>
-          <p className="text-[#6B6F76] text-xs mt-0.5">
-            {/* Named, so a board covering one branch never reads as the estate */}
-            {scopedTo && <span className="font-semibold text-[#17181D]">{scopedTo} • </span>}
-            {equipmentFilter && (
+      <div className="p-5 sm:p-6 md:p-8 lg:p-10 flex-1 space-y-6 max-w-[1440px] w-full mx-auto">
+        <Reveal>
+          <PageHeader
+            /*
+              Arrived from an appliance's History button, the board is that
+              appliance's history — so it says so, and says how to get back to
+              the whole of it. A filtered list that looks like the unfiltered
+              one is how somebody concludes there is no other work on the board.
+            */
+            eyebrow={equipmentFilter ? 'History' : 'Job board'}
+            title={
+              filteredAsset
+                ? [filteredAsset.assetNo, filteredAsset.name].filter(Boolean).join(' — ')
+                : 'Maintenance'
+            }
+            subtitle={
               <>
-                {filteredAsset?.location ? `${filteredAsset.location} • ` : ''}
-                {jobs.length} job{jobs.length === 1 ? '' : 's'} ever raised •{' '}
-                <button
-                  type="button"
-                  onClick={() => router.push('/maintenance/jobs')}
-                  className="font-semibold text-[#C8202D] hover:underline cursor-pointer"
-                >
-                  Show the whole board
-                </button>
-                {' • '}
-              </>
-            )}
-            {view === 'schedule' ? (
-              <>
-                {schedule.activeCount} plan{schedule.activeCount === 1 ? '' : 's'} running
-                {schedule.overdue.length > 0 && (
-                  <span className="text-[#C8202D] font-semibold">
-                    {' '}
-                    • {schedule.overdue.length} due now
-                  </span>
+                {/* Named, so a board covering one branch never reads as the estate */}
+                {scopedTo && <span className="font-semibold text-[#17181D]">{scopedTo} • </span>}
+                {equipmentFilter && (
+                  <>
+                    {filteredAsset?.location ? `${filteredAsset.location} • ` : ''}
+                    {jobs.length} job{jobs.length === 1 ? '' : 's'} ever raised •{' '}
+                    <button
+                      type="button"
+                      onClick={() => router.push('/maintenance/jobs')}
+                      className="font-semibold text-[#C8202D] hover:underline cursor-pointer"
+                    >
+                      Show the whole board
+                    </button>
+                    {' • '}
+                  </>
+                )}
+                {view === 'schedule' ? (
+                  <>
+                    {schedule.activeCount} plan{schedule.activeCount === 1 ? '' : 's'} running
+                    {schedule.overdue.length > 0 && (
+                      <span className="text-[#C8202D] font-semibold">
+                        {' '}
+                        • {schedule.overdue.length} due now
+                      </span>
+                    )}
+                  </>
+                ) : board.openCount === 0 ? (
+                  'Nothing outstanding'
+                ) : (
+                  `${board.openCount} job${board.openCount === 1 ? '' : 's'} outstanding${
+                    board.urgentCount > 0 ? ` • ${board.urgentCount} urgent` : ''
+                  }`
                 )}
               </>
-            ) : board.openCount === 0 ? (
-              'Nothing outstanding'
-            ) : (
-              `${board.openCount} job${board.openCount === 1 ? '' : 's'} outstanding${
-                board.urgentCount > 0 ? ` • ${board.urgentCount} urgent` : ''
-              }`
-            )}
-          </p>
-        </div>
+            }
+            /*
+              One primary action, belonging to whichever tab is open — two red
+              buttons offering different things is how somebody reporting a
+              breakdown ends up writing a servicing plan.
+            */
+            actions={
+              view === 'schedule' ? (
+                <button
+                  id="add-plan-btn"
+                  type="button"
+                  onClick={() => setEditingPlan('new')}
+                  className={BUTTON.primary}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add a plan</span>
+                </button>
+              ) : (
+                <button
+                  id="log-problem-btn"
+                  type="button"
+                  onClick={() => setLogging(true)}
+                  className={BUTTON.primary}
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Report a problem</span>
+                </button>
+              )
+            }
+          />
+        </Reveal>
 
-        {/*
-          One primary action, belonging to whichever tab is open — two red
-          buttons offering different things is how somebody reporting a
-          breakdown ends up writing a servicing plan.
-        */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {view === 'schedule' ? (
-            <button
-              id="add-plan-btn"
-              type="button"
-              onClick={() => setEditingPlan('new')}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add a plan</span>
-            </button>
-          ) : (
-            <button
-              id="log-problem-btn"
-              type="button"
-              onClick={() => setLogging(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors shadow-xs cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Report a problem</span>
-            </button>
-          )}
-        </div>
-      </header>
-
-      <div className="p-6 md:p-10 flex-1 space-y-6">
         {/*
           A link to an appliance that has since been deleted: the board would
           otherwise be silently empty, which reads as "no work here" rather
@@ -387,7 +389,7 @@ export const MaintenanceScreen: React.FC = () => {
         {equipmentFilter && !filteredAsset && (
           <p
             role="alert"
-            className="text-xs font-semibold text-[#B4740A] bg-[#FDF3E2] border border-[#B4740A]/30 rounded-md px-3.5 py-3"
+            className="text-xs font-semibold text-[#8A5A08] bg-[#FDF3E2] border border-[#B4740A]/25 rounded-xl px-4 py-3"
           >
             That appliance is no longer on the register. Its jobs are still on the board —
             clear the filter above to see everything.
@@ -395,87 +397,110 @@ export const MaintenanceScreen: React.FC = () => {
         )}
 
         {board.urgentCount > 0 && (
-          <div className="bg-[#FDECEE] border border-[#C8202D]/30 rounded-lg px-5 py-3.5 flex items-center gap-3">
-            <AlertTriangle className="w-4 h-4 text-[#C8202D] shrink-0" />
-            <p className="text-xs font-semibold text-[#17181D]">
-              {board.urgentCount} outstanding job{board.urgentCount === 1 ? '' : 's'} at critical
-              or high priority
-            </p>
-          </div>
+          <Reveal delay={0.05}>
+            <div className={`${CARD} px-5 py-3.5 flex items-center gap-3`}>
+              <span className="w-8 h-8 rounded-xl bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-4 h-4" />
+              </span>
+              <p className="text-[13px] font-semibold text-[#17181D]">
+                {board.urgentCount} outstanding job{board.urgentCount === 1 ? '' : 's'} at critical
+                or high priority
+              </p>
+            </div>
+          </Reveal>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-1 border-b border-[#E6E7EB] -mb-px">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setFilter(tab.key)}
-                className={`px-3.5 py-2.5 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
-                  view === tab.key
-                    ? 'border-[#C8202D] text-[#C8202D]'
-                    : 'border-transparent text-[#6B6F76] hover:text-[#17181D]'
-                }`}
-              >
-                {tab.label} <span className="tabular-nums">({tab.count})</span>
-              </button>
-            ))}
+        <Reveal delay={0.08} className="flex flex-wrap items-center justify-between gap-3">
+          {/*
+            The views as one segmented control. Scrolls sideways on a phone
+            rather than wrapping, so the tabs stay one row and read as one set.
+          */}
+          <div className="max-w-full overflow-x-auto">
+            <div className="inline-flex gap-1 p-1 rounded-xl bg-[#EEF0F3]">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  aria-pressed={view === tab.key}
+                  onClick={() => setFilter(tab.key)}
+                  className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                    view === tab.key
+                      ? 'bg-white text-[#17181D] shadow-[0_1px_2px_rgba(16,24,40,0.08),0_1px_4px_-1px_rgba(16,24,40,0.08)]'
+                      : 'text-[#6B6F76] hover:text-[#17181D]'
+                  }`}
+                >
+                  {tab.label}
+                  <span
+                    className={`min-w-[1.25rem] px-1.5 rounded-full text-[10px] font-bold leading-[1.125rem] text-center tabular-nums ${
+                      view === tab.key ? 'bg-[#FDECEE] text-[#A81823]' : 'bg-white/70 text-[#6B6F76]'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Nothing to search or narrow on the schedule — so nothing offered */}
           {filtersApply && (
-          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <div className="relative basis-full sm:basis-auto sm:flex-none">
-              <Search className="w-3.5 h-3.5 text-[#9CA1A9] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                id="maintenance-search"
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search jobs, units, branches…"
-                aria-label="Search maintenance"
-                className="w-full sm:w-64 pl-9 pr-8 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] placeholder:text-[#9CA1A9] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] transition-colors"
-              />
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery('')}
-                  aria-label="Clear search"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9CA1A9] hover:text-[#17181D] cursor-pointer"
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <div className="relative basis-full sm:basis-auto sm:flex-none">
+                <Search className="w-4 h-4 text-[#9CA1A9] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  id="maintenance-search"
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search jobs, units, branches…"
+                  aria-label="Search maintenance"
+                  className="w-full sm:w-64 h-10 pl-9 pr-8 bg-white border border-[#E4E6EB] rounded-xl text-xs text-[#17181D] placeholder:text-[#9CA1A9] shadow-xs focus:outline-none focus:border-[#C8202D] focus:ring-2 focus:ring-[#C8202D]/15 transition-colors"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery('')}
+                    aria-label="Clear search"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9CA1A9] hover:text-[#17181D] cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <select
+                value={kindFilter}
+                onChange={(e) => setKindFilter(e.target.value as 'all' | MaintenanceJobKind)}
+                aria-label="Filter by kind"
+                className={FILTER_SELECT}
+              >
+                <option value="all">Problems &amp; services</option>
+                <option value="problem">Problems only</option>
+                <option value="scheduled">Scheduled only</option>
+              </select>
+              {board.branches.length > 1 && (
+                <select
+                  value={branchFilter}
+                  onChange={(e) => setBranchFilter(e.target.value)}
+                  aria-label="Filter by branch"
+                  className={FILTER_SELECT}
                 >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                  <option value="all">All branches</option>
+                  {board.branches.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
               )}
             </div>
-            <select
-              value={kindFilter}
-              onChange={(e) => setKindFilter(e.target.value as 'all' | MaintenanceJobKind)}
-              aria-label="Filter by kind"
-              className="flex-1 sm:flex-none min-w-0 px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
-            >
-              <option value="all">Problems &amp; services</option>
-              <option value="problem">Problems only</option>
-              <option value="scheduled">Scheduled only</option>
-            </select>
-          {board.branches.length > 1 && (
-            <select
-              value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
-              aria-label="Filter by branch"
-              className="flex-1 sm:flex-none min-w-0 px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D]"
-            >
-              <option value="all">All branches</option>
-              {board.branches.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
           )}
-          </div>
-          )}
-        </div>
+        </Reveal>
 
+        {/*
+          The schedule is never inside a Reveal: it renders its own plan editor,
+          a `position: fixed` dialog, and the rising transform would become that
+          dialog's containing block while it plays.
+        */}
         {view === 'schedule' ? (
           <MaintenanceSchedulePanel
             schedule={schedule}
@@ -485,19 +510,16 @@ export const MaintenanceScreen: React.FC = () => {
           />
         ) : view === 'repeats' ? (
           repeats.length === 0 ? (
-            <div className="bg-white border border-[#E6E7EB] rounded-lg p-10 text-center shadow-xs">
-              <CheckCircle2 className="w-8 h-8 text-[#157F4B] mx-auto mb-2.5" />
-              <p className="text-sm font-bold text-[#17181D]">
-                {query.trim() ? 'Nothing matches that search' : 'Nothing is repeating'}
-              </p>
-              <p className="text-xs text-[#6B6F76] mt-1">
-                {query.trim()
+            <EmptyBoard
+              title={query.trim() ? 'Nothing matches that search' : 'Nothing is repeating'}
+              text={
+                query.trim()
                   ? 'No repeat offender matches what you typed.'
-                  : 'No unit has been reported more than once.'}
-              </p>
-            </div>
+                  : 'No unit has been reported more than once.'
+              }
+            />
           ) : (
-            <div className="space-y-3">
+            <Reveal delay={0.1} className="space-y-3">
               {repeats.map((group) => (
                 <RepeatCard
                   key={group.key}
@@ -505,31 +527,32 @@ export const MaintenanceScreen: React.FC = () => {
                   onOpen={(id: string) => router.push(`/maintenance/${id}`)}
                 />
               ))}
-            </div>
+            </Reveal>
           )
         ) : visible.length === 0 ? (
-          <div className="bg-white border border-[#E6E7EB] rounded-lg p-10 text-center shadow-xs">
-            <CheckCircle2 className="w-8 h-8 text-[#157F4B] mx-auto mb-2.5" />
-            <p className="text-sm font-bold text-[#17181D]">Nothing here</p>
-            <p className="text-xs text-[#6B6F76] mt-1">
-              {view === 'open'
-                ? 'No maintenance is outstanding.'
-                : 'No jobs match this filter.'}
-            </p>
-          </div>
+          <EmptyBoard
+            title="Nothing here"
+            text={view === 'open' ? 'No maintenance is outstanding.' : 'No jobs match this filter.'}
+          />
         ) : (
-          <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs divide-y divide-[#E6E7EB] overflow-hidden">
-            {visible.map((job) => (
-              <JobRow
-                key={job.id}
-                job={job}
-                onOpen={() => router.push(`/maintenance/${job.id}`)}
-                onStart={() => setStarting(job)}
-                onEnd={() => setEnding(job)}
-                mayManage={mayManage}
-              />
-            ))}
-          </div>
+          /*
+            Revealed as one block rather than staggered row by row: a board can
+            run to hundreds of jobs, and a stagger that long is a wait.
+          */
+          <Reveal delay={0.1}>
+            <div className={`${CARD} divide-y divide-[#F0F1F4] overflow-hidden`}>
+              {visible.map((job) => (
+                <JobRow
+                  key={job.id}
+                  job={job}
+                  onOpen={() => router.push(`/maintenance/${job.id}`)}
+                  onStart={() => setStarting(job)}
+                  onEnd={() => setEnding(job)}
+                  mayManage={mayManage}
+                />
+              ))}
+            </div>
+          </Reveal>
         )}
       </div>
 
@@ -573,6 +596,22 @@ export const MaintenanceScreen: React.FC = () => {
 // Job row — the whole job can be moved along from here, without opening it
 // ---------------------------------------------------------------------------
 
+const FILTER_SELECT =
+  'flex-1 sm:flex-none min-w-0 h-10 pl-3 pr-8 bg-white border border-[#E4E6EB] rounded-xl text-xs font-semibold text-[#17181D] shadow-xs cursor-pointer focus:outline-none focus:border-[#C8202D] focus:ring-2 focus:ring-[#C8202D]/15';
+
+/** An empty list, said as an answer rather than left as a blank card. */
+const EmptyBoard: React.FC<{ title: string; text: string }> = ({ title, text }) => (
+  <Reveal delay={0.1}>
+    <div className={`${CARD} px-6 py-14 text-center`}>
+      <span className="mx-auto w-12 h-12 rounded-2xl bg-[#E6F4EC] text-[#157F4B] flex items-center justify-center">
+        <CheckCircle2 className="w-6 h-6" />
+      </span>
+      <p className="mt-4 text-sm font-bold text-[#17181D]">{title}</p>
+      <p className="text-xs text-[#6B6F76] mt-1">{text}</p>
+    </div>
+  </Reveal>
+);
+
 /**
  * One unit that keeps breaking.
  *
@@ -587,9 +626,11 @@ const RepeatCard: React.FC<{
   const [open, setOpen] = useState(false);
 
   return (
-    <section className="bg-white border border-[#E6E7EB] rounded-lg shadow-xs overflow-hidden">
-      <div className="px-5 py-4 flex flex-wrap items-center gap-x-5 gap-y-3">
-        <span className="w-10 h-10 rounded-lg bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
+    <section
+      className={`${CARD} overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-[#DADCE2] hover:shadow-[0_12px_24px_-12px_rgba(16,24,40,0.18)]`}
+    >
+      <div className="px-5 sm:px-6 py-4 flex flex-wrap items-center gap-x-5 gap-y-3">
+        <span className="w-10 h-10 rounded-xl bg-[#FDECEE] text-[#C8202D] flex items-center justify-center shrink-0">
           <Repeat className="w-5 h-5" />
         </span>
 
@@ -606,18 +647,19 @@ const RepeatCard: React.FC<{
         {/* How bad the pattern is, in the two numbers that say it */}
         <div className="flex items-center gap-5 shrink-0">
           <div className="text-center">
-            <p className="text-xl font-bold text-[#C8202D] tabular-nums leading-none">
+            <p className="text-2xl font-bold tracking-tight text-[#17181D] leading-none">
               {group.times}
             </p>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mt-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA1A9] mt-1">
               times
             </p>
           </div>
+          <span className="w-px h-8 bg-[#F0F1F4]" />
           <div className="text-center">
-            <p className="text-xl font-bold text-[#17181D] tabular-nums leading-none">
+            <p className="text-2xl font-bold tracking-tight text-[#17181D] leading-none">
               {group.spanDays}
             </p>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mt-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9CA1A9] mt-1">
               days apart
             </p>
           </div>
@@ -626,7 +668,8 @@ const RepeatCard: React.FC<{
         <div className="flex items-center gap-2 shrink-0">
           <PriorityBadge severity={group.worstPriority} size="sm" />
           {group.openCount > 0 && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FDF3E2] text-[#B4740A]">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FDF3E2] text-[#8A5A08]">
+              <span className="w-1.5 h-1.5 rounded-full bg-current" />
               {group.openCount} open
             </span>
           )}
@@ -636,7 +679,7 @@ const RepeatCard: React.FC<{
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="inline-flex items-center gap-1 text-[11px] font-bold text-[#C8202D] hover:underline cursor-pointer shrink-0"
+          className="inline-flex items-center gap-1 h-8 px-3 rounded-lg text-[11px] font-bold text-[#17181D] bg-[#F4F5F7] hover:bg-[#EBEDF0] transition-colors cursor-pointer shrink-0"
         >
           {open ? 'Hide' : 'History'}
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -644,23 +687,23 @@ const RepeatCard: React.FC<{
       </div>
 
       {!open && (
-        <p className="px-5 pb-4 -mt-1 text-xs text-[#6B6F76]">
+        <p className="px-5 sm:px-6 pb-4 -mt-1 text-xs text-[#6B6F76]">
           First reported {formatDateTime(group.firstReportedAt)} • most recently{' '}
           {formatDateTime(group.lastReportedAt)}
         </p>
       )}
 
       {open && (
-        <ul className="border-t border-[#EFEFF2] divide-y divide-[#EFEFF2]">
+        <ul className="border-t border-[#F0F1F4] divide-y divide-[#F0F1F4] bg-[#FCFCFD]">
           {group.jobs.map((job, index) => (
             <li key={job.id}>
               <button
                 type="button"
                 onClick={() => onOpen(job.id)}
-                className="w-full px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-left hover:bg-[#FAFAFA] transition-colors cursor-pointer"
+                className="w-full px-5 sm:px-6 py-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-left hover:bg-[#F7F8FA] transition-colors cursor-pointer group"
               >
                 {/* Newest is #1, so the numbering matches the order read */}
-                <span className="w-6 h-6 rounded-full bg-[#F1F1F4] text-[10px] font-bold text-[#6B6F76] flex items-center justify-center shrink-0 tabular-nums">
+                <span className="w-6 h-6 rounded-full bg-[#EEF0F3] text-[10px] font-bold text-[#6B6F76] flex items-center justify-center shrink-0 tabular-nums">
                   {group.jobs.length - index}
                 </span>
                 <span className="flex-1 min-w-[12rem]">
@@ -670,7 +713,7 @@ const RepeatCard: React.FC<{
                   </span>
                 </span>
                 <StatusPill status={statusOf(job)} />
-                <ChevronRight className="w-4 h-4 text-[#9CA1A9] shrink-0" />
+                <ChevronRight className="w-4 h-4 text-[#C9CCD2] group-hover:text-[#17181D] group-hover:translate-x-0.5 transition-all shrink-0" />
               </button>
             </li>
           ))}
@@ -678,6 +721,17 @@ const RepeatCard: React.FC<{
       )}
     </section>
   );
+};
+
+/**
+ * The tile at the head of a row: where the job stands, as a mark. The status
+ * pill beside the title says the same thing in words, so this is read at a
+ * glance down the list and never has to carry the meaning alone.
+ */
+const STATUS_TILE: Record<MaintenanceStatus, { classes: string; Icon: typeof Wrench }> = {
+  reported: { classes: 'bg-[#FDECEE] text-[#C8202D]', Icon: Wrench },
+  'in-progress': { classes: 'bg-[#FDF3E2] text-[#B4740A]', Icon: Timer },
+  completed: { classes: 'bg-[#E6F4EC] text-[#157F4B]', Icon: CheckCircle2 },
 };
 
 const JobRow: React.FC<{
@@ -690,16 +744,24 @@ const JobRow: React.FC<{
 }> = ({ job, onOpen, onStart, onEnd, mayManage }) => {
   const status = statusOf(job);
   const waiting = daysOpen(job);
+  const tile = STATUS_TILE[status];
 
   return (
-    <div className="px-5 py-4 flex flex-wrap items-start gap-x-5 gap-y-3 hover:bg-[#FAFAFA] transition-colors">
+    <div className="px-5 sm:px-6 py-4 flex flex-wrap items-start gap-x-4 gap-y-3 hover:bg-[#FAFBFC] transition-colors group">
+      <span
+        className={`hidden sm:flex w-10 h-10 rounded-xl items-center justify-center shrink-0 ${tile.classes}`}
+        aria-hidden
+      >
+        <tile.Icon className="w-[18px] h-[18px]" />
+      </span>
+
       <button
         type="button"
         onClick={onOpen}
         className="flex-1 min-w-[14rem] text-left cursor-pointer"
       >
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-bold text-[#17181D]">{job.title}</span>
+          <span className="text-sm font-bold text-[#17181D] group-hover:text-black">{job.title}</span>
           <PriorityBadge severity={job.priority} size="sm" />
           <StatusPill status={status} />
           {/* Only the planned ones are marked: a breakdown is the ordinary case */}
@@ -715,17 +777,17 @@ const JobRow: React.FC<{
           {job.equipment ? ` • ${job.equipment}` : ''} •{' '}
           {categoryLabel(job.category)}
         </p>
-        <p className="text-[11px] text-[#6B6F76] mt-0.5">
+        <p className="text-[11px] text-[#9CA1A9] mt-0.5">
           Reported {formatDateTime(job.reportedAt)} by {job.reportedBy}
           {status === 'reported' && waiting > 0 && (
-            <span className="text-[#B4740A] font-semibold">
+            <span className="text-[#8A5A08] font-semibold">
               {' '}
               • waiting {waiting} day{waiting === 1 ? '' : 's'}
             </span>
           )}
         </p>
         {job.startedAt && (
-          <p className="text-[11px] font-semibold text-[#B4740A] mt-0.5 flex items-center gap-1.5">
+          <p className="text-[11px] font-semibold text-[#8A5A08] mt-0.5 flex items-center gap-1.5">
             <Clock className="w-3 h-3 shrink-0" />
             Started {formatDateTime(job.startedAt)}
             {status === 'in-progress' && (
@@ -738,12 +800,12 @@ const JobRow: React.FC<{
       </button>
 
       {/* The next step, right here on the row — for whoever takes it */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 self-center">
         {mayManage && status === 'reported' && (
           <button
             type="button"
             onClick={onStart}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
+            className={`${BUTTON.primary} h-9! px-3.5!`}
             title="Record that work has started"
           >
             <Play className="w-3.5 h-3.5" />
@@ -754,7 +816,7 @@ const JobRow: React.FC<{
           <button
             type="button"
             onClick={onEnd}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
+            className={`${BUTTON.dark} h-9! px-3.5!`}
             title="Record that work has finished"
           >
             <Square className="w-3.5 h-3.5" />
@@ -765,9 +827,9 @@ const JobRow: React.FC<{
           type="button"
           onClick={onOpen}
           aria-label="Open job"
-          className="p-1.5 text-[#6B6F76] hover:text-[#17181D] rounded-md transition-colors cursor-pointer"
+          className="w-9 h-9 flex items-center justify-center text-[#C9CCD2] hover:text-[#17181D] hover:bg-[#F4F5F7] rounded-lg transition-all cursor-pointer group-hover:text-[#17181D]"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
         </button>
       </div>
     </div>
@@ -779,10 +841,10 @@ const JobRow: React.FC<{
 // ---------------------------------------------------------------------------
 
 const inputClass =
-  'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
+  'w-full px-3.5 py-2.5 bg-white border border-[#E4E6EB] rounded-xl text-sm text-[#17181D] placeholder:text-[#9CA1A9] shadow-xs transition-colors focus:outline-none focus:border-[#C8202D] focus:ring-2 focus:ring-[#C8202D]/15';
 
 const labelClass =
-  'block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5';
+  'block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6B6F76] mb-1.5';
 
 /**
  * Three fields to raise a problem: where, what, how urgent. Everything else is
@@ -978,7 +1040,7 @@ const ReportProblemDialog: React.FC<{
       role="dialog"
       aria-modal="true"
       aria-labelledby="maintenancescreen-dialog-1-title"
-      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-[#17181D]/45 backdrop-blur-[2px] flex items-start sm:items-center justify-center p-4 overflow-y-auto"
     >
       {/*
         Wider than a dialog usually wants to be, because this one is a form and
@@ -986,8 +1048,17 @@ const ReportProblemDialog: React.FC<{
         could not be seen at once, which is when somebody files a fault against
         the wrong branch. Paired up below, it fits without scrolling.
       */}
-      <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-3xl my-8">
-        <div className="px-6 py-4 border-b border-[#E6E7EB]">
+      {/*
+        The panel settles in; the fixed backdrop around it does not move, so
+        nothing positioned inside it is re-parented by the transform.
+      */}
+      <motion.div
+        className="bg-white border border-[#E8E9EE] rounded-2xl shadow-[0_24px_48px_-12px_rgba(16,24,40,0.28)] w-full max-w-3xl my-8"
+        initial={{ opacity: 0, y: 8, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: t(0.25), ease: EASE_OUT }}
+      >
+        <div className="px-6 py-5 border-b border-[#F0F1F4]">
           <h3 id="maintenancescreen-dialog-1-title" className="text-base font-bold text-[#17181D]">Report a problem</h3>
           <p className="text-xs text-[#6B6F76] mt-0.5">
             Three things is enough. Add the rest later if you need to.
@@ -1043,7 +1114,7 @@ const ReportProblemDialog: React.FC<{
                 value={unitId}
                 onChange={(e) => setUnitId(e.target.value)}
                 disabled={units.length === 0}
-                className={`${inputClass} disabled:bg-[#F6F6F8] disabled:text-[#6B6F76]`}
+                className={`${inputClass} disabled:bg-[#F4F5F7] disabled:text-[#6B6F76]`}
               >
                 <option value="">
                   {units.length === 0
@@ -1071,10 +1142,10 @@ const ReportProblemDialog: React.FC<{
             nine Refrigerators.
           */}
           {unit ? (
-            <div className="rounded-md border border-[#E6E7EB] bg-[#FBFBFC] px-3.5 py-3">
+            <div className="rounded-xl border border-[#E8E9EE] bg-[#FAFBFC] px-4 py-3">
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                 {unit.assetNo && (
-                  <span className="font-mono text-[11px] font-bold tracking-wide text-[#C8202D] bg-[#FDECEE] px-1.5 py-0.5 rounded">
+                  <span className="font-mono text-[11px] font-bold tracking-wide text-[#A81823] bg-[#FDECEE] px-1.5 py-0.5 rounded-md">
                     {unit.assetNo}
                   </span>
                 )}
@@ -1151,10 +1222,10 @@ const ReportProblemDialog: React.FC<{
                     type="button"
                     onClick={() => setPriority(s)}
                     aria-pressed={priority === s}
-                    className={`px-3 py-2 rounded-md border text-[11px] font-bold transition-colors cursor-pointer ${
+                    className={`h-9 px-3 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
                       priority === s
-                        ? 'border-[#C8202D] bg-[#FDECEE] text-[#C8202D]'
-                        : 'border-[#E6E7EB] bg-white text-[#6B6F76] hover:bg-[#F6F6F8]'
+                        ? 'border-[#C8202D] bg-[#FDECEE] text-[#A81823] shadow-[0_0_0_3px_rgba(200,32,45,0.10)]'
+                        : 'border-[#E4E6EB] bg-white text-[#6B6F76] hover:text-[#17181D] hover:border-[#D5D8DE]'
                     }`}
                   >
                     {SEVERITY_LABEL[s]}
@@ -1200,7 +1271,7 @@ const ReportProblemDialog: React.FC<{
                   <span className={labelClass}>Branch</span>
                   <p
                     id="mnt-fixed-branch"
-                    className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#F6F6F8] border border-[#E6E7EB] rounded-md text-sm font-semibold text-[#17181D]"
+                    className="w-full flex items-center gap-2 px-3 py-2.5 bg-[#F4F5F7] border border-[#E8E9EE] rounded-xl text-sm font-semibold text-[#17181D]"
                   >
                     <Store className="w-4 h-4 text-[#6B6F76] shrink-0" />
                     <span className="truncate">{branchName || 'No branch set'}</span>
@@ -1275,7 +1346,7 @@ const ReportProblemDialog: React.FC<{
             <p
               role="alert"
               id="mnt-form-error"
-              className="p-2.5 rounded-md bg-[#FDECEE] border border-[#C8202D]/25 text-[#C8202D] text-xs font-semibold"
+              className="px-3.5 py-2.5 rounded-xl bg-[#FDECEE] border border-[#C8202D]/20 text-[#A81823] text-xs font-semibold"
             >
               {errors.form ??
                 (Object.keys(errors).length === 1
@@ -1284,11 +1355,11 @@ const ReportProblemDialog: React.FC<{
             </p>
           )}
 
-          <div className="pt-3 border-t border-[#E6E7EB] flex flex-wrap items-center justify-end gap-2.5">
+          <div className="pt-3 border-t border-[#F0F1F4] flex flex-wrap items-center justify-end gap-2.5">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-[#E6E7EB] rounded-md text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] transition-colors cursor-pointer"
+              className={BUTTON.secondary}
             >
               Cancel
             </button>
@@ -1297,8 +1368,8 @@ const ReportProblemDialog: React.FC<{
               type="submit"
               className={
                 mayManage
-                  ? 'px-4 py-2.5 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md transition-colors cursor-pointer'
-                  : 'inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs'
+                  ? BUTTON.secondary
+                  : BUTTON.primary
               }
             >
               Report it
@@ -1308,7 +1379,7 @@ const ReportProblemDialog: React.FC<{
                 id="mnt-save-start-btn"
                 type="button"
                 onClick={() => save(true)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer shadow-xs"
+                className={BUTTON.primary}
               >
                 <Play className="w-4 h-4" />
                 <span>Report &amp; start now</span>
@@ -1316,7 +1387,7 @@ const ReportProblemDialog: React.FC<{
             )}
           </div>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 };

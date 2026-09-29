@@ -6,7 +6,10 @@ import {
   ArrowLeft,
   Camera,
   Check,
+  ChevronDown,
   ChevronRight,
+  ClipboardList,
+  Info,
   Lock,
   Minus,
   X,
@@ -70,6 +73,9 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useRouter } from 'next/navigation';
 import { readImageFile } from '../services/photoFile';
 import { useToast } from './ToastProvider';
+import { motion } from 'motion/react';
+import { BUTTON, CARD, PageHeader } from './ui';
+import { EASE_OUT, Reveal, Stagger, StaggerItem, t } from './motion';
 
 interface ChecklistScreenProps {
   inspectionId: string;
@@ -168,17 +174,19 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
 
   if (!inspection) {
     return (
-      <div className="p-8 max-w-2xl mx-auto text-center">
-        <h2 className="text-xl font-bold text-[#17181D]">Inspection not found</h2>
-        <p className="text-sm text-[#6B6F76] mt-2">
-          The requested inspection checklist could not be loaded.
-        </p>
-        <button
-          onClick={() => router.push('/inspections')}
-          className="mt-4 px-4 py-2 bg-[#C8202D] text-white text-sm font-medium rounded-[6px]"
-        >
-          Return to records
-        </button>
+      <div className="p-5 sm:p-8 max-w-xl mx-auto w-full">
+        <div className={`${CARD} px-6 py-14 text-center`}>
+          <span className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FDECEE] to-[#FBDCDF] text-[#C8202D] flex items-center justify-center shadow-inner">
+            <ClipboardList className="w-7 h-7" />
+          </span>
+          <h2 className="mt-5 text-base font-bold text-[#17181D]">Inspection not found</h2>
+          <p className="text-[13px] text-[#6B6F76] mt-1.5">
+            The requested inspection checklist could not be loaded.
+          </p>
+          <button onClick={() => router.push('/inspections')} className={`${BUTTON.primary} mt-6`}>
+            Return to records
+          </button>
+        </div>
       </div>
     );
   }
@@ -216,17 +224,19 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
 
   if (totalSections === 0) {
     return (
-      <div className="p-8 max-w-2xl mx-auto text-center">
-        <h2 className="text-xl font-bold text-[#17181D]">The checklist is empty</h2>
-        <p className="text-sm text-[#6B6F76] mt-2">
-          Add at least one category with a question before running an inspection.
-        </p>
-        <button
-          onClick={() => router.push('/checklist')}
-          className="mt-4 px-4 py-2 bg-[#C8202D] text-white text-sm font-medium rounded-md cursor-pointer"
-        >
-          Edit checklist
-        </button>
+      <div className="p-5 sm:p-8 max-w-xl mx-auto w-full">
+        <div className={`${CARD} px-6 py-14 text-center`}>
+          <span className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FDECEE] to-[#FBDCDF] text-[#C8202D] flex items-center justify-center shadow-inner">
+            <ClipboardList className="w-7 h-7" />
+          </span>
+          <h2 className="mt-5 text-base font-bold text-[#17181D]">The checklist is empty</h2>
+          <p className="text-[13px] text-[#6B6F76] mt-1.5">
+            Add at least one category with a question before running an inspection.
+          </p>
+          <button onClick={() => router.push('/checklist')} className={`${BUTTON.primary} mt-6`}>
+            Edit checklist
+          </button>
+        </div>
       </div>
     );
   }
@@ -771,32 +781,30 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
   const remaining = totalItems - answeredTotal;
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto w-full">
+    <div className="p-5 sm:p-6 md:p-8 max-w-4xl mx-auto w-full">
       {/* Top Breadcrumb & Metadata Line */}
-      <div className="mb-4">
+      <Reveal className="mb-6">
         <button
           type="button"
           onClick={() => router.push('/inspections')}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-[#6B6F76] hover:text-[#17181D] transition cursor-pointer mb-2"
+          className="group inline-flex items-center gap-1.5 text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] transition-colors cursor-pointer mb-4"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
+          <ArrowLeft className="w-3.5 h-3.5 transition-transform group-hover:-translate-x-0.5" />
           <span>Exit inspection (draft saved automatically)</span>
         </button>
 
-        <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 border-b border-[#E6E7EB] pb-3">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-[#17181D]">
-              {inspection.branchName}
-            </h1>
-            <p className="text-xs text-[#6B6F76] mt-0.5 font-medium">
-              {FULL_CHECKLIST_LABEL} • {inspection.date} ({inspection.time})
-            </p>
-          </div>
-          <span className="text-xs text-[#6B6F76] self-start sm:self-auto whitespace-nowrap">
-            {totalItems} items
-          </span>
-        </div>
-      </div>
+        <PageHeader
+          eyebrow="Inspection in progress"
+          title={inspection.branchName}
+          subtitle={`${FULL_CHECKLIST_LABEL} • ${inspection.date} (${inspection.time})`}
+          actions={
+            <span className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-white border border-[#E8E9EE] text-xs font-semibold text-[#6B6F76] whitespace-nowrap shadow-xs">
+              <ClipboardList className="w-4 h-4 text-[#9CA1A9]" />
+              {totalItems} items
+            </span>
+          }
+        />
+      </Reveal>
 
 
       {/*
@@ -807,9 +815,11 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
       {saveFailed && (
         <div
           role="alert"
-          className="mb-5 px-4 py-3 rounded-md bg-[#FDECEE] border border-[#C8202D]/40 flex items-start gap-3"
+          className="mb-5 px-4 py-3.5 rounded-2xl bg-[#FDECEE] border border-[#C8202D]/30 flex items-start gap-3"
         >
-          <AlertCircle className="w-5 h-5 text-[#C8202D] shrink-0 mt-0.5" />
+          <span className="w-9 h-9 rounded-xl bg-white/70 text-[#C8202D] flex items-center justify-center shrink-0">
+            <AlertCircle className="w-5 h-5" />
+          </span>
           <div>
             <p className="text-sm font-bold text-[#17181D]">Your answers are not being saved</p>
             <p className="text-xs text-[#6B6F76] mt-0.5 leading-relaxed">
@@ -822,16 +832,25 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
       )}
 
       {/* Quick guide hint */}
-      <div className="mb-5 px-3.5 py-2 bg-[#FAFAFA] border border-[#E6E7EB] rounded-md text-xs text-[#6B6F76]">
-        Tap <strong className="text-[#17181D]">Yes</strong> or <strong className="text-[#17181D]">No</strong> on
-        every line. Marking <strong className="text-[#17181D]">No</strong> opens a reason box. Where a
-        whole section passes, <strong className="text-[#17181D]">All yes</strong> in its heading answers
-        it in one — anything already marked No is left as it is. Your answers save as you go.
-      </div>
+      <Reveal delay={0.04} className="mb-6">
+        <div className="px-4 py-3 bg-white border border-[#E8E9EE] rounded-2xl text-xs leading-relaxed text-[#6B6F76] flex items-start gap-3">
+          <span className="w-7 h-7 rounded-lg bg-[#F4F5F7] text-[#6B6F76] flex items-center justify-center shrink-0">
+            <Info className="w-3.5 h-3.5" />
+          </span>
+          <p className="pt-1">
+            Tap <strong className="text-[#17181D]">Yes</strong> or <strong className="text-[#17181D]">No</strong> on
+            every line. Marking <strong className="text-[#17181D]">No</strong> opens a reason box. Where a
+            whole section passes, <strong className="text-[#17181D]">All yes</strong> in its heading answers
+            it in one — anything already marked No is left as it is. Your answers save as you go.
+          </p>
+        </div>
+      </Reveal>
 
       {/* One scrolling list, headed by category. Padded at the foot so the
-          sticky bar below never covers the last row. */}
-      <div className="space-y-6 pb-28">
+          sticky bar below never covers the last row. The sections rise in
+          one after another; the bar is a sibling of this list, never inside
+          it, so the rise's transform cannot unstick it. */}
+      <Stagger className="space-y-6 pb-32">
         {sections.map((section, sectionIdx) => {
           const answered = answeredInSection(sectionIdx);
           const total = section.items.length;
@@ -846,17 +865,23 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
             sectionIdx === 0 || sections[sectionIdx - 1].listKey !== section.listKey;
 
           return (
-            <section key={`${section.listKey}-${section.key}`} id={`section-${section.key}`}>
+            <StaggerItem key={`${section.listKey}-${section.key}`}>
+            <section id={`section-${section.key}`}>
               {startsNewList && (
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[#6B6F76] mb-2">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9CA1A9] mb-2.5 mt-2">
                   {section.listLabel}
                 </p>
               )}
 
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <h2 className="text-base font-bold text-[#17181D]">{section.title}</h2>
+              <div className={`${CARD} overflow-hidden`}>
+              <div className="px-4 md:px-5 py-3.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5 border-b border-[#F0F1F4] bg-[#FAFBFC]">
+                <div className="flex items-center gap-3 min-w-0">
+                  {/* How far through this section, as a small ring that fills */}
+                  <SectionRing answered={answered} total={total} />
+                  <h2 className="text-[15px] font-bold text-[#17181D] leading-snug">{section.title}</h2>
+                </div>
 
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2 ml-auto shrink-0">
                   {/*
                     Every check in the section at once, for the sections that
                     simply pass. A tri-state box rather than a "mark all"
@@ -876,14 +901,14 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                           ? `Clear the Yes answers in ${section.title}`
                           : `Mark every unanswered check in ${section.title} Yes. Anything already marked No keeps its answer.`
                       }
-                      className={`inline-flex items-center gap-1.5 text-[11px] font-bold rounded-md px-1.5 py-1 -mr-1 transition-colors cursor-pointer ${
+                      className={`inline-flex items-center gap-2 h-8 px-2.5 text-[11px] font-bold rounded-lg border transition-all duration-200 cursor-pointer ${
                         allYes
-                          ? 'text-[#157F4B] hover:bg-[#EAF6EF]'
-                          : 'text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8]'
+                          ? 'text-[#12643C] bg-[#EAF6EF] border-[#157F4B]/25 hover:bg-[#DDF0E5]'
+                          : 'text-[#6B6F76] bg-white border-[#E4E6EB] hover:text-[#17181D] hover:border-[#C9CCD2]'
                       }`}
                     >
                       <span
-                        className={`w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors ${
+                        className={`w-4 h-4 rounded-[5px] border flex items-center justify-center shrink-0 transition-colors duration-200 ${
                           allYes
                             ? 'bg-[#157F4B] border-[#157F4B] text-white'
                             : someYes
@@ -902,17 +927,16 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                   )}
 
                   <span
-                    className={`inline-flex items-center gap-1.5 text-xs font-bold tabular-nums ${
-                      done ? 'text-[#157F4B]' : 'text-[#6B6F76]'
+                    className={`inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-bold tabular-nums transition-colors ${
+                      done ? 'bg-[#EAF6EF] text-[#12643C]' : 'bg-[#F4F5F7] text-[#6B6F76]'
                     }`}
                   >
-                    {done && <CheckCircle2 className="w-3.5 h-3.5" />}
                     {answered}/{total}
                   </span>
                 </div>
               </div>
 
-              <div className="bg-white border border-[#E6E7EB] rounded-md divide-y divide-[#E6E7EB] overflow-hidden shadow-xs">
+              <div className="divide-y divide-[#F0F1F4]">
                 {section.items.map((item: Item) => {
           const answer = inspection.answers[item.id];
           const status = answer?.status;
@@ -942,20 +966,26 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                   handleSelectYes(item.id);
                 }
               }}
-              className={`p-4 md:p-5 transition-colors ${
-                !status && !heldBy ? 'cursor-pointer hover:bg-[#FAFAFA]' : ''
+              className={`relative p-4 md:p-5 transition-colors duration-200 ${
+                !status && !heldBy ? 'cursor-pointer hover:bg-[#FAFBFC]' : ''
               } ${
                 heldBy
-                  ? 'border-l-4 border-l-[#C8202D] bg-[#FDECEE]/40'
+                  ? 'bg-[#FDECEE]/40'
                   : isInvalid
-                    ? 'border-l-4 border-l-[#C8202D] bg-[#FDECEE]/15'
-                    : ''
+                    ? 'bg-[#FDECEE]/25'
+                    : isNo
+                      ? 'bg-[#FFFBFB]'
+                      : ''
               }`}
             >
+              {/* The row's state down its leading edge: red for held or refused */}
+              {(heldBy || isInvalid) && (
+                <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-[#C8202D]" />
+              )}
               {heldBy && (
-                <div className="mb-4 rounded-md border border-[#C8202D]/30 bg-[#FDECEE] px-3.5 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <div className="mb-4 rounded-xl border border-[#C8202D]/25 bg-[#FDECEE] px-3.5 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                   <Lock className="w-3.5 h-3.5 text-[#C8202D] shrink-0" />
-                  <span className="text-[11px] font-bold text-[#C8202D]">
+                  <span className="text-[11px] font-bold text-[#A81823]">
                     Already with maintenance
                   </span>
                   <span className="text-[11px] text-[#6B6F76]">
@@ -980,11 +1010,19 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
               {/* Row: Item number, text, and toggle buttons */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-start gap-3 flex-1">
-                  <span className="text-xs font-bold text-[#6B6F76] bg-[#F6F6F8] min-w-6 h-6 px-1 rounded flex items-center justify-center shrink-0 mt-0.5 border border-[#E6E7EB] tabular-nums">
+                  <span
+                    className={`text-[11px] font-bold min-w-7 h-7 px-1.5 rounded-lg flex items-center justify-center shrink-0 tabular-nums transition-colors duration-200 ${
+                      isYes
+                        ? 'bg-[#E6F4EC] text-[#157F4B]'
+                        : isNo
+                          ? 'bg-[#FDECEE] text-[#C8202D]'
+                          : 'bg-[#F4F5F7] text-[#6B6F76]'
+                    }`}
+                  >
                     {numberOf(item.id)}
                   </span>
-                  <div className="flex-1">
-                    <p className="text-sm md:text-base font-semibold text-[#17181D] leading-snug">
+                  <div className="flex-1 pt-0.5">
+                    <p className="text-sm md:text-[15px] font-semibold text-[#17181D] leading-snug">
                       {item.text}
                     </p>
 
@@ -1009,7 +1047,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                       </div>
                     )}
                     {priority && (
-                      <div className="mt-1">
+                      <div className="mt-1.5">
                         <PriorityBadge
                           severity={priority.severity}
                           size="sm"
@@ -1021,8 +1059,16 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                   </div>
                 </div>
 
-                {/* Yes / No Toggle Button Pair */}
-                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                {/*
+                  Yes / No, as one segmented control. The chosen half fills
+                  with its colour and the other stays quiet, so a column of
+                  answered rows can be read down the right-hand edge.
+                */}
+                <div
+                  className={`flex items-center gap-1 p-1 rounded-xl border self-end sm:self-auto shrink-0 transition-colors duration-200 ${
+                    heldBy ? 'bg-[#F4F5F7] border-[#E8E9EE]' : 'bg-[#F7F8FA] border-[#E8E9EE]'
+                  }`}
+                >
                   {/* YES Button */}
                   <button
                     type="button"
@@ -1036,21 +1082,22 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                           ? 'Click again to convert to No with reason and photo options'
                           : 'Mark compliant (Yes)'
                     }
-                    className={`min-w-[80px] h-10 px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 select-none ${
+                    className={`${TOGGLE} ${
                       heldBy
-                        ? 'bg-[#F1F1F4] text-[#9CA1A9] border border-[#E6E7EB] cursor-not-allowed'
+                        ? 'text-[#9CA1A9] cursor-not-allowed'
                         : `cursor-pointer active:scale-95 ${
                             isYes
-                              ? 'bg-[#157F4B] text-white shadow-xs'
-                              : 'bg-white text-[#17181D] border border-[#E6E7EB] hover:bg-[#F6F6F8]'
+                              ? 'bg-[#157F4B] text-white shadow-[0_4px_10px_-4px_rgba(21,127,75,0.6)]'
+                              : 'text-[#17181D] hover:bg-white hover:shadow-xs'
                           }`
                     }`}
                     aria-pressed={isYes}
                   >
                     <Check
-                      className={`w-3.5 h-3.5 ${
+                      className={`w-3.5 h-3.5 transition-colors duration-200 ${
                         heldBy ? 'text-[#9CA1A9]' : isYes ? 'text-white' : 'text-[#157F4B]'
                       }`}
+                      strokeWidth={isYes ? 3 : 2}
                     />
                     <span>Yes</span>
                   </button>
@@ -1068,40 +1115,44 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                           ? 'Click to toggle back to Yes'
                           : 'Mark non-compliant (No)'
                     }
-                    className={`min-w-[80px] h-10 px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1.5 select-none ${
+                    className={`${TOGGLE} ${
                       heldBy
-                        ? 'bg-[#F1F1F4] text-[#9CA1A9] border border-[#E6E7EB] cursor-not-allowed'
+                        ? 'text-[#9CA1A9] cursor-not-allowed'
                         : `cursor-pointer active:scale-95 ${
                             isNo
-                              ? 'bg-[#C8202D] text-white shadow-xs'
-                              : 'bg-white text-[#17181D] border border-[#E6E7EB] hover:bg-[#F6F6F8]'
+                              ? 'bg-[#C8202D] text-white shadow-[0_4px_10px_-4px_rgba(200,32,45,0.6)]'
+                              : 'text-[#17181D] hover:bg-white hover:shadow-xs'
                           }`
                     }`}
                     aria-pressed={isNo}
                   >
                     <X
-                      className={`w-3.5 h-3.5 ${
+                      className={`w-3.5 h-3.5 transition-colors duration-200 ${
                         heldBy ? 'text-[#9CA1A9]' : isNo ? 'text-white' : 'text-[#C8202D]'
                       }`}
+                      strokeWidth={isNo ? 3 : 2}
                     />
                     <span>No</span>
                   </button>
                 </div>
               </div>
 
-              {/* Expandable panel when marked NO */}
+              {/* Expandable panel when marked NO — eases open below the row */}
               {isNo && (
-                <div
+                <motion.div
                   id={`item-${item.id}-reason-panel`}
-                  className="mt-4 pt-4 border-t border-[#E6E7EB] bg-[#FAFAFA] p-4 rounded-md border border-[#E6E7EB] space-y-4"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: t(0.25), ease: EASE_OUT }}
+                  className="mt-4 bg-white p-4 md:p-5 rounded-xl border border-[#F0D9DC] shadow-[0_1px_2px_rgba(16,24,40,0.04)] space-y-4"
                 >
                   {/* 0. Priority, and how it was reached */}
                   {priority && (
                     <div
                       id={`item-${item.id}-priority`}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pb-3.5 border-b border-[#E6E7EB]"
+                      className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pb-4 border-b border-[#F0F1F4]"
                     >
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-[#17181D]">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#9CA1A9]">
                         Priority
                       </span>
                       <PriorityBadge
@@ -1109,25 +1160,28 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                         escalated={priority.severity !== priority.base}
                       />
                       {/* Rules decide by default; an inspector can overrule */}
-                      <select
-                        id={`item-${item.id}-priority-select`}
-                        aria-label="Override the priority for this issue"
-                        value={answer?.priorityOverride ?? ''}
-                        onChange={(e) =>
-                          handlePriorityOverride(
-                            item.id,
-                            e.target.value ? (e.target.value as Severity) : null
-                          )
-                        }
-                        className="px-2 py-1 bg-white border border-[#E6E7EB] rounded-md text-xs text-[#17181D] focus:outline-none focus:ring-1 focus:ring-[#C8202D] cursor-pointer"
-                      >
-                        <option value="">Auto ({SEVERITY_LABEL[priority.computed]})</option>
-                        {SEVERITY_KEYS.map((s) => (
-                          <option key={s} value={s}>
-                            {SEVERITY_LABEL[s]}
-                          </option>
-                        ))}
-                      </select>
+                      <span className="relative">
+                        <select
+                          id={`item-${item.id}-priority-select`}
+                          aria-label="Override the priority for this issue"
+                          value={answer?.priorityOverride ?? ''}
+                          onChange={(e) =>
+                            handlePriorityOverride(
+                              item.id,
+                              e.target.value ? (e.target.value as Severity) : null
+                            )
+                          }
+                          className={`${FIELD} h-8 w-auto pl-2.5 pr-8 text-xs appearance-none cursor-pointer`}
+                        >
+                          <option value="">Auto ({SEVERITY_LABEL[priority.computed]})</option>
+                          {SEVERITY_KEYS.map((s) => (
+                            <option key={s} value={s}>
+                              {SEVERITY_LABEL[s]}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#9CA1A9]" />
+                      </span>
                       <span className="text-xs text-[#6B6F76] basis-full sm:basis-auto">
                         {priority.factors.join(' · ')}
                       </span>
@@ -1141,30 +1195,31 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                     technician has to reach the people who send one and only
                     the inspector in front of it knows that.
                   */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label
-                      htmlFor={`item-${item.id}-group-select`}
-                      className="block text-[10px] font-bold uppercase tracking-wider text-[#17181D] mb-1.5"
-                    >
+                    <label htmlFor={`item-${item.id}-group-select`} className={LABEL}>
                       Category
                     </label>
-                    <select
-                      id={`item-${item.id}-group-select`}
-                      value={reasonGroup}
-                      onChange={(e) =>
-                        handleReasonGroupChange(item.id, e.target.value as ReasonGroup)
-                      }
-                      className="w-full px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D] cursor-pointer"
-                    >
-                      {REASON_GROUP_KEYS.map((key) => (
-                        <option key={key} value={key}>
-                          {key}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="relative block">
+                      <select
+                        id={`item-${item.id}-group-select`}
+                        value={reasonGroup}
+                        onChange={(e) =>
+                          handleReasonGroupChange(item.id, e.target.value as ReasonGroup)
+                        }
+                        className={`${FIELD} ${SELECT_ARROW}`}
+                      >
+                        {REASON_GROUP_KEYS.map((key) => (
+                          <option key={key} value={key}>
+                            {key}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className={CHEVRON} />
+                    </span>
 
                     {toMaintenance ? (
-                      <p className="text-xs font-semibold text-[#B4740A] mt-1.5 flex items-start gap-1.5">
+                      <p className="text-xs font-semibold text-[#8A5A08] mt-1.5 flex items-start gap-1.5">
                         <Wrench className="w-3.5 h-3.5 shrink-0 mt-px" />
                         <span>
                           Goes to the maintenance board as{' '}
@@ -1173,7 +1228,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                         </span>
                       </p>
                     ) : (
-                      <p className="text-xs text-[#6B6F76] mt-1.5">
+                      <p className="text-[11px] leading-relaxed text-[#6B6F76] mt-1.5">
                         Sets the reasons offered below. Choose MAINTENANCE when something has to
                         be repaired or serviced rather than put right on the spot.
                       </p>
@@ -1182,39 +1237,37 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
 
                   {/* 2. Required Reason dropdown */}
                   <div>
-                    <label
-                      htmlFor={`item-${item.id}-reason-select`}
-                      className="block text-[10px] font-bold uppercase tracking-wider text-[#17181D] mb-1.5"
-                    >
+                    <label htmlFor={`item-${item.id}-reason-select`} className={LABEL}>
                       Reason <span className="text-[#C8202D]">*</span>
                     </label>
-                    <select
-                      id={`item-${item.id}-reason-select`}
-                      value={answer?.reason || ''}
-                      onChange={(e) => handleReasonChange(item.id, e.target.value)}
-                      className={`w-full px-3 py-2 bg-white border rounded-md text-sm text-[#17181D] focus:outline-none focus:ring-1 ${
-                        isInvalid && (!answer?.reason || answer.reason.trim() === '')
-                          ? 'border-[#C8202D] focus:border-[#C8202D] focus:ring-[#C8202D]'
-                          : 'border-[#E6E7EB] focus:border-[#C8202D] focus:ring-[#C8202D]'
-                      }`}
-                      required
-                    >
-                      <option value="">Select a reason</option>
-                      {reasonsList.map((r, idx) => (
-                        <option key={idx} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="relative block">
+                      <select
+                        id={`item-${item.id}-reason-select`}
+                        value={answer?.reason || ''}
+                        onChange={(e) => handleReasonChange(item.id, e.target.value)}
+                        className={`${FIELD} ${SELECT_ARROW} ${
+                          isInvalid && (!answer?.reason || answer.reason.trim() === '')
+                            ? INVALID
+                            : ''
+                        }`}
+                        required
+                      >
+                        <option value="">Select a reason</option>
+                        {reasonsList.map((r, idx) => (
+                          <option key={idx} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className={CHEVRON} />
+                    </span>
+                  </div>
                   </div>
 
                   {/* 3. Required free-text field when reason is 'Other' */}
                   {answer?.reason === 'Other' && (
                     <div>
-                      <label
-                        htmlFor={`item-${item.id}-other-input`}
-                        className="block text-[10px] font-bold uppercase tracking-wider text-[#17181D] mb-1.5"
-                      >
+                      <label htmlFor={`item-${item.id}-other-input`} className={LABEL}>
                         Please specify <span className="text-[#C8202D]">*</span>
                       </label>
                       <input
@@ -1223,10 +1276,10 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                         value={answer?.otherReason || ''}
                         onChange={(e) => handleOtherReasonChange(item.id, e.target.value)}
                         placeholder="Detail the specific reason..."
-                        className={`w-full px-3 py-2 bg-white border rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:ring-1 ${
+                        className={`${FIELD} ${
                           isInvalid && (!answer?.otherReason || answer.otherReason.trim() === '')
-                            ? 'border-[#C8202D] focus:border-[#C8202D] focus:ring-[#C8202D]'
-                            : 'border-[#E6E7EB] focus:border-[#C8202D] focus:ring-[#C8202D]'
+                            ? INVALID
+                            : ''
                         }`}
                         required
                       />
@@ -1244,17 +1297,17 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                   */}
                   <div>
                     <label
-                      className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${
-                        toMaintenance ? 'text-[#B4740A]' : 'text-[#6B6F76]'
+                      className={`block text-xs font-semibold mb-1.5 ${
+                        toMaintenance ? 'text-[#8A5A08]' : 'text-[#17181D]'
                       }`}
                     >
                       Which unit{' '}
                       {toMaintenance ? (
-                        <span className="text-[#B4740A]">
+                        <span className="text-[#8A5A08] font-normal">
                           — names the unit on the maintenance job
                         </span>
                       ) : (
-                        <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+                        <span className="text-[#9CA1A9] font-normal">(optional)</span>
                       )}
                     </label>
                     <UnitPicker
@@ -1269,11 +1322,8 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
 
                   {/* 5. Optional textarea labeled "Additional notes" */}
                   <div>
-                    <label
-                      htmlFor={`item-${item.id}-notes-input`}
-                      className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5"
-                    >
-                      Additional notes <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+                    <label htmlFor={`item-${item.id}-notes-input`} className={LABEL}>
+                      Additional notes <span className="text-[#9CA1A9] font-normal">(optional)</span>
                     </label>
                     <textarea
                       id={`item-${item.id}-notes-input`}
@@ -1281,39 +1331,42 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                       value={answer?.note || ''}
                       onChange={(e) => handleNoteChange(item.id, e.target.value)}
                       placeholder="Add any context or instructions..."
-                      className="w-full px-3 py-2 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]"
+                      className={`${FIELD} h-auto py-2.5 leading-relaxed resize-y`}
                     />
                   </div>
 
                   {/* 6. Optional "Add photo" button with thumbnail */}
                   <div>
                     <label
-                      className={`block text-[10px] font-bold uppercase tracking-wider mb-1.5 ${
-                        needsPhoto ? 'text-[#C8202D]' : 'text-[#6B6F76]'
+                      className={`block text-xs font-semibold mb-1.5 ${
+                        needsPhoto ? 'text-[#C8202D]' : 'text-[#17181D]'
                       }`}
                     >
                       Photo evidence{' '}
                       {priority && requiresPhoto(priority.severity) ? (
                         <span className="text-[#C8202D]">* required for critical issues</span>
                       ) : (
-                        <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
+                        <span className="text-[#9CA1A9] font-normal">(optional)</span>
                       )}
                     </label>
 
                     {answer?.photo ? (
-                      <div className="flex items-center gap-4 bg-white p-2.5 rounded-md border border-[#E6E7EB] max-w-sm">
+                      <div className="flex items-center gap-4 bg-[#FAFBFC] p-2.5 rounded-xl border border-[#E8E9EE] max-w-sm">
                         <img
                           src={answer.photo}
                           alt={`Evidence for item ${item.id}`}
-                          className="w-16 h-16 object-cover rounded border border-[#E6E7EB]"
+                          className="w-16 h-16 object-cover rounded-lg border border-[#E8E9EE]"
                           referrerPolicy="no-referrer"
                         />
                         <div className="flex-1">
-                          <p className="text-xs font-semibold text-[#17181D]">Photo attached</p>
+                          <p className="text-xs font-semibold text-[#17181D] flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-[#157F4B]" />
+                            Photo attached
+                          </p>
                           <button
                             type="button"
                             onClick={() => handleRemovePhoto(item.id)}
-                            className="mt-1 text-xs text-[#C8202D] hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                            className="mt-1.5 text-xs text-[#C8202D] hover:underline flex items-center gap-1 font-semibold cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Remove photo</span>
@@ -1324,7 +1377,9 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                       <div className="flex items-center gap-2 flex-wrap">
                         <label
                           htmlFor={`item-${item.id}-photo-upload`}
-                          className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-[#F6F6F8] border border-[#E6E7EB] text-xs font-semibold text-[#17181D] rounded-md cursor-pointer transition-colors"
+                          className={`inline-flex items-center gap-2 h-10 px-3.5 bg-white border text-xs font-bold text-[#17181D] rounded-xl cursor-pointer transition-all hover:-translate-y-px hover:shadow-md ${
+                            needsPhoto ? 'border-[#C8202D]/50 border-dashed' : 'border-[#E4E6EB] shadow-xs'
+                          }`}
                         >
                           <Camera className="w-4 h-4 text-[#6B6F76]" />
                           <span>Upload photo</span>
@@ -1345,7 +1400,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                         <button
                           type="button"
                           onClick={() => handleUseSamplePhoto(item.id)}
-                          className="inline-flex items-center gap-1.5 px-3 py-2 bg-[#FAFAFA] hover:bg-[#EFEFF2] border border-[#E6E7EB] text-xs font-semibold text-[#6B6F76] rounded-md transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1.5 h-10 px-3 bg-[#F7F8FA] hover:bg-[#F0F1F4] border border-[#E8E9EE] text-xs font-semibold text-[#6B6F76] rounded-xl transition-colors cursor-pointer"
                           title="Attach sample evidence image for quick verification"
                         >
                           <ImageIcon className="w-3.5 h-3.5 text-[#6B6F76]" />
@@ -1354,21 +1409,25 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
                       </div>
                     )}
                   </div>
-                </div>
+                </motion.div>
               )}
                     </div>
                   );
                 })}
               </div>
+              </div>
             </section>
+            </StaggerItem>
           );
         })}
-      </div>
+      </Stagger>
 
-      {/* Progress and submit, always in reach while scrolling */}
+      {/* Progress and submit, always in reach while scrolling. Deliberately
+          outside every animated wrapper above: a transform around a sticky
+          element takes the stick away. */}
       <div
         id="checklist-action-bar"
-        className="sticky bottom-0 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-[#F6F6F8]/95 backdrop-blur border-t border-[#E6E7EB]"
+        className="sticky bottom-0 -mx-5 sm:-mx-6 md:-mx-8 px-5 sm:px-6 md:px-8 py-3.5 bg-white/90 backdrop-blur-md border-t border-[#E8E9EE] shadow-[0_-10px_30px_-18px_rgba(16,24,40,0.25)]"
       >
         {/*
           Why the record will not go through, in the one place that is always
@@ -1379,7 +1438,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
         {validationError && (
           <div
             id="checklist-validation-banner"
-            className="mb-2.5 px-3 py-2 rounded-md bg-[#FDECEE] border border-[#C8202D]/40 text-[#C8202D] flex items-start gap-2"
+            className="mb-3 px-3.5 py-2.5 rounded-xl bg-[#FDECEE] border border-[#C8202D]/30 text-[#A81823] flex items-start gap-2"
             role="alert"
             aria-live="polite"
           >
@@ -1397,7 +1456,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
         {saveFailed && (
           <div
             role="alert"
-            className="mb-2.5 px-3 py-2 rounded-md bg-[#FDECEE] border border-[#C8202D]/40 text-[#C8202D] flex items-start gap-2"
+            className="mb-3 px-3.5 py-2.5 rounded-xl bg-[#FDECEE] border border-[#C8202D]/30 text-[#A81823] flex items-start gap-2"
           >
             <AlertCircle className="w-4 h-4 shrink-0 mt-px" />
             <span className="text-xs font-semibold">
@@ -1408,17 +1467,27 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
 
         <div className="flex items-center gap-4">
           <div className="flex-1 min-w-0">
-            <div className="flex justify-between items-baseline text-xs mb-1.5">
-              <span className="font-semibold text-[#17181D]">
+            <div className="flex justify-between items-baseline gap-3 text-xs mb-2">
+              <span className="font-semibold text-[#17181D] truncate">
                 {answeredTotal} of {totalItems} answered
               </span>
-              <span className="text-[#6B6F76]">
+              <span className="text-[#6B6F76] shrink-0 tabular-nums">
                 {remaining === 0 ? 'All done' : `${remaining} left`}
+                <span className="ml-2 font-bold text-[#17181D]">{progressPercentage}%</span>
               </span>
             </div>
-            <div className="w-full bg-[#E6E7EB] h-1.5 rounded-full overflow-hidden">
+            <div
+              className="w-full bg-[#EEF0F3] h-2 rounded-full overflow-hidden"
+              role="progressbar"
+              aria-label="Checks answered"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progressPercentage}
+            >
               <div
-                className="bg-[#C8202D] h-full transition-all duration-300 ease-out"
+                className={`h-full rounded-full transition-[width,background-color] duration-500 ease-out motion-reduce:transition-none ${
+                  remaining === 0 ? 'bg-[#157F4B]' : 'bg-[#C8202D]'
+                }`}
                 style={{ width: `${progressPercentage}%` }}
               />
             </div>
@@ -1428,7 +1497,7 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
             type="button"
             id="checklist-review-btn"
             onClick={handleReview}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-xs font-semibold bg-[#C8202D] text-white hover:bg-[#A81823] transition-colors shadow-xs cursor-pointer select-none shrink-0"
+            className={`${BUTTON.primary} h-11 px-5 select-none shrink-0`}
           >
             <span>Review and submit</span>
             <FileCheck className="w-4 h-4" />
@@ -1436,5 +1505,61 @@ export const ChecklistScreen: React.FC<ChecklistScreenProps> = ({ inspectionId }
         </div>
       </div>
     </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Pieces
+// ---------------------------------------------------------------------------
+
+/*
+ * The fields inside a No panel, in the same look as the new-inspection form:
+ * 40px tall, rounded, and a soft red halo on focus.
+ */
+const FIELD =
+  'w-full h-10 px-3 bg-white border border-[#E4E6EB] rounded-xl text-sm text-[#17181D] placeholder:text-[#9CA1A9] shadow-xs transition-all hover:border-[#C9CCD2] focus:outline-none focus:border-[#C8202D]/60 focus:ring-4 focus:ring-[#C8202D]/10';
+const SELECT_ARROW = 'appearance-none pr-9 cursor-pointer';
+const CHEVRON =
+  'pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA1A9]';
+const INVALID = 'border-[#C8202D] hover:border-[#C8202D] ring-4 ring-[#C8202D]/10';
+const LABEL = 'block text-xs font-semibold text-[#17181D] mb-1.5';
+const TOGGLE =
+  'min-w-[76px] h-9 px-3.5 text-xs font-bold rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 select-none';
+
+/**
+ * A section's progress as a ring that fills as its checks are answered, and
+ * turns to a tick when the last one is. The count beside the heading says
+ * the same in figures, so the ring is never the only place it is said.
+ */
+const SectionRing: React.FC<{ answered: number; total: number }> = ({ answered, total }) => {
+  const size = 28;
+  const stroke = 3;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const share = total > 0 ? answered / total : 0;
+  const done = total > 0 && answered === total;
+  return (
+    <span className="relative shrink-0" style={{ width: size, height: size }} aria-hidden>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#EEF0F3" strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={done ? '#157F4B' : '#C8202D'}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - share)}
+          className="transition-[stroke-dashoffset,stroke] duration-500 ease-out motion-reduce:transition-none"
+        />
+      </svg>
+      {done && (
+        <span className="absolute inset-0 flex items-center justify-center text-[#157F4B]">
+          <Check className="w-3.5 h-3.5" strokeWidth={3} />
+        </span>
+      )}
+    </span>
   );
 };

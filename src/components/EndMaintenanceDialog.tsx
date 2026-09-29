@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Camera, CheckCircle2, Loader2, Receipt, Trash2 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { AlertCircle, Camera, Check, CheckCircle2, Loader2, Receipt, Trash2, X } from 'lucide-react';
 import { Interval, MaintenanceJob } from '../types';
 import { completeJob, getJobs, getLastPerson, rememberPerson } from '../services/maintenanceStore';
 import { reconcileServiceStatus } from '../services/equipmentStore';
@@ -20,12 +21,14 @@ import {
 } from '../services/maintenanceSchedule';
 import { IntervalPicker } from './IntervalPicker';
 import { useDialog } from '../hooks/useDialog';
+import { EASE_OUT, t } from './motion';
+import { BUTTON } from './ui';
 
 const inputClass =
-  'w-full px-3 py-2.5 bg-white border border-[#E6E7EB] rounded-md text-sm text-[#17181D] placeholder:text-[#6B6F76]/50 focus:outline-none focus:border-[#C8202D] focus:ring-1 focus:ring-[#C8202D]';
+  'w-full px-3 py-2.5 bg-white border border-[#E4E6EB] rounded-xl text-sm text-[#17181D] placeholder:text-[#9CA1A9] shadow-xs focus:outline-none focus:border-[#C8202D] focus:ring-4 focus:ring-[#C8202D]/10 transition-[border-color,box-shadow]';
 
 const labelClass =
-  'block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76] mb-1.5';
+  'block text-xs font-semibold text-[#17181D] mb-1.5';
 
 /**
  * How many photographs one job may carry.
@@ -240,234 +243,280 @@ export const EndMaintenanceDialog: React.FC<{
   const dialogRef = useDialog<HTMLDivElement>(onClose);
 
   return (
-    <div
+    /*
+     * The scrim only fades; the panel inside rises and scales. Nothing above a
+     * `position: fixed` element may carry a transform, or it stops being fixed
+     * to the window — so the movement is kept to the panel.
+     */
+    <motion.div
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="endmaintenancedialog-dialog-1-title"
-      className="fixed inset-0 z-50 bg-[#17181D]/50 flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-[#17181D]/45 backdrop-blur-[2px] flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: t(0.2) }}
     >
-      <div className="bg-white border border-[#E6E7EB] rounded-lg shadow-lg w-full max-w-lg my-8">
-        <div className="px-6 py-4 border-b border-[#E6E7EB]">
-          <h3 id="endmaintenancedialog-dialog-1-title" className="text-base font-bold text-[#17181D]">End maintenance</h3>
-          <p className="text-xs text-[#6B6F76] mt-0.5 truncate">{job.title}</p>
+      <motion.div
+        className="relative bg-white border border-[#E8E9EE] rounded-2xl shadow-[0_24px_64px_-16px_rgba(16,24,40,0.35)] w-full max-w-lg my-8 overflow-hidden"
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: t(0.3), ease: EASE_OUT }}
+      >
+        <div className="pl-6 pr-14 py-4 border-b border-[#F0F1F4] flex items-center gap-3">
+          <span className="w-9 h-9 rounded-xl bg-[#E6F4EC] text-[#157F4B] flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-[18px] h-[18px]" />
+          </span>
+          <div className="min-w-0">
+            <h3 id="endmaintenancedialog-dialog-1-title" className="text-[15px] font-bold text-[#17181D]">End maintenance</h3>
+            <p className="text-xs text-[#6B6F76] mt-0.5 truncate">{job.title}</p>
+          </div>
         </div>
 
-        <form onSubmit={submit} className="p-6 space-y-5">
-          <div>
-            <label htmlFor="mnt-resolution" className={labelClass}>
-              What was done
-            </label>
-            <textarea
-              id="mnt-resolution"
-              value={resolutionNote}
-              onChange={(e) => setResolutionNote(e.target.value)}
-              rows={3}
-              autoFocus
-              placeholder="e.g. Gas recharged and leaking joint resealed."
-              className={`${inputClass} resize-y`}
-            />
-            {errors.resolutionNote && (
-              <p className="text-xs font-semibold text-[#C8202D] mt-1">
-                {errors.resolutionNote}
+        <form onSubmit={submit}>
+          <div className="p-6 space-y-5">
+            <div>
+              <label htmlFor="mnt-resolution" className={labelClass}>
+                What was done
+              </label>
+              <textarea
+                id="mnt-resolution"
+                value={resolutionNote}
+                onChange={(e) => setResolutionNote(e.target.value)}
+                rows={3}
+                autoFocus
+                placeholder="e.g. Gas recharged and leaking joint resealed."
+                className={`${inputClass} resize-y`}
+              />
+              {errors.resolutionNote && (
+                <p className="text-xs font-semibold text-[#C8202D] mt-1.5">
+                  {errors.resolutionNote}
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="mnt-attended" className={labelClass}>
+                  Attended by (optional)
+                </label>
+                <input
+                  id="mnt-attended"
+                  type="text"
+                  value={attendedBy}
+                  onChange={(e) => setAttendedBy(e.target.value)}
+                  placeholder="Engineer or contractor"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="mnt-cost" className={labelClass}>
+                  Cost (optional)
+                </label>
+                <input
+                  id="mnt-cost"
+                  type="text"
+                  inputMode="decimal"
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  placeholder="Leave blank if unknown"
+                  className={inputClass}
+                />
+                {errors.cost && (
+                  <p className="text-xs font-semibold text-[#C8202D] mt-1.5">{errors.cost}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Receipts and the finished work */}
+            <div className="border-t border-[#F0F1F4] pt-5">
+              <span className={labelClass}>
+                Photos <span className="text-[#9CA1A9] font-normal">(optional)</span>
+              </span>
+              <p className="-mt-0.5 mb-3 text-[11px] text-[#9CA1A9]">
+                The receipt, and the work once it is finished. Up to {MAX_PHOTOS}.
+              </p>
+
+              {photos.length > 0 && (
+                <ul className="flex flex-wrap gap-2.5 mb-3">
+                  {photos.map((photo, index) => (
+                    <li key={index} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo}
+                        alt={`Attached photo ${index + 1}`}
+                        className="w-20 h-20 object-cover rounded-xl border border-[#E8E9EE] shadow-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(index)}
+                        aria-label={`Remove photo ${index + 1}`}
+                        title="Remove this photo"
+                        className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white border border-[#E6E7EB] shadow-xs flex items-center justify-center text-[#C8202D] hover:bg-[#FDECEE] transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <label
+                  htmlFor="mnt-photo-upload"
+                  aria-disabled={photos.length >= MAX_PHOTOS || reading}
+                  className={`inline-flex items-center gap-2 h-10 px-4 border border-dashed text-xs font-bold rounded-xl transition-all ${
+                    photos.length >= MAX_PHOTOS || reading
+                      ? 'bg-[#F4F5F7] border-[#E4E6EB] text-[#9CA1A9] cursor-not-allowed'
+                      : 'bg-white hover:bg-[#FAFBFC] border-[#D0D3D9] hover:border-[#9CA1A9] text-[#17181D] cursor-pointer'
+                  }`}
+                >
+                  {reading ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#6B6F76]" />
+                  ) : (
+                    <Camera className="w-4 h-4 text-[#6B6F76]" />
+                  )}
+                  <span>{reading ? 'Adding…' : 'Add photos'}</span>
+                  <input
+                    id="mnt-photo-upload"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={photos.length >= MAX_PHOTOS || reading}
+                    className="hidden"
+                    // Cleared on open so the same file can be picked twice
+                    onClick={(e) => {
+                      (e.target as HTMLInputElement).value = '';
+                    }}
+                    onChange={(e) => {
+                      const { files } = e.target;
+                      if (files && files.length > 0) void addPhotos(files);
+                    }}
+                  />
+                </label>
+
+                {photos.length > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-[11px] text-[#6B6F76]">
+                    <Receipt className="w-3.5 h-3.5" />
+                    {photos.length} of {MAX_PHOTOS} • {formatBytes(photoBytes)}
+                  </span>
+                )}
+              </div>
+
+              {errors.photos && (
+                <p className="text-xs font-semibold text-[#C8202D] mt-2">{errors.photos}</p>
+              )}
+            </div>
+
+            {offerGeneral && currentCadence && (
+              <div
+                className={`rounded-xl border p-4 space-y-3 transition-colors ${
+                  alsoGeneral ? 'border-[#C8202D]/40 bg-[#FFF7F8]' : 'border-[#E4E6EB] bg-[#FAFBFC]'
+                }`}
+              >
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={alsoGeneral}
+                    onChange={(e) => {
+                      setAlsoGeneral(e.target.checked);
+                      if (!e.target.checked && currentCadence) setCadence(currentCadence);
+                    }}
+                    className="peer sr-only"
+                  />
+                  <span
+                    aria-hidden
+                    className={`mt-0.5 w-[18px] h-[18px] rounded-md border flex items-center justify-center shrink-0 transition-colors peer-focus-visible:ring-4 peer-focus-visible:ring-[#C8202D]/15 ${
+                      alsoGeneral ? 'bg-[#C8202D] border-[#C8202D] text-white' : 'bg-white border-[#D0D3D9]'
+                    }`}
+                  >
+                    {alsoGeneral && <Check className="w-3 h-3" strokeWidth={3} />}
+                  </span>
+                  <span>
+                    <span className="block text-xs font-bold text-[#17181D]">
+                      General maintenance was done too
+                    </span>
+                    <span className="block text-[11px] text-[#6B6F76] mt-0.5">
+                      While the unit was open. Its clock resets from today, so the next one
+                      falls due {intervalText(currentCadence)} from now rather than from the
+                      date it was already on.
+                    </span>
+                  </span>
+                </label>
+
+                {alsoGeneral && (
+                  <div className="pl-[30px] space-y-2.5">
+                    {/*
+                      The period is on the form rather than behind a second
+                      tickbox. It is already filled in with what this unit keeps,
+                      so leaving it alone is the ordinary case — but somebody who
+                      has just had the thing apart and wants it looked at more
+                      often should not have to find a checkbox first.
+                    */}
+                    <span className="block text-xs font-semibold text-[#17181D]">
+                      How often from now on
+                    </span>
+                    <IntervalPicker
+                      id="mnt-general-cadence"
+                      value={cadence}
+                      onChange={setCadence}
+                      label="general maintenance for this unit"
+                    />
+                    <p className="text-[11px] text-[#6B6F76]">
+                      Next general maintenance falls due{' '}
+                      <strong>{addInterval(today, cadence) ?? '—'}</strong> —{' '}
+                      {intervalText(cadence)}
+                      {cadenceChanged
+                        ? ', kept for this unit alone from now on.'
+                        : ', which is what it was already on.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {errors.form && (
+              <p
+                role="alert"
+                className="flex items-center gap-2 text-xs font-semibold text-[#A81823] bg-[#FDECEE] border border-[#C8202D]/20 rounded-xl px-3 py-2.5"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {errors.form}
               </p>
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="mnt-attended" className={labelClass}>
-                Attended by (optional)
-              </label>
-              <input
-                id="mnt-attended"
-                type="text"
-                value={attendedBy}
-                onChange={(e) => setAttendedBy(e.target.value)}
-                placeholder="Engineer or contractor"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="mnt-cost" className={labelClass}>
-                Cost (optional)
-              </label>
-              <input
-                id="mnt-cost"
-                type="text"
-                inputMode="decimal"
-                value={cost}
-                onChange={(e) => setCost(e.target.value)}
-                placeholder="Leave blank if unknown"
-                className={inputClass}
-              />
-              {errors.cost && (
-                <p className="text-xs font-semibold text-[#C8202D] mt-1">{errors.cost}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Receipts and the finished work */}
-          <div className="border-t border-[#EFEFF2] pt-4">
-            <span className={labelClass}>
-              Photos <span className="text-[#6B6F76]/70 font-normal">(optional)</span>
-            </span>
-            <p className="-mt-1 mb-2.5 text-[11px] text-[#6B6F76]">
-              The receipt, and the work once it is finished. Up to {MAX_PHOTOS}.
-            </p>
-
-            {photos.length > 0 && (
-              <ul className="flex flex-wrap gap-2.5 mb-3">
-                {photos.map((photo, index) => (
-                  <li key={index} className="relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo}
-                      alt={`Attached photo ${index + 1}`}
-                      className="w-20 h-20 object-cover rounded-md border border-[#E6E7EB]"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(index)}
-                      aria-label={`Remove photo ${index + 1}`}
-                      title="Remove this photo"
-                      className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-white border border-[#E6E7EB] shadow-xs flex items-center justify-center text-[#C8202D] hover:bg-[#FDECEE] transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              <label
-                htmlFor="mnt-photo-upload"
-                aria-disabled={photos.length >= MAX_PHOTOS || reading}
-                className={`inline-flex items-center gap-2 px-3.5 py-2 border text-xs font-semibold rounded-md transition-colors ${
-                  photos.length >= MAX_PHOTOS || reading
-                    ? 'bg-[#F6F6F8] border-[#E6E7EB] text-[#9CA1A9] cursor-not-allowed'
-                    : 'bg-white hover:bg-[#F6F6F8] border-[#E6E7EB] text-[#17181D] cursor-pointer'
-                }`}
-              >
-                {reading ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-[#6B6F76]" />
-                ) : (
-                  <Camera className="w-4 h-4 text-[#6B6F76]" />
-                )}
-                <span>{reading ? 'Adding…' : 'Add photos'}</span>
-                <input
-                  id="mnt-photo-upload"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  disabled={photos.length >= MAX_PHOTOS || reading}
-                  className="hidden"
-                  // Cleared on open so the same file can be picked twice
-                  onClick={(e) => {
-                    (e.target as HTMLInputElement).value = '';
-                  }}
-                  onChange={(e) => {
-                    const { files } = e.target;
-                    if (files && files.length > 0) void addPhotos(files);
-                  }}
-                />
-              </label>
-
-              {photos.length > 0 && (
-                <span className="inline-flex items-center gap-1.5 text-[11px] text-[#6B6F76]">
-                  <Receipt className="w-3.5 h-3.5" />
-                  {photos.length} of {MAX_PHOTOS} • {formatBytes(photoBytes)}
-                </span>
-              )}
-            </div>
-
-            {errors.photos && (
-              <p className="text-xs font-semibold text-[#C8202D] mt-2">{errors.photos}</p>
-            )}
-          </div>
-
-          {offerGeneral && currentCadence && (
-            <div className="rounded-md border border-[#E6E7EB] bg-[#FAFAFA] p-3.5 space-y-3">
-              <label className="flex items-start gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={alsoGeneral}
-                  onChange={(e) => {
-                    setAlsoGeneral(e.target.checked);
-                    if (!e.target.checked && currentCadence) setCadence(currentCadence);
-                  }}
-                  className="mt-0.5 w-4 h-4 accent-[#C8202D] cursor-pointer"
-                />
-                <span>
-                  <span className="block text-xs font-bold text-[#17181D]">
-                    General maintenance was done too
-                  </span>
-                  <span className="block text-[11px] text-[#6B6F76] mt-0.5">
-                    While the unit was open. Its clock resets from today, so the next one
-                    falls due {intervalText(currentCadence)} from now rather than from the
-                    date it was already on.
-                  </span>
-                </span>
-              </label>
-
-              {alsoGeneral && (
-                <div className="pl-7 space-y-2.5">
-                  {/*
-                    The period is on the form rather than behind a second
-                    tickbox. It is already filled in with what this unit keeps,
-                    so leaving it alone is the ordinary case — but somebody who
-                    has just had the thing apart and wants it looked at more
-                    often should not have to find a checkbox first.
-                  */}
-                  <span className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6F76]">
-                    How often from now on
-                  </span>
-                  <IntervalPicker
-                    id="mnt-general-cadence"
-                    value={cadence}
-                    onChange={setCadence}
-                    label="general maintenance for this unit"
-                  />
-                  <p className="text-[11px] text-[#6B6F76]">
-                    Next general maintenance falls due{' '}
-                    <strong>{addInterval(today, cadence) ?? '—'}</strong> —{' '}
-                    {intervalText(cadence)}
-                    {cadenceChanged
-                      ? ', kept for this unit alone from now on.'
-                      : ', which is what it was already on.'}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {errors.form && (
-            <p role="alert" className="text-xs font-semibold text-[#C8202D] bg-[#FDECEE] border border-[#C8202D]/30 rounded-md px-3 py-2.5">
-              {errors.form}
-            </p>
-          )}
-
-          <div className="pt-3 border-t border-[#E6E7EB] flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-[#E6E7EB] rounded-md text-xs font-semibold text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F6F6F8] transition-colors cursor-pointer"
-            >
+          <div className="px-6 py-4 border-t border-[#F0F1F4] bg-[#FAFBFC] flex items-center justify-end gap-2">
+            <button type="button" onClick={onClose} className={BUTTON.secondary}>
               Cancel
             </button>
             <button
               id="mnt-complete-btn"
               type="submit"
               disabled={reading}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#C8202D] hover:bg-[#A81823] disabled:bg-[#E0A0A6] text-white text-xs font-semibold rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed"
+              className={`${BUTTON.primary} disabled:cursor-not-allowed`}
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>Mark done</span>
             </button>
           </div>
         </form>
-      </div>
-    </div>
+
+        {/*
+          Last in the panel so it is last in the tab order: the dialog opens
+          with focus on "What was done", and a close button placed first would
+          take that instead. Drawn at the top corner all the same.
+        */}
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute top-[18px] right-4 w-8 h-8 rounded-lg flex items-center justify-center text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F4F5F7] transition-colors cursor-pointer"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </motion.div>
+    </motion.div>
   );
 };
