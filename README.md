@@ -153,6 +153,7 @@ src/
   __tests__/      Test suites (run with npm test)
 docs/
   design-notes.md Why things work the way they do
+CLAUDE.md         Guardrails and conventions for anyone changing the code
 ```
 
 ### Pages
@@ -191,17 +192,73 @@ automatically on every push to `main` of this repository.
 
 ## Before you change anything
 
-Some changes alter how the business runs, not just how a screen looks: who
-may do what, how an inspection is scored, the steps of the Monday round or
-a repair, and where records are stored. Changes like these can break a
-workflow or affect records already saved in every browser.
-[CLAUDE.md](CLAUDE.md) lists the protected workflows and system logic, and
-what to check before changing them. Read it first, whether you are making
-the change yourself or with an AI coding assistant. Claude Code reads it
-automatically and warns before it touches any of them.
+Some changes alter how the business runs, not just how a screen looks.
+They can break a workflow the restaurants depend on, or change records
+already saved in every browser that has opened the app. Read this section
+before changing the code, whether you work by hand or with an AI coding
+assistant.
+
+### The workflows that must keep working
+
+| Workflow | What has to keep happening |
+| -------- | -------------------------- |
+| **Monday round** | A branch manager fills in the checklist, reviews, signs and submits. The branch then shows as done on the dashboard, or as late. |
+| **Surprise visit** | The admin books a visit, an inspector is assigned and carries it out. Only that inspector and the admin see it. |
+| **Failed check to repair** | A failed maintenance check creates a job for that unit. Closing the job, with a note and photos, updates the asset register. |
+| **Reported problem** | A branch manager reports a fault on any day. They can follow the job but cannot close it. |
+| **Scheduled service** | A service falls due on schedule and creates exactly one job. Finishing it restarts the clock. |
+| **Month-end** | The report counts repairs and services separately for each branch, under the right month. |
+| **Accounts** | Everyone signs in. A manager with two branches can switch between them, and the admin manages accounts. |
+
+### What counts as changing the system
+
+- Who may see or do what (permissions and sign-in)
+- How an inspection is scored or passed
+- What a checklist category or severity means, and which failures create a
+  repair job
+- Schedules: the Monday round, service intervals and surprise-visit
+  assignment
+- How jobs are created, closed and reopened
+- Where data is stored, starting data, and anything that changes or
+  deletes saved records
+- How asset numbers and other ids are made
+
+Changing wording, colours, layout or icons does not count.
+
+### Rules for any change like this
+
+1. **Say which workflow or rule changes,** what happens to records already
+   saved, and who is affected. Agree it with the owner first.
+2. **Never rename a storage key or edit starting data without a
+   migration.** Starting data only reaches browsers with nothing saved yet,
+   and records under a renamed key are lost to the app. To ship a new
+   checklist, raise `CHECKLIST_KEY` in `checklistStore.ts`.
+3. **Archive, don't delete.** Past inspections still need the checklists,
+   branches and assets they were recorded against.
+4. **Don't rename or remove element ids** such as `#login-submit-btn`. The
+   end-to-end tests use them.
+5. **Run `npm run lint` and `npm test`.** If a test fails because it
+   checks the rule you changed, say so. Never weaken a test just to make it
+   pass.
+6. **Read the reasoning first.** Many rules exist because the opposite was
+   tried and went wrong. The comments in the code and
+   [docs/design-notes.md](docs/design-notes.md) explain why.
+
+### Working with Claude Code
+
+[CLAUDE.md](CLAUDE.md) holds the same guardrails in full, and Claude Code
+reads it automatically. Before it touches a protected area, it stops and
+starts its reply with a warning such as:
+
+> **⚠ This breaks the Monday round workflow**
+
+It then explains in plain words what changes, who is affected, what
+happens to saved records and what cannot be undone, and waits for a yes
+before editing.
 
 ## Further reading
 
-[docs/design-notes.md](docs/design-notes.md) explains the decisions behind
-the asset register, the service schedule, the job board and asset matching.
-It is useful reading before changing any of them.
+- [CLAUDE.md](CLAUDE.md): guardrails, code conventions and working notes
+  for anyone changing the code, and the file Claude Code reads.
+- [docs/design-notes.md](docs/design-notes.md): the reasoning behind the
+  asset register, the service schedule, the job board and asset matching.
