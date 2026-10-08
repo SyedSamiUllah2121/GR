@@ -50,11 +50,47 @@ logic below, **stop and warn first. Do not edit until the user has said yes.**
 Wording, colours, layout, spacing, icons and animation are not system logic.
 Change those without the warning, but still follow the UI conventions below.
 
+### The workflows
+
+These are the journeys the business runs on. A change that removes a step,
+reorders steps, skips a check, moves a step to another role, or stops one
+journey feeding the next **breaks a workflow**, even if every screen still
+loads.
+
+1. **Monday round.** A branch manager starts this week's round, fills in
+   the checklist, reviews, signs and submits it, and gets a summary and a
+   printable report. The dashboard shows the branch as done, or late.
+2. **Surprise visit.** The admin books a visit; the branch and inspector
+   are chosen automatically or by hand. The inspector sees it, carries it
+   out and submits it. Only that inspector and the admin see it.
+3. **Failed check to repair.** A failed MAINTENANCE check on a submitted
+   inspection raises a job naming the unit. The maintenance manager starts
+   and closes it with a note and photos, and closing it updates the asset's
+   status on the register.
+4. **Reported problem.** A branch manager reports a fault on any day. It
+   lands on the board, and they can follow it but not close it.
+5. **Scheduled service.** A service falls due on its cadence and raises
+   exactly one job. Finishing it restarts the clock from the day the work
+   was done.
+6. **Month-end.** The month-end report counts problems and services
+   separately, per branch, filed under the month the work belongs to.
+7. **Accounts.** Sign in; a manager with two branches switches between
+   them, and every screen follows the switch. The admin creates and resets
+   accounts from `/users`.
+
+The element ids listed under UI conventions are how the end-to-end tests
+walk these journeys. Renaming or removing one breaks the tests even when
+the screen looks fine.
+
 ### The warning
 
-Before the first edit, tell the user in plain words, without code:
+Before the first edit, start the reply with a clearly marked warning. Use
+**"⚠ This breaks the <name> workflow"** when a journey above stops working
+as described, and **"⚠ This changes the system's logic"** otherwise. Then
+say in plain words, without code:
 
-1. **That this changes how the system works,** not just how it looks.
+1. **Which workflow or rule changes,** by its name from the lists above.
+   Say which step breaks and what a user will run into.
 2. **What happens today,** and what will happen after the change.
 3. **Who it affects:** which roles, which branches, every browser or only
    new records.

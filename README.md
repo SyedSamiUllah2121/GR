@@ -189,6 +189,17 @@ its own process so that one cannot affect another.
 The live site is hosted on [Vercel](https://vercel.com) and redeploys
 automatically on every push to `main` of this repository.
 
+## Before you change anything
+
+Some changes alter how the business runs, not just how a screen looks: who
+may do what, how an inspection is scored, the steps of the Monday round or
+a repair, and where records are stored. Changes like these can break a
+workflow or affect records already saved in every browser.
+[CLAUDE.md](CLAUDE.md) lists the protected workflows and system logic, and
+what to check before changing them. Read it first, whether you are making
+the change yourself or with an AI coding assistant. Claude Code reads it
+automatically and warns before it touches any of them.
+
 ## Further reading
 
 [docs/design-notes.md](docs/design-notes.md) explains the decisions behind
