@@ -5,8 +5,14 @@
 Weekly food-safety and service inspection app for a nine-branch restaurant
 estate, with a maintenance board and appliance register. Next.js 16 (App
 Router, Turbopack), React 19, TypeScript, Tailwind CSS 4, `motion` for
-animation, `lucide-react` for icons. README.md has the product detail; this
-file is what you need to work in the code.
+animation, `lucide-react` for icons. There are no other dependencies and no
+external services or API keys (the AI Studio Gemini setup was removed; do not
+add it back).
+
+- `README.md` — what the app does and how to run it, for anyone new.
+- `docs/design-notes.md` — why the asset register, schedule, job board and
+  asset matching work as they do. Read it before changing those.
+- This file — what you need to work in the code.
 
 ## Commands
 
@@ -38,6 +44,14 @@ Consequences to keep in mind:
 - Seeds are only written to an empty store. Changing seed data for existing
   browsers needs a migration. See `SEED_VERSION`, `RETIRED_SEEDS` and
   `CORRECTED_SEEDS` in `userStore.ts`.
+- The checklist is the same: `DEFAULT_CHECKLIST` in `defaultChecklist.ts` is
+  only read when its store is empty. To ship a new checklist to browsers that
+  already have one, bump `CHECKLIST_KEY` in `checklistStore.ts` (now `_v3`)
+  and note why in the comment above it.
+- The live checklist is the `standard` list (the CHECKLIST STANDARD sheet,
+  nine categories, 76 checks). Lists and items it replaced are marked
+  `archived`, never deleted, because past inspections still render against
+  them.
 - Passwords are stored in plain text. `authenticate()` is the only reader.
 
 ## Where things are
@@ -123,3 +137,5 @@ what they describe, and write new ones in the same voice.
 - **SyedSamiUllah2121/GR** is the `gr` remote. Vercel deploys it to
   https://gr-one-eta.vercel.app.
 - Push `main` to both.
+- Vercel reads `NEXT_PUBLIC_DEMO_SIGN_IN` at build time; `.env.local` is
+  gitignored and never reaches the site.
