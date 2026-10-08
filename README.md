@@ -1,450 +1,196 @@
-# Inspection Log
+# Inspection Log — Royal Gujrat
 
-Weekly restaurant hygiene and service inspection log, built with **Next.js 16** (App Router),
-React 19, TypeScript and Tailwind CSS 4.
+A web app for running food-safety inspections and equipment maintenance
+across a restaurant group of nine branches in Abu Dhabi.
 
-Inspection records are stored in the browser via `localStorage` — there is no backend or database.
+Every branch is inspected against the same checklist each week. Anything that
+fails is scored, signed off and kept on record, and a broken piece of
+equipment found during an inspection goes straight onto a maintenance board
+where it is tracked until it is fixed.
 
-## Run locally
+**Live demo:** https://gr-one-eta.vercel.app
 
-**Prerequisites:** Node.js 20+
+---
+
+## What it does
+
+**Inspections**
+
+- **Weekly Monday round.** Each branch manager inspects their own branch
+  every Monday. The dashboard shows which branches have done this week's round
+  and which are late.
+- **Surprise visits.** The admin books an unannounced visit and an inspector
+  carries it out. The app can choose the branch and the inspector itself,
+  spreading visits evenly across branches and inspectors.
+- **One standard checklist.** It has 76 checks in nine categories: staff
+  hygiene, premises, handwashing, kitchen hygiene, dry storage, chilled
+  storage, dishwashing, documentation and pest control. Each check is graded
+  by severity, and the admin can edit the checklist from the **Checklist**
+  screen.
+- **Score, review and sign.** A finished inspection gets a percentage score.
+  The person who did it reviews and signs it, and it becomes a printable
+  report.
+
+**Maintenance**
+
+- **Job board.** Every repair and service job in one place, newest first,
+  from reported through in progress to done. When a maintenance check fails
+  on the Monday round, the app creates a job for it. A branch manager can also
+  report a problem on any day.
+- **Appliance register.** The group's real equipment list: 302 assets (air
+  conditioners, chillers and electrical equipment), each with its own asset
+  number such as `RG-ACU-008`.
+- **Service schedule.** Regular services fall due by themselves. Air
+  conditioning is every 45 days, refrigeration quarterly and electrical every
+  six months.
+- **Month-end report.** Repairs and services for each branch, counted
+  separately.
+
+## Who uses it
+
+| Role | What they can do |
+| ---- | ---------------- |
+| **Main Admin** | Everything: every branch, every record, user accounts, the checklist and the maintenance board. |
+| **Branch Manager** | Runs their own branch's Monday round and reports repairs there. A manager with two branches switches between them from the top bar. |
+| **Maintenance Manager** | Runs the maintenance board for every branch: starts, finishes and reschedules jobs, and reads the month-end report. |
+| **Inspector** | Sees and carries out only the surprise visits assigned to them. |
+
+## Run it on your computer
+
+You need [Node.js](https://nodejs.org) 20 or newer.
 
 ```bash
+git clone https://github.com/SyedSamiUllah2121/GR.git
+cd GR
 npm install
 npm run dev
 ```
 
-Then open http://localhost:3000.
+Then open **http://localhost:3000**.
 
-Demo sign-in — email `123`, password `123`, which is the Main Admin.
+### Signing in
 
-## Roles
+The quickest way in is `123` / `123`, which signs in as the Main Admin. On
+the sign-in page, **Or sign in as** lets you try each role with one click.
 
-Four account types. Permissions are listed one at a time in
-`src/services/permissions.ts`, which is what every guarded route and hidden
-button asks — they are not derived from an ordering, because the roles do not
-nest: an inspector may submit a visit at any branch where a branch manager may
-not, and a job manager works across every branch while seeing none of their
-inspections.
+| Who | Sign-in name | Password |
+| --- | ------------ | -------- |
+| Main Admin | `admin@royalgujrat.com` | `admin123` |
+| Maintenance Manager | `jobs@royalgujrat.com` | `jobs123` |
+| Inspector | `rahman@royalgujrat.com` | `visit123` |
+| Branch Manager | their name with no spaces, e.g. `Parvezuddin` | the same name followed by `123`, e.g. `Parvezuddin123` |
 
-| Role           | Reach                                                         | Demo sign-in                            |
-| -------------- | ------------------------------------------------------------- | --------------------------------------- |
-| Main Admin     | Everything: all branches, records, accounts, checklist, jobs  | `admin@royalgujrat.com` / `admin123`    |
-| Branch Manager | Their own branches: Monday rounds, repairs and assets         | `AliBarakat` / `AliBarakat123`          |
-| Maintenance Mgr| The whole maintenance board, every branch                      | `jobs@royalgujrat.com` / `jobs123`      |
-| Inspector      | Only the surprise visits assigned to them                     | `rahman@royalgujrat.com` / `visit123`   |
+The other branch managers are `AliBarakat`, `MusaShafqat`,
+`MehranShahabuddin`, `Mr.Altaf`, `MuhammadArshaan` and `FarooqKhan`. Sign-in
+names ignore capital letters and spaces. Passwords do not.
 
-A surprise visit can be booked for a time — the **When** field on the form —
-in which case the inspector sees it due then and it is flagged late if that
-time passes unstarted. Left empty, it is due as soon as they can get there.
+These are starting accounts for trying the app. The admin can change any
+password from the **Users** screen.
 
-Surprise visits can be placed by the system: the branch is drawn from a
-rotation that deals every branch once before repeating any, and the inspector
-from whoever is carrying the fewest outstanding visits. The Main Admin can
-turn this off with the **Automatic assignment** switch on the surprise-visit
-form, after which the branch and inspector are named by hand on every visit.
+## Where the data is kept
 
-A Branch Manager reports repairs at their own branch on any day, not only
-inspection day: **Maintenance** in the sidebar, or **Report a repair** on the
-dashboard, opens the job board narrowed to their branch, and **Report a
-problem** puts a fault on it there and then. Equipment does not wait for the
-round, and before this the only way onto the board was a failed Monday check —
-so a chiller that went on the Tuesday went unrecorded until the following week.
+There is no server or database. Everything is saved in the web browser
+(`localStorage`). This means:
 
-What they do not get is the running of the repair. Starting, ending, re-timing,
-reopening and deleting a job stay with maintenance, because a branch that could
-close its own jobs could mark a repair done that nobody carried out. They raise
-it, and they watch it: the job's timeline says where it has got to. The
-estate-wide overview and the month-end report stay out of reach as well.
+- **Each browser has its own data.** An inspection recorded on one phone does
+  not appear on another device, and data on `localhost` is separate from the
+  live site.
+- **Clearing the browser's site data deletes the records.**
+- **Storage is limited to a few megabytes per browser.** Photos are shrunk
+  before they are saved, and if something still won't fit, the app shows an
+  error rather than losing it silently.
+- **Passwords are stored as plain text** in the browser.
 
-## The asset register
+This suits a demonstration or a pilot on one device. Using it across the
+whole group with shared records would need a backend.
 
-The estate's real register ships with the app: **302 assets across nine
-branches**, transcribed from the AC, chiller and electrical master documents
-dated 17 September 2026.
+### Turning off the demo shortcuts
 
-| Segment | Assets | Numbering | Trade |
-| ------- | ------ | --------- | ----- |
-| `ACU`   | 91     | 001–091   | AC & ventilation |
-| `CHL`   | 93     | 001–093   | Refrigeration & chillers |
-| `ELC`   | 118    | 001–118   | Electrical equipment |
-
-| Branch | Prefix | ACU | CHL | ELC |
-| ------ | ------ | --: | --: | --: |
-| Nana House - Shabiya 11          | `NHB`  |  7 | 11 |  6 |
-| Royal Gujarat                    | `RG`   | 20 | 21 | 32 |
-| Mussafah 17 - Delight Gujarat    | `DGR`  | 11 | 13 | 12 |
-| Shabiya 12 - Gujarat Restaurants | `GRSB` |  4 |  6 |  5 |
-| Nana House - Shabiya 10          | `NH`   |  2 | 10 |  9 |
-| Mafraq Gujarat Restaurant        | `MGR`  | 12 | 15 | 10 |
-| Manpasand - New Store            | `MPS`  | 14 |  2 | 19 |
-| Mussafah 26 - Gujarat Hotel      | `GRS`  | 12 | 10 | 13 |
-| Mussafah 26 - Zaharat Gujarat    | `ZG`   |  9 |  5 | 12 |
-
-### The asset number is the identity
-
-`RG-ACU-008` is Royal Gujarat, air conditioning, unit 8. Every equipment id
-derives from it, and that is not cosmetic: eleven assets at Royal Gujarat are
-called "Fan" and nine at Nana House are called "Refrigerator", and the old
-id — derived from the branch and the name — folded each of those groups into a
-single record.
-
-The number runs **continuously across the whole estate**, not per branch, which
-is how the master documents number them. **Next free** on the asset form offers
-the next one for the branch and trade; a withdrawn asset's number is never
-reissued, because the estate's paperwork still refers to it.
-
-### What is recorded, and what is not
-
-Every field comes from the source document or is left blank. There are no
-invented serial numbers, install dates or models — the registers record none,
-and a fabricated number on screen matching nothing on the wall is worse than an
-empty field.
-
-Each asset carries the register's own wording verbatim in `statusNote`
-("SERVICE DUE", "Serviced 25 Aug 2026", "Unit 1 of 2") **and** a sorted
-`serviceStatus` the screens can filter and colour by: Serviced, Service due,
-Service pending, Not working, On inventory, Not recorded. Both are kept,
-because the note says things the status cannot — which of two identical shake
-machines this is, or that a date was never written down.
-
-For the 47 air conditioners whose register line carries a date, that date is
-the clock the schedule counts from, ahead of the install date but behind any
-job this app watched happen.
-
-### Dropdowns that suggest rather than constrain
-
-Asset type, make, capacity and location are comboboxes. The options are the
-register's own vocabulary joined with whatever is already on the operator's
-assets — so a brand typed once is in the list next time, with no second store
-to keep in step. Nothing is rejected: a fitter standing in front of a machine
-the list does not have can record what is actually there.
-
-Choosing a type fills the rest of the sentence in. It sets the name while the
-name is still following it, and it sets the category when the register has only
-ever filed that type under one trade — pick "Kulfi Freezer" and the asset lands
-under refrigeration without being asked.
-
-Capacity appears only for trades measured in tons. It is text, not a number,
-because the register contains "Approx. 2.35 Ton" for a unit whose indoor and
-outdoor halves are different makes.
-
-### Importing
-
-**Import a list** takes the master registers as they stand:
+The `123` / `123` shortcut and the **Or sign in as** buttons let anyone with
+the link in as the admin without a password. They are on by default. For a
+deployment holding real records, set this environment variable and rebuild:
 
 ```
-Asset no, Branch, Type, Capacity, Make, Location, Status, Serial, Model, Installed
-RG-ACU-008, Royal Gujarat, Split AC, 2.5 Ton, Mitsubishi, Juice & Sweets, SERVICE DUE
+NEXT_PUBLIC_DEMO_SIGN_IN=false
 ```
 
-Only Branch and Type are required and a line can stop at any comma. The trade
-is read from the asset number, so the documents need no category column. The
-Status column is kept in the register's own wording and read at the same time:
-"Serviced 25 Aug 2026" sets the status *and* the date. An asset already on
-record is corrected rather than added twice, matched on its asset number, so a
-corrected register can be pasted again. Rows that cannot be read are reported
-by line number rather than dropped, and a duplicate asset number within one
-paste is caught on the second line rather than overwriting the first.
+It is read when the app is built, so the setting only takes effect after a
+redeploy. See [.env.example](.env.example).
 
-## Scheduled maintenance
+## Commands
 
-**Maintenance → Schedule** holds the recurring services, written per category
-rather than per asset. Air conditioning is looked at every 45 days — these are
-kitchen and hall units in Abu Dhabi, and the shipped register already shows 35
-of 91 overdue; a six-monthly rule would have agreed with that backlog instead
-of raising it. Refrigeration goes quarterly, electrical six-monthly, each with
-an annual full service beside it.
+| Command | What it does |
+| ------- | ------------ |
+| `npm run dev` | Start the app at http://localhost:3000 |
+| `npm run build` | Production build (also checks the types) |
+| `npm run start` | Serve the production build |
+| `npm run lint` | Check the types (`tsc --noEmit`) |
+| `npm test` | Run every test suite |
 
-An individual asset that genuinely differs carries an override on its own
-record, including being exempted outright.
+## Built with
 
-### The register's status is recorded, not acted on
+[Next.js 16](https://nextjs.org) (App Router), React 19, TypeScript,
+Tailwind CSS 4, [Motion](https://motion.dev) for animation and
+[Lucide](https://lucide.dev) for icons. No other services, accounts or API
+keys are needed.
 
-38 of the 302 assets arrive with the master document already saying something
-is owed — 33 `SERVICE DUE`, 3 pending, 2 `NOT WORKING`. Those are kept on the
-asset, drive the coloured pill and the status filter on the Appliances screen,
-and are searchable. **They do not create jobs.**
-
-That is deliberate, and it was tried the other way first. Reading the stamps as
-work put 38 jobs on the board on the first load — none of which anybody in the
-company had raised. A board is a list of work somebody is accountable for, and
-filling it from a transcribed document breaks that: the operator opens the app
-on day one and is answerable for 38 things they never agreed to.
-
-So the board starts empty. Work arrives three ways, all of them traceable to a
-person or to this app's own arithmetic:
-
-- somebody reports a problem
-- a failed maintenance check on the Monday round raises one
-- a service falls due on its cadence
-
-The flags are not lost, they are just where a statement copied out of a
-document belongs — on the record, not on the work queue. **Appliances → filter
-by "Service due"** is the list of what the register says is owed.
-
-In practice the board does not stay empty for long: 47 air conditioners carry a
-real service date from August, and a 45-day cadence brings the first six round
-on 26 September. That is the app's own clock, counted from work that actually
-happened.
-
-Every job title leads with the asset number — `RG-ACU-013 — General
-maintenance — Split AC`. Without it the board is unreadable: twenty-eight
-Split ACs come due together, and twenty-eight rows reading "General
-maintenance — Split AC" look like a bug in the app rather than twenty-eight
-machines.
-
-### Clearing what the earlier build raised
-
-For one release the app read those stamps as work and put 38 jobs on the board
-before anyone had opened it. Removing that code does not remove the jobs — they
-were written into the browser at the time — so `maintenanceStore` clears them
-once, on the next read.
-
-Narrow on purpose: it removes only jobs the app raised itself (`reportedBy` of
-"Maintenance schedule" or "Asset register") that nobody has touched. A job a
-person reported, one that has been started, and one that has been finished are
-all kept, because those are records of real work. After it runs once a marker
-stops it for good, so the services that genuinely fall due from here on are
-left alone.
-
-### Finishing the work corrects the register
-
-Closing a job rewrites the asset's own status, in the register's wording:
-`SERVICE DUE` becomes `Serviced 22 Sep 2026` with the date filled in. Without
-that step the schedule moved on correctly but the register screen kept its red
-pill for ever, and the status filter — the one place a manager looks to answer
-"what still needs doing" — kept counting a unit that had just been serviced.
-
-A repair is not a service and does not claim to be one: fixing a dead unit
-clears the breakdown and records `Repaired 23 Sep 2026`, leaving the routine
-service still owed on its own clock.
-
-When a service falls due the job appears on the board by itself. There is no
-server and nothing runs on a timer, so this is worked out each time the app is
-opened. That is safe because a scheduled job's id is derived from its plan, its
-asset and the date it was due — so the same occurrence can never raise two
-jobs, however many tabs are open or however long the app was shut. A service is
-dated the day it fell due, not the day it was noticed, so the month-end report
-files it under the right month.
-
-A long gap raises **one** job, not one per missed interval: a quarterly plan
-last serviced two years ago produces a single overdue job, because nobody is
-going to carry out eight retrospective services. Finishing a service restarts
-the interval from the day the work was done.
-
-Jobs carry a **kind** — a problem report or a scheduled service — filtered on
-the board and marked on the job. The distinction is not cosmetic: the
-**Repeated** tab counts only breakdowns, and the month-end report counts
-problems and services in separate columns, or a branch that looks after its
-equipment would read as a branch that keeps breaking it.
-
-A Branch Manager reads their own branch's register and sees what is due on it,
-but cannot change it: an interval is an estate-wide commitment about how often
-the contractor comes, and is the admin's and the Maintenance Manager's to set.
-
-A Maintenance Manager has the maintenance module in full — the board, the
-overview, the month-end report, and starting, ending, re-timing, reopening,
-deleting and raising jobs. They have no inspections list, but may open the
-report of an inspection that raised a job, since a repair whose origin cannot
-be read is a repair taken on trust.
-
-Closing a job takes photographs as well as a note — the receipt, and the work
-once it is finished, up to six. Pictures are scaled down before they are kept,
-because the whole app shares one small browser store; if a write will not fit,
-closing the job is refused with a message rather than quietly losing the record.
-
-The role is stored under its older key, `job-manager`. Only the name changed —
-renaming the key would have stranded accounts already saved in a browser.
-
-The admin creates Branch Manager, Maintenance Manager and Inspector accounts
-from `/users`. A second Main Admin is not something that screen mints.
-
-## Starting from nothing
-
-The jobs board and the records list start **empty**, and that is deliberate.
-
-Both used to ship with fixtures. The maintenance seed generated one completed
-service per asset per plan, which against 302 real assets would have written
-some six hundred completed jobs — each naming a real unit at a real branch,
-each claiming a service on a date with a contractor's name attached, each
-indistinguishable from work that happened, each anchoring a schedule and
-counted by the month-end report.
-
-An empty board is the honest state of an estate whose maintenance has not been
-recorded here yet. The register is not empty, so there is plenty to look at; it
-is the *work* that has to be earned rather than seeded.
-
-## Upgrading an installation already in use
-
-**Everything stored by the previous build is deleted, once, on the next page
-load.** Not migrated — deleted.
-
-That is deliberate. Migrating is the right instinct when an estate grows a
-branch, but nothing in the old store was ever real: seven invented branches,
-ninety-eight appliances nobody owns, thirteen trades chosen before there was
-anything to file under them, and generated inspections and jobs. Preserving any
-of it would carry invented assets and invented services into a register that is
-now the operator's actual paperwork, where nobody on the floor could tell which
-rows were which.
-
-`services/estateReset.ts` removes every `inspection_log_*` key and each store
-then seeds itself as if the browser had never run the app. Keys belonging to
-anything else on the origin are left alone.
-
-Be plain about the cost: **this clears the signed-in session, and any
-inspection or maintenance job recorded against the demo estate.** Everybody
-signs in again. That is the point — those records name branches that do not
-exist.
-
-It runs at most once, and the marker it leaves is written *last*, so a purge
-interrupted half way repeats on the next load rather than leaving a store
-half-cleared and marked done.
-
-## Accounts
-
-One admin, **the estate's seven branch managers across the nine branches**,
-one maintenance manager over the whole board, and three inspectors. Every
-branch has a manager by construction — a branch nobody manages cannot run its
-own Monday round or report its own repairs. A manager can run more than one
-branch from the one account. They work on one branch at a time and switch
-between them from the account menu in the top bar, which also shows where each
-branch's Monday round stands; the branch being worked on is named in the bar.
-
-A branch manager signs in with their name run together, no spaces, and that
-name followed by `123` as the password. The sign-in field takes a username or
-an email address.
-
-| Branch manager     | Branches                                                         | Sign-in                                     |
-| ------------------ | ---------------------------------------------------------------- | ------------------------------------------- |
-| Parvezuddin        | Nana House - Shabiya 11, Shabiya 12 - Gujarat Restaurants        | `Parvezuddin` / `Parvezuddin123`            |
-| Ali Barakat        | Nana House - Shabiya 10                                          | `AliBarakat` / `AliBarakat123`              |
-| Musa Shafqat       | Mussafah 26 - Gujarat Hotel, Mussafah 26 - Zaharat Gujarat       | `MusaShafqat` / `MusaShafqat123`            |
-| Mehran Shahabuddin | Manpasand - New Store                                            | `MehranShahabuddin` / `MehranShahabuddin123`|
-| Mr. Altaf          | Royal Gujarat                                                    | `Mr.Altaf` / `Mr.Altaf123`                  |
-| Muhammad Arshaan   | Mussafah 17 - Delight Gujarat                                    | `MuhammadArshaan` / `MuhammadArshaan123`    |
-| Farooq Khan        | Mafraq Gujarat Restaurant                                        | `FarooqKhan` / `FarooqKhan123`              |
-
-| Role | Sign-in |
-| ---- | ------- |
-| Main Admin       | `admin@royalgujrat.com` / `admin123` (or `123` / `123`) |
-| Maintenance Mgr  | `jobs@royalgujrat.com` / `jobs123` |
-| Inspector        | `rahman@royalgujrat.com` / `visit123` |
-
-A browser that already held the invented managers an earlier build seeded has
-them retired on its next load: removed if they never touched a record,
-withdrawn if they did.
-
-These are starting credentials, not a security model. The admin resets them
-from `/users`.
-
-## Naming the unit on a finding
-
-When a maintenance check fails, **Which unit** picks the machine off that
-branch's register, grouped by trade:
-
-```
-AC & ventilation
-  RG-ACU-008 — Split AC — 2.5 Ton — Juice & Sweets
-  RG-ACU-009 — Split AC — 2.5 Ton — Juice & Sweets
-Refrigeration & chillers
-  RG-CHL-030 — Refrigerator — Main Kitchen
-```
-
-The asset number leads because on this estate nothing else identifies a unit:
-Royal Gujarat has nine assets called "Refrigerator" and ten called "Fan", and
-the register records no serial numbers. Before this, all ten fans read "Fan" in
-the dropdown — 73 assets produced 33 distinct labels.
-
-Worse, the finding stored only the name, so `assetForCheck` matched the first
-asset carrying it. Picking `RG-CHL-030` and reopening the inspection resolved
-to `RG-CHL-020`: the unit changed underneath the inspector, the dropdown showed
-the wrong one selected, and the job went to the wrong machine with nothing
-reporting a problem. Matching is now by asset number, then serial, then a name
-**only when exactly one asset at the branch carries it** — an ambiguous name
-resolves to null, which reads as "not about a particular unit", the honest
-answer to a record that does not say which.
-
-The number is carried onto the job, so the board can tell that a fault reported
-today is one it already has somebody working on, and withdrawn assets are not
-offered.
-
-## Reading a fault into a trade
-
-A failed maintenance check on the Monday round becomes a job, and the trade is
-guessed from the wording so the board is not a wall of "Other".
-`CATEGORY_HINTS` in `services/maintenanceIntake.ts` is written from this
-estate's register rather than from what a kitchen generally contains, which is
-why two entries look wrong until you check:
-
-- **A fan is electrical, not ventilation.** The register has fifteen, every one
-  an `ELC` asset — standing and wall fans in the outdoor area and dish wash,
-  not extraction. Filing "fan not working" under air conditioning would send
-  the AC contractor to a fan.
-- **An oven, fryer or bain-marie is electrical too.** There is no cooking-gas
-  trade on this estate; the pizza ovens, fryers and bain-maries are all on the
-  electrical register, so a fault on one is an electrician's job.
-
-Hints for trades the estate has no assets for — gas, fire safety, plumbing —
-stay in the list but never fire, because `suggestCategory` skips any category
-that is not on the live list. They start working the moment somebody adds that
-trade back, which is a button; a register that gains a gas bank should not also
-need a code change.
-
-## Scripts
-
-| Script          | What it does                                  |
-| --------------- | --------------------------------------------- |
-| `npm run dev`   | Start the dev server on port 3000              |
-| `npm run build` | Production build                               |
-| `npm run start` | Serve the production build                     |
-| `npm run lint`  | Typecheck with `tsc --noEmit`                  |
-| `npm test`      | The suite below — 127 assertions               |
-
-## Tests
-
-`npm test` runs six suites against the real register, under a `localStorage`
-shim, with no browser. Each runs in its own process: the stores hold
-module-level state and read a shim installed on the global, so two suites
-sharing a process would share a browser and the second would inherit what the
-first left behind — which is the bug these tests exist to catch.
-
-| Suite | What it holds the line on |
-| ----- | ------------------------- |
-| `a-schedule` | The register's flags and the board agree: 36 services, 2 repairs, and sweeping three times does not raise three boards |
-| `b-data`     | All 302 rows transcribed without drift, spot-checked against the printed documents; asset numbering, duplicate refusal, dropdown options, status wording, import round-trip |
-| `c-time`     | The board over nine months of sweeps — nothing raised twice, no asset ever holding two open jobs for one plan, storage footprint, schedule under 50ms at full volume |
-| `d-screens`  | Board, month-end report, overview and permissions across nine branches; every job names a live branch, asset and trade |
-| `e-lifecycle`| A service carried out and a dead AC repaired, end to end, including the status the register is left holding |
-| `f-unitpicker`| Every one of the 302 assets is distinguishable in the dropdown and survives a round trip back to itself |
-
-Four of these were written because something was wrong. They are worth
-keeping for that reason.
-
-## Routes
-
-| Route                            | Screen                              |
-| -------------------------------- | ----------------------------------- |
-| `/`                              | Redirects to `/inspections` or `/login` |
-| `/login`                         | Sign in                             |
-| `/inspections`                   | Records list                        |
-| `/inspections/new`               | Start a new inspection              |
-| `/inspections/[id]/checklist`    | Section-by-section checklist        |
-| `/inspections/[id]/review`       | Review, sign and submit             |
-| `/inspections/[id]`              | Printable report                    |
-
-## Project structure
+## How the code is organised
 
 ```
 src/
-  app/                    App Router routes, layouts and global CSS
-    inspections/          Auth-guarded area (sidebar shell + toast provider)
-  components/             Screen and UI components
-  data/                   Checklist templates and seed records
-  hooks/                  useMounted (client-only render guard)
-  services/storage.ts     localStorage persistence layer
-  types.ts                Domain types, reason groups and branches
+  app/            One folder per page (dashboard, inspections, maintenance,
+                  checklist, users, login)
+  components/     The screens (*Screen.tsx) and shared pieces
+    ui.tsx          Cards, panels, page headers and buttons
+    charts.tsx      Charts and their colours
+    motion.tsx      Animation timing
+  services/       All the logic and storage, one store per kind of record
+    permissions.ts  The only place that decides who may do what
+    session.ts      Sign-in and the current user
+  data/           Starting data: the checklist, the asset register,
+                  service plans and accounts
+  types.ts        Shared types and the list of branches
+  __tests__/      Test suites (run with npm test)
+docs/
+  design-notes.md Why things work the way they do
 ```
 
-Everything under `/inspections` is client-rendered: the auth check and all inspection
-data come from `localStorage`, so those screens wait for mount before rendering.
+### Pages
+
+| Address | Page |
+| ------- | ---- |
+| `/login` | Sign in |
+| `/dashboard` | Overview of this week's rounds, scores and open jobs |
+| `/inspections` | All inspection records |
+| `/inspections/new` | Start an inspection or book a surprise visit |
+| `/inspections/[id]/checklist` | Fill in the checklist |
+| `/inspections/[id]/review` | Review, sign and submit |
+| `/inspections/[id]/summary` | Result after submitting |
+| `/inspections/[id]` | Printable report |
+| `/maintenance` | Maintenance overview |
+| `/maintenance/jobs` | Job board |
+| `/maintenance/[id]` | One job and its timeline |
+| `/maintenance/equipment` | Appliance register |
+| `/maintenance/schedule` | Service schedule |
+| `/maintenance/report` | Month-end report |
+| `/checklist` | Edit the inspection checklist |
+| `/users` | Manage accounts |
+
+## Tests
+
+`npm test` runs 13 suites in Node with a stand-in for the browser's storage,
+so no browser is needed. They cover the asset register, the service schedule,
+the job board, permissions, surprise-visit assignment, submitting an
+inspection, full storage and the branch-manager accounts. Each suite runs in
+its own process so that one cannot affect another.
+
+## Deployment
+
+The live site is hosted on [Vercel](https://vercel.com) and redeploys
+automatically on every push to `main` of this repository.
+
+## Further reading
+
+[docs/design-notes.md](docs/design-notes.md) explains the decisions behind
+the asset register, the service schedule, the job board and asset matching.
+It is useful reading before changing any of them.
