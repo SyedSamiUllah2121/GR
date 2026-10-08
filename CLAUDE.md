@@ -14,6 +14,78 @@ add it back).
   asset matching work as they do. Read it before changing those.
 - This file — what you need to work in the code.
 
+## Guardrails: changing system logic
+
+The people asking for changes here are often not developers, and a request
+that sounds like a small tweak ("let managers close their own jobs", "count
+N/A as a pass") can change who may do what, how a branch is scored, or
+whether records survive the next page load. So before changing any of the
+logic below, **stop and warn first. Do not edit until the user has said yes.**
+
+### What counts as system logic
+
+- **Permissions.** `permissions.ts`, and anything deciding who sees or does
+  what. This includes the branch narrowing in `session.ts`.
+- **Sign-in.** `session.ts`, `authenticate()`, the demo sign-in switch and
+  password rules.
+- **Scoring.** How an inspection is scored and passed: `calculatedScore` in
+  `ReviewScreen.tsx`, severity and photo rules in `priority.ts`, and what
+  `reportModel.ts` and `dashboardModel.ts` count.
+- **The checklist's meaning.** Reason groups, severities, which group raises
+  a maintenance job (`maintenanceIntake.ts`), archiving, and the
+  `nextItemId` / `idBase` numbering. Wording changes to a check are not
+  system logic.
+- **Scheduling.** The Monday round (`mondaySchedule.ts`), service cadences
+  and due dates (`maintenanceSchedule.ts`, `maintenancePlanStore.ts`,
+  `generalMaintenance.ts`), and surprise-visit rotation and assignment
+  (`assignments.ts`, `settings.ts`).
+- **The job lifecycle.** How jobs are raised, deduplicated, started, closed
+  and reopened, and what closing a job writes back to the asset register.
+- **Storage.** Any localStorage key name, any seed, migration or purge
+  (`estateReset.ts`, `SEED_VERSION`, `RETIRED_SEEDS`, `CORRECTED_SEEDS`,
+  `CHECKLIST_KEY`), and the shape of a stored record in `types.ts`.
+- **Identity.** How ids are derived: asset numbers, equipment ids, scheduled
+  job ids, and asset matching in `assetForCheck`.
+
+Wording, colours, layout, spacing, icons and animation are not system logic.
+Change those without the warning, but still follow the UI conventions below.
+
+### The warning
+
+Before the first edit, tell the user in plain words, without code:
+
+1. **That this changes how the system works,** not just how it looks.
+2. **What happens today,** and what will happen after the change.
+3. **Who it affects:** which roles, which branches, every browser or only
+   new records.
+4. **What happens to data already saved.** Will existing inspections,
+   jobs, scores or accounts read differently, need migrating, or be lost?
+   Remember that seeds only reach empty stores, and a renamed key strands
+   whatever was saved under the old name.
+5. **What is hard to undo.** A purge or migration that runs on page load
+   runs in every browser that opens the live site, and cannot be called
+   back once it has.
+
+Then wait for a clear yes. If the request is vague, ask what they actually
+want rather than guessing at the logic. If a safer change gets them the same
+result, for example a setting instead of a rule change, an archive instead
+of a delete, or a new key instead of a rewritten one, offer it.
+
+### While making the change
+
+- **Tests.** Run `npm run lint` and `npm test`. If a test fails because it
+  encodes the rule being changed, say so and name the test before updating
+  it. Never weaken or delete a test just to get a pass.
+- **Comments and notes.** Update the block comment that explains the rule,
+  and `docs/design-notes.md` if the rule is described there. A comment that
+  still argues for the old behaviour is worse than none.
+- **Changes deliberately undone.** Many rules exist because the opposite
+  was tried and went wrong; their comments and the design notes say so.
+  If a change undoes one of those, quote that reason to the user before
+  going ahead.
+- **Reporting.** In the final message, say plainly which rule changed and
+  what existing data will do.
+
 ## Commands
 
 ```bash
