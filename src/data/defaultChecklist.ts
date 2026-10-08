@@ -34,12 +34,163 @@ export const FULL_CHECKLIST_LABEL = 'Full branch inspection';
  *   high      likely to cause harm if left unaddressed
  *   medium    standards breach, contained
  *   low       presentation or housekeeping
+ *
+ * The live list is the CHECKLIST STANDARD sheet: nine categories, 76 checks.
+ * The four lists it replaced (kitchen, front of house, branch-wide and
+ * temperature) are kept below as archived rather than deleted, so any
+ * inspection already recorded against them still renders its report. They are
+ * not offered to new inspections; the Checklist screen shows them only under
+ * 'Show removed'. A failed check in the MAINTENANCE group raises a job on the
+ * maintenance board when the inspection is submitted.
  */
 export const DEFAULT_CHECKLIST: ChecklistDoc = {
-  nextIdBase: 5000,
+  nextIdBase: 6000,
   lists: [
     {
+      // The CHECKLIST STANDARD sheet, category for category and in its order.
+      key: 'standard',
+      label: 'Inspection checklist',
+      idBase: 5000,
+      nextItemId: 77,
+      nextSectionKey: 10,
+      sections: [
+        {
+          key: 'standard-s1',
+          title: 'Staff hygiene',
+          items: [
+            { id: 1, text: 'Food handlers wearing clean uniform', reasonGroup: 'STAFF', severity: 'medium' },
+            { id: 2, text: 'Hair/beard properly restrained where applicable', reasonGroup: 'STAFF', severity: 'high' },
+            { id: 3, text: 'No eating, drinking or smoking in food-preparation areas', reasonGroup: 'STAFF', severity: 'high' },
+            { id: 4, text: 'No jewellery/watch or other contamination risks during food handling', reasonGroup: 'STAFF', severity: 'medium' },
+            { id: 5, text: 'Cuts/wounds properly covered with suitable waterproof dressing', reasonGroup: 'STAFF', severity: 'high' },
+            { id: 6, text: 'Disposable gloves used correctly where required', reasonGroup: 'STAFF', severity: 'high' },
+            { id: 7, text: 'Staff personal belongings kept away from food areas', reasonGroup: 'STAFF', severity: 'low' },
+          ],
+        },
+        {
+          key: 'standard-s2',
+          title: 'Facility / premises',
+          items: [
+            { id: 8, text: 'Premises structurally sound', reasonGroup: 'MAINTENANCE', severity: 'high' },
+            { id: 9, text: 'Floors cleaned and maintained', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 10, text: 'Walls/ceilings cleaned and maintained', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 11, text: 'Adequate lighting', reasonGroup: 'MAINTENANCE', severity: 'medium' },
+            { id: 12, text: 'Adequate drainage', reasonGroup: 'MAINTENANCE', severity: 'high' },
+            { id: 13, text: 'No water leakage', reasonGroup: 'MAINTENANCE', severity: 'high' },
+            { id: 14, text: 'Doors/windows maintained', reasonGroup: 'MAINTENANCE', severity: 'medium' },
+            { id: 15, text: 'No unnecessary items stored in food areas', reasonGroup: 'CLEANING', severity: 'low' },
+            { id: 16, text: 'Dirty flow appropriately controlled (manholes)', reasonGroup: 'MAINTENANCE', severity: 'high' },
+            { id: 17, text: 'Tables/service counters clean', reasonGroup: 'CLEANING', severity: 'medium' },
+          ],
+        },
+        {
+          key: 'standard-s3',
+          title: 'Handwashing facilities',
+          items: [
+            { id: 18, text: 'Dedicated handwash basin available', reasonGroup: 'EQUIPMENT', severity: 'high' },
+            { id: 19, text: 'Liquid hand soap available', reasonGroup: 'SUPPLY', severity: 'high' },
+            { id: 20, text: 'Disposable paper towels/approved hand-drying facility available', reasonGroup: 'SUPPLY', severity: 'medium' },
+            { id: 21, text: 'Handwash signage displayed where required', reasonGroup: 'SUPPLY', severity: 'low' },
+            { id: 22, text: 'Handwash basin clean and maintained', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 23, text: 'No utensils/food stored in handwash basin', reasonGroup: 'STAFF', severity: 'medium' },
+            { id: 24, text: 'Toilets clean', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 25, text: 'Cleaning records maintained', reasonGroup: 'RECORDS', severity: 'medium' },
+          ],
+        },
+        {
+          key: 'standard-s4',
+          title: 'Kitchen / food preparation hygiene',
+          items: [
+            { id: 26, text: 'Hot holding equipment functioning (bain-marie, oven etc.)', reasonGroup: 'EQUIPMENT', severity: 'high' },
+            { id: 27, text: 'Working tables clean and sanitised', reasonGroup: 'CLEANING', severity: 'high' },
+            { id: 28, text: 'Preparation tables clean and in good condition', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 29, text: 'Cutting boards clean, sanitised and in good condition', reasonGroup: 'CLEANING', severity: 'high' },
+            { id: 30, text: 'Utensils clean and properly stored', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 31, text: 'Food preparation equipment clean (mincer, blender etc.)', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 32, text: 'Floors clean and free from food debris', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 33, text: 'Walls/ceilings clean and maintained', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 34, text: 'Drains clean and functioning properly', reasonGroup: 'CLEANING', severity: 'high' },
+            { id: 35, text: 'No evidence of pests/insects/rodents', reasonGroup: 'PEST', severity: 'critical' },
+            { id: 36, text: 'Exhaust/hood system clean and maintained', reasonGroup: 'CLEANING', severity: 'high' },
+          ],
+        },
+        {
+          key: 'standard-s5',
+          title: 'Dry food storage',
+          items: [
+            { id: 37, text: 'Cleaning chemicals stored away from food', reasonGroup: 'FOOD', severity: 'critical' },
+            { id: 38, text: 'Raw food kept separate from cooked/ready-to-eat food', reasonGroup: 'FOOD', severity: 'critical' },
+            { id: 39, text: 'Food stored off the floor', reasonGroup: 'FOOD', severity: 'medium' },
+            { id: 40, text: 'Shelves clean and in good condition', reasonGroup: 'CLEANING', severity: 'low' },
+            { id: 41, text: 'FIFO/FEFO system implemented', reasonGroup: 'FOOD', severity: 'medium' },
+            { id: 42, text: 'Opened food properly covered/contained', reasonGroup: 'FOOD', severity: 'high' },
+            { id: 43, text: 'Food containers labelled appropriately', reasonGroup: 'FOOD', severity: 'medium' },
+            { id: 44, text: 'Expiry/use-by dates checked', reasonGroup: 'FOOD', severity: 'high' },
+            { id: 45, text: 'No damaged/infested food packages', reasonGroup: 'FOOD', severity: 'high' },
+          ],
+        },
+        {
+          key: 'standard-s6',
+          title: 'Chilled / refrigerated storage',
+          items: [
+            { id: 46, text: 'No expired food/drinks displayed', reasonGroup: 'FOOD', severity: 'critical' },
+            { id: 47, text: 'Refrigerator temperature monitored', reasonGroup: 'TEMPERATURE', severity: 'high' },
+            { id: 48, text: 'Temperature records maintained', reasonGroup: 'RECORDS', severity: 'high' },
+            { id: 49, text: 'Food stored covered/protected', reasonGroup: 'FOOD', severity: 'high' },
+            { id: 50, text: 'Raw and ready-to-eat food segregated', reasonGroup: 'FOOD', severity: 'critical' },
+            { id: 51, text: 'Raw meat/poultry stored appropriately below ready-to-eat foods', reasonGroup: 'FOOD', severity: 'critical' },
+            { id: 52, text: 'No overloaded refrigerators', reasonGroup: 'TEMPERATURE', severity: 'medium' },
+            { id: 53, text: 'Refrigerator clean and free of spills', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 54, text: 'Door seals/gaskets in good condition', reasonGroup: 'EQUIPMENT', severity: 'medium' },
+            { id: 55, text: 'No expired food', reasonGroup: 'FOOD', severity: 'critical' },
+            { id: 56, text: 'Food appropriately labelled/date marked', reasonGroup: 'FOOD', severity: 'high' },
+          ],
+        },
+        {
+          key: 'standard-s7',
+          title: 'Dishwashing and cleaning',
+          items: [
+            { id: 57, text: 'Dishwashing area clean', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 58, text: 'Dirty and clean utensils separated', reasonGroup: 'CLEANING', severity: 'high' },
+            { id: 59, text: 'Dishwasher operating correctly, if applicable', reasonGroup: 'EQUIPMENT', severity: 'medium' },
+            { id: 60, text: 'Correct detergent/chemical used', reasonGroup: 'SUPPLY', severity: 'medium' },
+            { id: 61, text: 'Clean utensils stored hygienically', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 62, text: 'No standing dirty water', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 63, text: 'Drying method hygienic (pantry)', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 64, text: 'Bins have lids where required', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 65, text: 'Bins clean and not overflowing', reasonGroup: 'CLEANING', severity: 'medium' },
+            { id: 66, text: 'Adequate waste bins available', reasonGroup: 'SUPPLY', severity: 'low' },
+          ],
+        },
+        {
+          key: 'standard-s8',
+          title: 'Documentation & management',
+          items: [
+            { id: 67, text: 'Valid licences/approvals available', reasonGroup: 'RECORDS', severity: 'high' },
+            { id: 68, text: 'Valid outdoor seating permit available, if applicable', reasonGroup: 'RECORDS', severity: 'medium' },
+            { id: 69, text: 'Valid NOC available for signage advertisement, if applicable', reasonGroup: 'RECORDS', severity: 'low' },
+            { id: 70, text: 'Pest-control documentation available', reasonGroup: 'RECORDS', severity: 'medium' },
+            { id: 71, text: 'Valid Hassantuk certificate available', reasonGroup: 'RECORDS', severity: 'high' },
+            { id: 72, text: 'Staff training records maintained (ADAFSA)', reasonGroup: 'RECORDS', severity: 'medium' },
+          ],
+        },
+        {
+          key: 'standard-s9',
+          title: 'Pest control',
+          items: [
+            { id: 73, text: 'No live/dead insects observed', reasonGroup: 'PEST', severity: 'critical' },
+            { id: 74, text: 'Pest-control records available', reasonGroup: 'RECORDS', severity: 'medium' },
+            { id: 75, text: 'Doors/windows/openings adequately protected', reasonGroup: 'PEST', severity: 'high' },
+            { id: 76, text: 'Pest-control devices appropriately located', reasonGroup: 'PEST', severity: 'medium' },
+          ],
+        },
+      ],
+    },
+
+    // ---- Replaced by the list above. Archived, kept for past reports. ----
+    {
       key: 'kitchen',
+      archived: true,
       label: 'Kitchen hygiene',
       idBase: 1000,
       nextItemId: 28,
@@ -107,6 +258,7 @@ export const DEFAULT_CHECKLIST: ChecklistDoc = {
     },
     {
       key: 'frontofhouse',
+      archived: true,
       label: 'Front of house',
       idBase: 2000,
       nextItemId: 28,
@@ -181,6 +333,7 @@ export const DEFAULT_CHECKLIST: ChecklistDoc = {
       // Checks there is one of per branch. Kept here rather than repeated in
       // each area's list, so they are answered once per inspection.
       key: 'branchwide',
+      archived: true,
       label: 'Branch-wide',
       idBase: 3000,
       nextItemId: 6,
@@ -213,6 +366,7 @@ export const DEFAULT_CHECKLIST: ChecklistDoc = {
       // house lists — those ask whether the log was written up, these ask what
       // the food and the units are actually running at.
       key: 'temperature',
+      archived: true,
       label: 'Temperature control',
       idBase: 4000,
       nextItemId: 14,

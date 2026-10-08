@@ -15,8 +15,11 @@ import { ensureEstate } from './estateReset';
  * temperature lists and per-item severity, so it would cap every new report at
  * the items that older checklist happened to define. The old value is left in
  * place rather than migrated.
+ *
+ *   v3  replaced by the CHECKLIST STANDARD sheet (nine categories, 76 checks);
+ *       the old lists ship archived so past reports still render
  */
-const CHECKLIST_KEY = 'inspection_log_checklist_v2';
+const CHECKLIST_KEY = 'inspection_log_checklist_v3';
 const CHECKLIST_EVENT = 'inspection_log_checklist_change';
 
 function clone<T>(value: T): T {
