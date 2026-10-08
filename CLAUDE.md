@@ -131,7 +131,8 @@ npm run lint    # tsc --noEmit (there is no ESLint)
 npm test        # every src/__tests__/*.mts suite, each in its own process
 ```
 
-Run `npm run lint` and `npm test` before calling a change done. Run a single
+Run `npm run lint` and `npm test`, and add the change to **Project
+history** at the end of this file, before calling a change done. Run a single
 suite with `npx tsx src/__tests__/m-branch-managers.mts`.
 
 ## There is no backend
@@ -247,3 +248,108 @@ what they describe, and write new ones in the same voice.
 - Push `main` to both.
 - Vercel reads `NEXT_PUBLIC_DEMO_SIGN_IN` at build time; `.env.local` is
   gitignored and never reaches the site.
+
+## Project history
+
+**Rule: every change to the project adds an entry here, in the same commit
+as the change.** A change is not done until it is recorded. This covers code,
+data, docs and configuration, by anyone.
+
+- Newest first, under a heading for the date (`### 2026-10-08`).
+- One line per change, in plain words a non-developer can follow: what
+  changed and why it matters. Not file names or function names.
+- Start the line with **⚠** if it changed a workflow or system logic (see
+  Guardrails), and say what happens to data already saved.
+- Never rewrite or delete a past entry. Correct one by adding a new entry.
+- **Before starting work,** compare `git log` with the newest entry here. If
+  there are commits not recorded (changes made by hand, in another tool, or
+  pulled from the other remote), add entries for them first, in the same
+  style.
+
+### 2026-10-08
+
+- Added this Project history, written back to the first commit, and the
+  rule that every change to the project adds an entry here.
+- Added guardrails to the README, so builders who never open this file see
+  the protected workflows and the rules for changing them.
+- Named the seven core workflows in this file. Claude must now warn
+  "This breaks the <name> workflow" before a change that stops one working.
+- Added guardrails: before changing permissions, sign-in, scoring,
+  schedules, the job lifecycle, storage or ids, Claude must warn in plain
+  words and wait for a yes.
+- Brought this file up to date with the new checklist, the docs and the
+  removed AI setup.
+- Rewrote the README for someone new to the project. The design reasoning
+  moved word for word to `docs/design-notes.md`.
+- Removed the Gemini / AI Studio setup (package, API key placeholders,
+  capability flag). The app never used it and needs no API keys.
+- ⚠ Replaced the checklist with the CHECKLIST STANDARD sheet: 76 checks in
+  nine categories. The old lists are archived, so past reports still open.
+  Every browser picks up the new list (storage key moved to `_v3`); checklist
+  edits made in the app before this are not carried over.
+
+### 2026-09-29
+
+- Redesigned every screen, with real charts and motion.
+- ⚠ Gave the branches their real managers (seven managers over nine
+  branches; some run two). Invented manager accounts are retired on the next
+  load. Every refusal is now shown next to the button that caused it.
+
+### 2026-09-22
+
+- The newest job now appears at the top of the job board.
+- Brought back the "Sign in as" role switcher, with a build setting to turn
+  it off.
+- ⚠ Opened maintenance to branch managers (report and follow repairs at
+  their own branch), and closed permission gaps that had no check.
+
+### 2026-09-21
+
+- ⚠ Stopped the register's status stamps from raising jobs on their own,
+  and made jobs name the exact unit.
+- ⚠ Loaded the estate's real asset register (302 assets across nine
+  branches) and deleted the invented demo data. Existing browsers were
+  cleared once on their next load.
+
+### 2026-09-14
+
+- Every page and dialog can now be reached and used by keyboard.
+
+### 2026-09-12
+
+- A failed check asks which unit before asking what is wrong with it.
+- Branches can write their own equipment categories, and services are
+  scheduled by category.
+
+### 2026-09-11
+
+- ⚠ Equipment is tracked on a servicing schedule, and branches can report
+  repairs.
+
+### 2026-09-09
+
+- Fixed the Details button only showing on hover.
+- Surprise visits can be booked for a time window, not just a moment.
+- ⚠ Surprise visits rotate across branches; the admin can book them and
+  turn automatic booking off.
+- Fixed the checklist editor saving a question with no text.
+- Removed seven unused imports.
+- ⚠ Added a Job Manager role (now Maintenance Manager) over the
+  maintenance board.
+- ⚠ Inspectors can route findings to maintenance.
+
+### 2026-09-08
+
+- ⚠ Added user roles, surprise visits and locked results.
+- Rebranded to Royal Gujrat, and split inspections from maintenance.
+
+### 2026-09-07
+
+- Added a dashboard and a maintenance module.
+- Showed the score in the report's donut chart, with animation.
+- Added an editable checklist, issue priorities and a detailed inspection
+  report.
+
+### 2026-09-04
+
+- Moved the app from a Vite single-page app to Next.js 16.
