@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 763 165" width="763" height="165" role="img" aria-label="Royal Gujrat — Restaurant &amp; Sweets">
-  <title>Royal Gujrat — Restaurant &amp; Sweets</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 763 165" width="763" height="165" role="img" aria-label="Gujrat Group — Restaurant &amp; Sweets">
+  <title>Gujrat Group — Restaurant &amp; Sweets</title>
 
   <!-- Bowl: a shallow wide arc, not a half circle -->
   <path d="M18 92H222A102 63 0 0 1 18 92Z" fill="#CE2130"/>
@@ -37,7 +37,7 @@
   -->
   <text x="252" y="101" textLength="505" lengthAdjust="spacingAndGlyphs"
         font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="800"
-        fill="#CE2130">ROYAL GUJRAT</text>
+        fill="#CE2130">GUJRAT GROUP</text>
   <text x="253" y="141" textLength="500" lengthAdjust="spacing"
         font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700"
         fill="#CE2130">RESTAURANT &amp; SWEETS</text>

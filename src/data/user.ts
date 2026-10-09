@@ -7,6 +7,6 @@
  * services/session.ts and services/userStore.ts.
  */
 export const ORGANISATION = {
-  name: 'Royal Gujrat',
+  name: 'Gujrat Group',
   tagline: 'Restaurant & Sweets',
 };

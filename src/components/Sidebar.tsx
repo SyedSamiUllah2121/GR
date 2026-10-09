@@ -288,7 +288,7 @@ export const Sidebar: React.FC = () => {
           href="/dashboard"
           className="block min-w-0 flex-1 cursor-pointer md:w-full md:flex-none transition-opacity hover:opacity-90"
           id="brand-logo-btn"
-          title="Royal Gujrat — Dashboard"
+          title="Gujrat Group — Dashboard"
         >
           {/*
             Reversed out of the rail rather than boxed on a white plate. The

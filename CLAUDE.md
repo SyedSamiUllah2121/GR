@@ -266,6 +266,12 @@ data, docs and configuration, by anyone.
   pulled from the other remote), add entries for them first, in the same
   style.
 
+### 2026-10-09
+
+- Renamed the brand from Royal Gujrat to Gujrat Group on the logo, the
+  sign-in screen and the sidebar. The emblem and the "Restaurant & Sweets"
+  line are unchanged, and the Royal Gujarat branch keeps its name.
+
 ### 2026-10-08
 
 - Added this Project history, written back to the first commit, and the
