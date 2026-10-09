@@ -20,6 +20,8 @@ const {
   startAssignment,
   cancelAssignment,
   assignmentsFor,
+  openAssignments,
+  resumeAssignment,
   outstandingVisitAt,
   outstandingVisitFor,
   randomBranch,
@@ -103,6 +105,25 @@ ok(
   'still in their own list to pick up',
   visibleInspections(inspector, getInspections()).some((i) => i.id === started.id)
 );
+/*
+ * The check above asks whether they may see the record. The screens list
+ * visits from `assignmentsFor` and `openAssignments`, and those used to hold
+ * only unstarted ones — so a visit put down for later vanished from both
+ * the inspector's list and the admin's, while still blocking its branch.
+ */
+ok(
+  'and in the list their screen shows',
+  assignmentsFor(inspector.id).some((i) => i.id === started.id)
+);
+ok(
+  'and in the admin’s list of what is outstanding',
+  openAssignments().some((i) => i.id === started.id)
+);
+const startedAt = getInspectionById(started.id)!.startedAt;
+ok('picking it up again works', resumeAssignment(getInspectionById(started.id)!));
+check('which puts it back in the slot', getActiveDraft()?.id, started.id);
+check('without restarting its clock', getInspectionById(started.id)?.startedAt, startedAt);
+clearActiveDraft();
 
 section('one unfinished visit per branch, and per inspector');
 /*

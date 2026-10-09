@@ -310,7 +310,7 @@ export function createSurpriseVisit(input: CreateSurpriseInput): CreateSurpriseR
       error:
         busyBranch.status === 'assigned'
           ? `${branchName} already has a surprise visit waiting to be started — that one has to be finished or withdrawn first`
-          : `A surprise visit to ${branchName} is already under way — it has to be finished first`,
+          : `A surprise visit to ${branchName} is already under way — it is under Surprise visits on the Inspections page, to be finished or discarded first`,
     };
   }
 
@@ -321,7 +321,7 @@ export function createSurpriseVisit(input: CreateSurpriseInput): CreateSurpriseR
       error:
         busyInspector.status === 'assigned'
           ? `${inspector.name} already has a surprise visit to ${busyInspector.branchName} waiting to be started`
-          : `${inspector.name} is part way through a surprise visit to ${busyInspector.branchName}`,
+          : `${inspector.name} is part way through a surprise visit to ${busyInspector.branchName} — it is under Surprise visits on the Inspections page`,
     };
   }
 
@@ -366,11 +366,26 @@ export function createSurpriseVisit(input: CreateSurpriseInput): CreateSurpriseR
   return { ok: true, inspection };
 }
 
-/** The surprise visits handed to someone and not yet started, newest first. */
+/**
+ * The surprise visits handed to someone and not yet submitted — waiting to
+ * be started, or started and put down — newest first.
+ *
+ * Started ones belong here as much as waiting ones. This list used to hold
+ * only the unstarted, and the only other place a started visit showed was
+ * the one-per-browser draft slot: an inspector who put a visit down to come
+ * back to it later cleared that slot, and the visit vanished from every
+ * screen while still blocking the next one to its branch. A visit leaves
+ * this list when it is submitted, which is when it stops being work to do.
+ */
 export function assignmentsFor(userId: string, all: Inspection[] = getInspections()): Inspection[] {
-  return all
-    .filter((i) => i.status === 'assigned' && i.assignedToUserId === userId)
-    .sort((a, b) => (b.assignedAt ?? '').localeCompare(a.assignedAt ?? ''));
+  return outstandingVisits(all)
+    .filter((i) => i.assignedToUserId === userId)
+    .sort(newestAssignedFirst);
+}
+
+/** Newest handed over first. */
+function newestAssignedFirst(a: Inspection, b: Inspection): number {
+  return (b.assignedAt ?? '').localeCompare(a.assignedAt ?? '');
 }
 
 /**
@@ -423,11 +438,13 @@ export function scheduleLabel(
     : `${from} – ${formatDateTime(inspection.scheduledUntil)}`;
 }
 
-/** Every unstarted surprise visit, for the admin's view of what is outstanding. */
+/**
+ * Every surprise visit not yet submitted, started or not, for the admin's
+ * view of what is outstanding. The same set the one-per-branch rule counts,
+ * so a visit that refuses a new booking is always one the admin can see.
+ */
 export function openAssignments(all: Inspection[] = getInspections()): Inspection[] {
-  return all
-    .filter((i) => i.status === 'assigned')
-    .sort((a, b) => (b.assignedAt ?? '').localeCompare(a.assignedAt ?? ''));
+  return outstandingVisits(all).sort(newestAssignedFirst);
 }
 
 /**
@@ -456,6 +473,18 @@ export function startAssignment(inspection: Inspection, now: Date = new Date()):
   if (!saveInspection(started)) return null;
   saveActiveDraft(started);
   return started;
+}
+
+/**
+ * Picks a started visit up again where it was put down.
+ *
+ * Unlike starting, nothing is restamped: the visit began when it began, and
+ * the report measures it from then. Only the draft slot is written, so the
+ * visit is the one this browser is working on. False when storage refused.
+ */
+export function resumeAssignment(inspection: Inspection): boolean {
+  if (inspection.status !== 'draft') return false;
+  return saveActiveDraft(inspection);
 }
 
 /** Withdraws an unstarted assignment. Only ever an admin's to call. */

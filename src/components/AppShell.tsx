@@ -211,7 +211,7 @@ const SKELETON = 'animate-pulse motion-reduce:animate-none';
 
 const AppShellFallback: React.FC = () => (
   <div className="min-h-screen bg-[#F6F6F8] flex flex-col" role="status" aria-label="Loading">
-    <div className="hidden md:block h-9 bg-[#8E1520]" />
+    <div className="hidden md:block h-9 bg-[linear-gradient(90deg,#B51C28_0%,#A21A24_100%)]" />
     <div className="h-16 md:h-[4.25rem] bg-white border-b border-[#E8E9EE] flex items-center gap-5 px-4 sm:px-6 lg:px-8">
       <div className={`h-9 w-10 sm:w-[10.5rem] rounded-lg bg-[#F4F5F7] ${SKELETON}`} />
       <div className={`h-10 flex-1 max-w-xl lg:mx-auto rounded-xl bg-[#F4F5F7] ${SKELETON}`} />

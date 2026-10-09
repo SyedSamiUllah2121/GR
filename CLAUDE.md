@@ -268,6 +268,17 @@ data, docs and configuration, by anyone.
 
 ### 2026-10-09
 
+- ⚠ Fixed surprise visits vanishing after "continue later". A started visit
+  now stays in the inspector's list with Resume (answers and start time
+  kept), and in the Super Admin's list marked In progress with Discard, so a
+  branch held by an unfinished visit can be freed. Visits already stuck in a
+  browser reappear on their own; nothing was migrated or deleted.
+- The top strip and the header's New inspection button are now the same red
+  as the sidebar, instead of a darker maroon.
+- Removed the "New inspection" button from the inspections page. The
+  header's button is now the only one, and it shows on phones too (as an
+  icon) so it can always be reached. Managers still start their Monday
+  round from the card on the inspections page.
 - Added the supplied kitchen photo behind every page banner. Removed the
   "Safe Food. Happy Customers." line, which could not be read over the
   photo, and put the banner's buttons on a white tray so a red button no

@@ -273,7 +273,7 @@ export const Topbar: React.FC = () => {
   return (
     <header ref={barRef} className="no-print sticky top-0 z-40 shrink-0">
       {/* Status strip */}
-      <div className="hidden md:flex h-9 items-center gap-6 px-6 lg:px-8 bg-[#8E1520] text-white text-[12px] font-semibold whitespace-nowrap overflow-hidden">
+      <div className="hidden md:flex h-9 items-center gap-6 px-6 lg:px-8 bg-[linear-gradient(90deg,#B51C28_0%,#A21A24_100%)] text-white text-[12px] font-semibold whitespace-nowrap overflow-hidden">
         <StripItem icon={MapPin}>{scope}</StripItem>
         {seesInspections && (
           <StripItem icon={ClipboardList} href="/inspections">
@@ -411,14 +411,16 @@ export const Topbar: React.FC = () => {
       <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
         {/*
           Starting an inspection, from every screen — for the roles the route
-          table lets through to it, and nobody else.
+          table lets through to it, and nobody else. The only button for it
+          in the app, so it stays on a phone too, as an icon.
         */}
         {mayStartVisits && (
           <Link
             id="topbar-new-inspection-btn"
             href="/inspections/new"
-            className="hidden md:inline-flex items-center gap-2 h-10 px-3 lg:px-4 rounded-xl bg-[#8E1520] hover:bg-[#76101A] text-white text-[13px] font-semibold shadow-[0_6px_16px_-8px_rgba(142,21,32,0.7)] transition-all duration-200 hover:-translate-y-px mr-1"
+            className="inline-flex items-center justify-center gap-2 h-10 w-10 lg:w-auto lg:px-4 shrink-0 rounded-xl bg-[#C8202D] hover:bg-[#A81823] text-white text-[13px] font-semibold shadow-[0_6px_16px_-8px_rgba(200,32,45,0.65)] transition-all duration-200 hover:-translate-y-px mr-1"
             title="New inspection"
+            aria-label="New inspection"
           >
             <ClipboardCheck className="w-4 h-4 shrink-0" />
             <span className="hidden lg:inline">New inspection</span>

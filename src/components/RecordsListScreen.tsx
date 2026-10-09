@@ -14,7 +14,6 @@ import {
   Lock,
   MapPin,
   PlayCircle,
-  Plus,
   Search,
   Trash2,
   X,
@@ -41,6 +40,7 @@ import {
   cancelAssignment,
   isOverdueAssignment,
   openAssignments,
+  resumeAssignment,
   scheduleLabel,
   startAssignment,
 } from '../services/assignments';
@@ -102,7 +102,10 @@ export const RecordsListScreen: React.FC = () => {
 
   const mayStartVisits = can(user, 'monday.perform');
 
-  /** The surprise visits waiting to be carried out, from where you sit. */
+  /**
+   * The surprise visits not yet submitted, from where you sit — waiting to
+   * be started, and started but put down to finish later.
+   */
   const assignments = user
     ? user.role === 'inspector'
       ? assignmentsFor(user.id, inspections)
@@ -110,6 +113,9 @@ export const RecordsListScreen: React.FC = () => {
         ? openAssignments(inspections)
         : []
     : [];
+
+  const inProgressCount = assignments.filter((visit) => visit.status === 'draft').length;
+  const waitingCount = assignments.length - inProgressCount;
 
   /** A branch manager's own weekly round at each branch, and whether it is outstanding. */
   const ownBranches = branchesOf(user);
@@ -223,12 +229,45 @@ export const RecordsListScreen: React.FC = () => {
       return;
     }
     setActionError(null);
+
+    // Already started and put down: pick it up as it was, answers and all
+    if (assignment.status === 'draft') {
+      if (!resumeAssignment(assignment)) {
+        setActionError('Could not open the visit — this browser’s storage is full');
+        return;
+      }
+      router.push(`/inspections/${assignment.id}/checklist`);
+      return;
+    }
+
     const started = startAssignment(assignment);
     if (!started) {
       setActionError('Could not start the visit — this browser’s storage is full');
       return;
     }
     router.push(`/inspections/${started.id}/checklist`);
+  };
+
+  /**
+   * Throws away a started visit, answers and all, which frees its branch and
+   * its inspector for a new booking. The admin's — the same right as
+   * discarding the draft from its banner, offered where the admin can
+   * actually find the visit. Asked twice, because the answers go with it.
+   */
+  const handleDiscardVisit = async (visit: Inspection) => {
+    if (!canDiscardDraft(user, visit)) return;
+    const ok = await confirm({
+      title: `Discard the visit to ${visit.branchName}?`,
+      body: `${visit.inspectorName ?? 'The inspector'} has started it. The answers recorded so far are deleted, and the branch is free for a new surprise visit.`,
+      confirmLabel: 'Discard visit',
+    });
+    if (!ok) return;
+    deleteInspection(visit.id);
+    if (getActiveDraft()?.id === visit.id) {
+      clearActiveDraft();
+      setActiveDraft(null);
+    }
+    setActionError(null);
   };
 
   const handleCancelAssignment = (assignment: Inspection) => {
@@ -260,24 +299,12 @@ export const RecordsListScreen: React.FC = () => {
                     filteredInspections.length === 1 ? '' : 's'
                   }`
           }
-          actions={
-            /*
-              Starting a visit belongs on the screen that lists visits, rather
-              than on the dashboard, which reports rather than acts. Not offered
-              to an inspector: their visits are assigned to them, and the button
-              would lead to a screen that turns them away.
-            */
-            mayStartVisits ? (
-              <Link
-                id="records-new-inspection-btn"
-                href="/inspections/new"
-                className={`${BUTTON.primary} whitespace-nowrap`}
-              >
-                <Plus className="w-4 h-4" />
-                <span>New inspection</span>
-              </Link>
-            ) : undefined
-          }
+          /*
+            No "New inspection" here: the header offers it on every screen,
+            at every width, to the same roles, and a second copy on this page
+            was the same button twice. A manager's round has its own start
+            button in the card below.
+          */
         />
       </Reveal>
 
@@ -422,7 +449,12 @@ export const RecordsListScreen: React.FC = () => {
                       : 'Surprise visits outstanding'}
                   </h3>
                   <p className="text-xs text-[#6B6F76] mt-0.5">
-                    {assignments.length} waiting to be started
+                    {[
+                      waitingCount > 0 && `${waitingCount} waiting to be started`,
+                      inProgressCount > 0 && `${inProgressCount} in progress`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </p>
                 </div>
               </div>
@@ -434,6 +466,8 @@ export const RecordsListScreen: React.FC = () => {
             <ul className="divide-y divide-[#F0F1F4]">
               {assignments.map((visit) => {
                 const late = isOverdueAssignment(visit);
+                const inProgress = visit.status === 'draft';
+                const answered = Object.keys(visit.answers).length;
                 return (
                   <li
                     key={visit.id}
@@ -453,6 +487,16 @@ export const RecordsListScreen: React.FC = () => {
                         named says when it was handed over, which is all there
                         is to say about it.
                       */}
+                      {inProgress ? (
+                        <p className="text-[11px] truncate flex items-center gap-1.5 mt-0.5 text-[#8A5A08] font-semibold">
+                          <PlayCircle className="w-3 h-3 shrink-0" />
+                          <span className="truncate">
+                            {user?.role !== 'inspector' && `${visit.inspectorName} • `}
+                            In progress • started {formatDate(visit.date)} at {visit.time} •{' '}
+                            {answered} of {checklist.total} answered
+                          </span>
+                        </p>
+                      ) : (
                       <p
                         className={`text-[11px] truncate flex items-center gap-1.5 mt-0.5 ${
                           late ? 'text-[#C8202D] font-semibold' : 'text-[#6B6F76]'
@@ -471,22 +515,45 @@ export const RecordsListScreen: React.FC = () => {
                           {user?.role === 'inspector' && ` • ${FULL_CHECKLIST_LABEL}`}
                         </span>
                       </p>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 ml-auto">
                       {canPerformInspection(user, visit) && (
                         <button
                           type="button"
-                          id={`assignment-start-${visit.id}`}
+                          id={
+                            inProgress
+                              ? `assignment-resume-${visit.id}`
+                              : `assignment-start-${visit.id}`
+                          }
                           onClick={() => handleStartAssignment(visit)}
                           className={`${BUTTON.primary} h-9 px-3.5 whitespace-nowrap`}
                         >
                           <PlayCircle className="w-3.5 h-3.5" />
-                          Start visit
+                          {inProgress ? 'Resume' : 'Start visit'}
                         </button>
                       )}
 
-                      {can(user, 'surprise.create') && (
+                      {/*
+                        Withdrawing is for a visit nobody has started. Once it
+                        is under way the admin may still discard it — the
+                        answers go with it, so it asks first.
+                      */}
+                      {inProgress && canDiscardDraft(user, visit) && (
+                        <button
+                          type="button"
+                          id={`assignment-discard-${visit.id}`}
+                          onClick={() => handleDiscardVisit(visit)}
+                          title={`Discard the started visit to ${visit.branchName}`}
+                          className="inline-flex items-center gap-1.5 h-9 px-3 text-xs font-bold text-[#C8202D] hover:bg-[#FDECEE] border border-[#C8202D]/30 bg-white rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Discard
+                        </button>
+                      )}
+
+                      {!inProgress && can(user, 'surprise.create') && (
                         <button
                           type="button"
                           id={`assignment-cancel-${visit.id}`}
@@ -515,7 +582,9 @@ export const RecordsListScreen: React.FC = () => {
       {activeDraft &&
         activeDraft.status === 'draft' &&
         canPerformInspection(user, activeDraft) &&
-        !mondays.some(({ monday }) => monday.inspection?.id === activeDraft.id) && (
+        !mondays.some(({ monday }) => monday.inspection?.id === activeDraft.id) &&
+        // A started surprise visit already has its row, with Resume, above
+        !assignments.some((visit) => visit.id === activeDraft.id) && (
         <Reveal delay={0.05}>
           <div
             id="active-draft-banner"

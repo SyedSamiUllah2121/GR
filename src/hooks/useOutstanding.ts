@@ -137,7 +137,12 @@ export function useOutstanding(user: User | null): Outstanding {
     const submitted = inspections.filter((i) => i.status === 'submitted');
     const out: Alert[] = [];
 
-    const draft = inspections.find((i) => i.status === 'draft');
+    /*
+     * An inspector's drafts are all surprise visits, and each of those has
+     * its own line below — so for them this would be the same visit twice.
+     */
+    const draft =
+      user?.role === 'inspector' ? undefined : inspections.find((i) => i.status === 'draft');
     if (draft) {
       out.push({
         key: 'draft',
@@ -156,6 +161,18 @@ export function useOutstanding(user: User | null): Outstanding {
      */
     if (user?.role === 'inspector') {
       assignmentsFor(user.id, inspections).forEach((visit) => {
+        // Started and put down: theirs to pick up again, not to start
+        if (visit.status === 'draft') {
+          out.push({
+            key: `assigned-${visit.id}`,
+            href: '/inspections',
+            icon: CalendarClock,
+            text: `Surprise visit to ${visit.branchName} is in progress — resume it`,
+            tone: 'warn',
+            kind: 'visit',
+          });
+          return;
+        }
         // A visit booked for a time that has passed is a different message
         // from one simply waiting, and a worse one
         const late = isOverdueAssignment(visit);
