@@ -8,5 +8,5 @@
  */
 export const ORGANISATION = {
   name: 'Gujrat Group',
-  tagline: 'Restaurant & Sweets',
+  tagline: 'of Restaurants',
 };

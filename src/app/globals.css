@@ -2,6 +2,7 @@
 
 @theme {
   --font-sans: var(--font-ibm-plex-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: var(--font-source-serif), Georgia, "Times New Roman", serif;
 
   /*
    * Brand red. The rail takes the deepest step so the content beside it reads

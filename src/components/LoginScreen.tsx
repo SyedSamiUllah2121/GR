@@ -4,20 +4,24 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowRight,
+  BarChart3,
+  CalendarCheck,
+  ChevronRight,
   ClipboardCheck,
   Eye,
   EyeOff,
   Lock,
+  LucideIcon,
   Mail,
   ShieldCheck,
-  TrendingUp,
+  User as UserIcon,
+  Users,
   Wrench,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { BrandLogo } from './BrandLogo';
 import { EASE_OUT, MotionProvider, t } from './motion';
-import { ORGANISATION } from '../data/user';
-import { USER_ROLE_BLURB, USER_ROLE_KEYS, USER_ROLE_LABEL, User, branchesOf } from '../types';
+import { USER_ROLE_KEYS, USER_ROLE_LABEL, User, UserRole } from '../types';
 import { DEMO_SIGN_IN_ENABLED, signIn, signInAs } from '../services/session';
 import { homePathFor } from '../services/permissions';
 import { activeUsers } from '../services/userStore';
@@ -69,12 +73,12 @@ const LoginBackdrop: React.FC = () => {
   if (stage >= BACKDROP_SOURCES.length) {
     /*
      * No photograph on disk. A near-black panel reads as a page that failed
-     * to load, so the ground is a deep warm gradient instead — deliberate on
-     * its own, and completely covered the moment an image is dropped in.
+     * to load, so the ground is a deep maroon gradient instead — deliberate
+     * on its own, and completely covered the moment an image is dropped in.
      *
-     * Two quiet layers over it give the ground some depth: a fine dot grid
-     * that fades out down the panel, and a low warm glow in the far corner.
-     * Neither is drawn over a photograph — that already has depth of its own.
+     * The emblem sits over it, very faint and cropped by the corner, to give
+     * the ground some depth without competing with the copy. It is not drawn
+     * over a photograph, which already has depth of its own.
      */
     return (
       <>
@@ -83,23 +87,15 @@ const LoginBackdrop: React.FC = () => {
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(130% 110% at 18% -5%, #7E2A22 0%, #4A1A1C 38%, #241417 68%, #0E0B0C 100%)',
+              'radial-gradient(120% 90% at 15% 0%, #5C0E18 0%, #3A0910 45%, #22060A 80%, #1A0507 100%)',
           }}
         />
-        <div
+        {/* eslint-disable-next-line @next/next/no-img-element -- a decorative watermark, not content */}
+        <img
+          src="/brand/gujrat-group-emblem.png"
+          alt=""
           aria-hidden
-          className="absolute inset-0 opacity-[0.09]"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.9) 1px, transparent 1px)',
-            backgroundSize: '22px 22px',
-            maskImage: 'linear-gradient(to bottom, black 0%, transparent 70%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, black 0%, transparent 70%)',
-          }}
-        />
-        <div
-          aria-hidden
-          className="absolute -bottom-48 -right-40 w-[36rem] h-[36rem] rounded-full blur-3xl opacity-40"
-          style={{ background: 'radial-gradient(closest-side, #C8202D, transparent)' }}
+          className="absolute -bottom-24 -right-28 w-[34rem] max-w-none opacity-[0.035] brightness-0 invert pointer-events-none select-none"
         />
       </>
     );
@@ -154,10 +150,22 @@ const LoginBackdrop: React.FC = () => {
 
 /** What the product does, said briefly beside the form. */
 const HIGHLIGHTS = [
-  { icon: ClipboardCheck, text: 'Weekly hygiene and service checks, every branch on the same list' },
-  { icon: Wrench, text: 'Failed equipment checks raise a maintenance job on submit' },
-  { icon: TrendingUp, text: 'Scores, repeat issues and overdue visits tracked per branch' },
+  { icon: CalendarCheck, text: 'Weekly branch inspections' },
+  { icon: Wrench, text: 'Failed checks trigger maintenance jobs' },
+  { icon: BarChart3, text: 'Scores and repeat issues tracked by branch' },
 ];
+
+/*
+ * The demo buttons describe each role in the words of someone choosing which
+ * one to try, which is shorter than the account screen's description of what
+ * the role is allowed to do.
+ */
+const DEMO_ROLE: Record<UserRole, { icon: LucideIcon; blurb: string }> = {
+  admin: { icon: UserIcon, blurb: 'Full control across branches and accounts' },
+  'branch-manager': { icon: Users, blurb: 'Manage your branch and weekly inspections' },
+  'job-manager': { icon: Wrench, blurb: 'Track repairs and maintenance jobs' },
+  inspector: { icon: ClipboardCheck, blurb: 'Complete assigned inspections at any branch' },
+};
 
 export const LoginScreen: React.FC = () => {
   const router = useRouter();
@@ -228,7 +236,7 @@ export const LoginScreen: React.FC = () => {
   };
 
   const fieldClass =
-    'w-full h-11 pl-11 pr-4 bg-white border border-[#E4E6EB] rounded-xl text-sm text-[#17181D] placeholder:text-[#9CA1A9] shadow-xs hover:border-[#D5D8DE] focus:outline-none focus:border-[#C8202D] focus:ring-4 focus:ring-[#C8202D]/10 transition-[border-color,box-shadow] duration-200';
+    'w-full h-[clamp(2.5rem,6vh,3.5rem)] pl-[3.25rem] pr-4 bg-white border border-[#DAD7D2] rounded-lg text-[15px] text-[#17181D] placeholder:text-[#9CA1A9] hover:border-[#C9C5BF] focus:outline-none focus:border-[#8E1520] focus:ring-4 focus:ring-[#8E1520]/10 autofill:shadow-[inset_0_0_0_100px_#FFFFFF] autofill:[-webkit-text-fill-color:#17181D] transition-[border-color,box-shadow] duration-200';
 
   return (
     /*
@@ -238,10 +246,28 @@ export const LoginScreen: React.FC = () => {
      * device for less movement.
      */
     <MotionProvider>
-    <div className="min-h-screen flex bg-white">
-      {/* Brand half */}
-      <div className="hidden lg:flex lg:w-[46%] xl:w-1/2 relative bg-[#0C0B0C] text-white flex-col justify-between gap-10 p-10 xl:p-14 overflow-hidden">
+    <div className="relative min-h-screen bg-[#F8F6F2]">
+      {/*
+        The brand panel's ground is drawn on its own, behind both halves, so
+        that the two halves can share one grid row. That row is as tall as the
+        taller half, and the brand half spreads its content over it, so the
+        logo lines up with "Welcome back" and the last feature with the last
+        account button — two columns centred separately never quite met.
+      */}
+      <div
+        aria-hidden
+        className="hidden lg:block absolute inset-y-0 left-0 w-[46%] xl:w-1/2 overflow-hidden bg-[#1A0507]"
+      >
         <LoginBackdrop />
+      </div>
+
+      {/*
+        Sized against the window's height as well as its width, so the whole
+        page fits on a laptop screen without scrolling.
+      */}
+      <div className="relative min-h-screen flex flex-col justify-center lg:grid lg:grid-cols-[46%_1fr] xl:grid-cols-2 lg:content-center py-[clamp(0.75rem,3vh,4rem)]">
+      {/* Brand half */}
+      <div className="hidden lg:flex text-white flex-col justify-between gap-[clamp(1.5rem,5vh,3.5rem)] px-10 xl:px-[4.5rem]">
 
         {/*
           The entrance here is CSS, not motion. This page is rendered on the
@@ -250,72 +276,70 @@ export const LoginScreen: React.FC = () => {
           soon as the stylesheet does, and is off for reduced motion.
         */}
         <div className="relative animate-rise">
-          <BrandLogo variant="knockout" className="w-[13rem]" />
+          <BrandLogo variant="lockup" large className="w-[clamp(19rem,46vh,29rem)]" />
         </div>
 
-        <div className="relative max-w-md">
+        <div className="relative max-w-[30rem]">
           <p
             style={{ animationDelay: `${t(0.06)}s` }}
-            className="animate-rise inline-flex items-center gap-2 h-8 px-3 rounded-full bg-white/10 ring-1 ring-inset ring-white/15 backdrop-blur-sm text-[11px] font-semibold uppercase tracking-[0.14em] text-white/80"
+            className="animate-rise inline-flex items-center gap-2.5 h-[clamp(2rem,4.4vh,2.5rem)] px-4 rounded-full ring-1 ring-inset ring-white/35 text-[12px] font-semibold uppercase tracking-[0.2em] text-white/90"
           >
-            <ShieldCheck className="w-3.5 h-3.5" />
+            <ShieldCheck className="w-4 h-4" />
             Inspection Log
           </p>
 
           <h2
             style={{ animationDelay: `${t(0.12)}s` }}
-            className="animate-rise mt-6 text-[2.1rem] xl:text-[2.6rem] font-bold leading-[1.12] tracking-tight"
+            className="animate-rise mt-[clamp(1rem,3vh,1.75rem)] font-serif text-[clamp(2.25rem,6.2vh,3.6rem)] font-semibold leading-[1.08] tracking-[-0.01em]"
           >
             Every branch.
             <br />
             Every week.
             <br />
-            <span className="text-white/60">On record.</span>
+            <span className="text-[#C9A6A4]">On record.</span>
           </h2>
 
-          <ul className="mt-10 space-y-3">
+          <p
+            style={{ animationDelay: `${t(0.16)}s` }}
+            className="animate-rise mt-[clamp(0.875rem,2.6vh,1.5rem)] text-[clamp(15px,2.2vh,18px)] leading-relaxed text-white/80"
+          >
+            A consistent standard for food safety, hygiene and service quality.
+          </p>
+
+          <ul className="mt-[clamp(1rem,3.4vh,2.25rem)]">
             {HIGHLIGHTS.map((item, i) => (
               <li
                 key={item.text}
-                style={{ animationDelay: `${t(0.18 + i * 0.06)}s` }}
-                className="animate-rise flex items-center gap-3.5 rounded-2xl bg-white/[0.06] ring-1 ring-inset ring-white/10 backdrop-blur-sm px-4 py-3"
+                style={{ animationDelay: `${t(0.2 + i * 0.06)}s` }}
+                className="animate-rise flex items-center gap-6 py-[clamp(0.5rem,1.5vh,0.875rem)] border-b border-white/15 last:border-b-0 last:pb-0"
               >
-                <span className="w-9 h-9 rounded-xl bg-white/[0.12] ring-1 ring-inset ring-white/15 flex items-center justify-center shrink-0">
-                  <item.icon className="w-[18px] h-[18px]" />
+                <span className="w-[clamp(2.5rem,6vh,3.25rem)] h-[clamp(2.5rem,6vh,3.25rem)] rounded-xl ring-1 ring-inset ring-white/30 flex items-center justify-center shrink-0">
+                  <item.icon className="w-[22px] h-[22px] text-white/90" strokeWidth={1.6} />
                 </span>
-                <span className="text-[13px] text-white/85 leading-relaxed">{item.text}</span>
+                <span className="text-[clamp(15px,2vh,17px)] text-white/90">{item.text}</span>
               </li>
             ))}
           </ul>
         </div>
-
-        <p
-          style={{ animationDelay: `${t(0.35)}s` }}
-          className="animate-rise relative text-[11px] font-semibold uppercase tracking-[0.16em] text-white/45"
-        >
-          {ORGANISATION.name} — {ORGANISATION.tagline}
-        </p>
       </div>
 
       {/* Form half */}
-      <div className="relative flex-1 min-w-0 flex flex-col justify-center items-center px-5 sm:px-8 py-12 bg-[radial-gradient(90%_60%_at_100%_0%,#FBF3F4_0%,rgba(255,255,255,0)_60%)]">
-        <div className="w-full max-w-[24rem] animate-rise" style={{ animationDelay: `${t(0.08)}s` }}>
+      <div className="relative min-w-0 flex flex-col justify-center items-center px-5 sm:px-8 xl:px-12">
+        <div className="w-full max-w-[34rem] animate-rise" style={{ animationDelay: `${t(0.08)}s` }}>
           {/*
-            The brand panel is gone at this width, so the mark comes inline —
-            reversed out of the rail's own red, so a phone signs in to the
-            same brand it will see across the top of every screen after.
+            The brand panel is gone at this width, so the logo comes inline.
+            The form sits on white, so the full logo can go in exactly as
+            supplied, with no tile.
           */}
-          <div className="lg:hidden mb-8 inline-flex rounded-2xl px-4 py-3.5 bg-[radial-gradient(140%_80%_at_0%_0%,rgba(255,255,255,0.14),transparent_70%),linear-gradient(160deg,#B51C28_0%,#8E141D_100%)] shadow-[0_12px_28px_-14px_rgba(142,20,29,0.7)]">
-            <BrandLogo variant="knockout" className="w-[9.5rem]" />
-          </div>
+          <BrandLogo className="lg:hidden mb-8 w-[6.5rem]" />
 
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9CA1A9]">
+          <p className="text-[12px] font-semibold uppercase tracking-[0.24em] text-[#6B6F76]">
             Welcome back
           </p>
-          <h1 className="mt-1.5 text-[1.85rem] leading-tight font-bold tracking-tight text-[#17181D]">
+          <h1 className="mt-1.5 font-serif text-[clamp(2rem,5.2vh,3rem)] leading-[1.1] font-semibold tracking-[-0.01em] text-[#17181D]">
             Sign in
           </h1>
-          <p className="text-[13px] text-[#6B6F76] mt-1.5">
+          <p className="text-[clamp(15px,2.1vh,17px)] text-[#55585E] mt-1.5">
             Inspection Log — food safety &amp; quality
           </p>
 
@@ -335,16 +359,16 @@ export const LoginScreen: React.FC = () => {
             </motion.div>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
+          <form onSubmit={handleSubmit} className="mt-[clamp(1rem,3.2vh,2rem)] space-y-[clamp(0.625rem,1.9vh,1.25rem)]">
             <div>
               <label
                 htmlFor="email-input"
-                className="block text-xs font-semibold text-[#17181D] mb-2"
+                className="block text-[14px] font-semibold text-[#17181D] mb-2"
               >
                 Email or username
               </label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-[#9CA1A9] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Mail className="w-5 h-5 text-[#6B6F76] absolute left-[1.15rem] top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   id="email-input"
                   type="text"
@@ -365,12 +389,12 @@ export const LoginScreen: React.FC = () => {
             <div>
               <label
                 htmlFor="password-input"
-                className="block text-xs font-semibold text-[#17181D] mb-2"
+                className="block text-[14px] font-semibold text-[#17181D] mb-2"
               >
                 Password
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 text-[#9CA1A9] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Lock className="w-5 h-5 text-[#6B6F76] absolute left-[1.15rem] top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   id="password-input"
                   type={showPassword ? 'text' : 'password'}
@@ -388,9 +412,9 @@ export const LoginScreen: React.FC = () => {
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg flex items-center justify-center text-[#9CA1A9] hover:text-[#17181D] hover:bg-[#F4F5F7] transition-colors cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg flex items-center justify-center text-[#6B6F76] hover:text-[#17181D] hover:bg-[#F4F2EE] transition-colors cursor-pointer"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
@@ -398,10 +422,10 @@ export const LoginScreen: React.FC = () => {
             <button
               id="login-submit-btn"
               type="submit"
-              className="group w-full mt-2 h-11 px-4 bg-[#C8202D] hover:bg-[#A81823] text-white text-sm font-bold rounded-xl shadow-[0_8px_20px_-8px_rgba(200,32,45,0.65)] hover:shadow-[0_12px_24px_-10px_rgba(200,32,45,0.7)] hover:-translate-y-px active:translate-y-0 transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2"
+              className="group w-full !mt-[clamp(0.75rem,2.6vh,1.5rem)] h-[clamp(2.5rem,6vh,3.5rem)] px-4 bg-[#8E1520] hover:bg-[#76101A] text-white font-serif text-[18px] font-semibold rounded-lg shadow-[0_10px_24px_-12px_rgba(142,21,32,0.7)] hover:-translate-y-px active:translate-y-0 transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-3"
             >
               Sign in
-              <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+              <ArrowRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-0.5" />
             </button>
           </form>
 
@@ -417,15 +441,17 @@ export const LoginScreen: React.FC = () => {
             the shortcut itself is one of the two doors.
           */}
           {DEMO_SIGN_IN_ENABLED && (
-          <div className="mt-8 pt-6 border-t border-[#F0F1F4]">
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9CA1A9]">
-                Or sign in as
+          <div className="mt-[clamp(1rem,3.4vh,2.25rem)]">
+            <div className="flex items-center gap-4">
+              <span aria-hidden className="h-px flex-1 bg-[#DAD7D2]" />
+              <p className="text-[11px] sm:text-[12px] font-semibold uppercase tracking-[0.22em] text-[#6B6F76] whitespace-nowrap">
+                Quick demo access
               </p>
+              <span aria-hidden className="h-px flex-1 bg-[#DAD7D2]" />
               <button
                 type="button"
                 onClick={fillDemo}
-                className="text-[11px] font-bold text-[#C8202D] hover:text-[#A81823] hover:underline underline-offset-2 cursor-pointer whitespace-nowrap"
+                className="text-[13px] font-medium text-[#55585E] hover:text-[#8E1520] hover:underline underline-offset-2 cursor-pointer whitespace-nowrap"
               >
                 Use 123 / 123
               </button>
@@ -439,17 +465,17 @@ export const LoginScreen: React.FC = () => {
               has mounted, and the rows below hold the space until it has.
             */}
             {!mounted && (
-              <div className="mt-3 space-y-2">
+              <div className="mt-[clamp(0.75rem,2vh,1.25rem)] space-y-[clamp(0.375rem,1.1vh,0.75rem)]">
                 {USER_ROLE_KEYS.map((role) => (
                   <div
                     key={role}
                     aria-hidden="true"
-                    className="w-full h-[3.75rem] px-3 rounded-xl border border-[#E8E9EE] bg-white flex items-center gap-3"
+                    className="w-full h-[clamp(2.875rem,7.2vh,4.25rem)] px-4 rounded-lg border border-[#DAD7D2] bg-white flex items-center gap-4"
                   >
-                    <span className="w-9 h-9 rounded-lg bg-[#F4F5F7] shrink-0 animate-pulse motion-reduce:animate-none" />
-                    <span className="min-w-0 flex-1 space-y-1.5">
-                      <span className="block h-3 w-24 rounded bg-[#F4F5F7] animate-pulse motion-reduce:animate-none" />
-                      <span className="block h-2.5 w-40 rounded bg-[#F4F5F7] animate-pulse motion-reduce:animate-none" />
+                    <span className="w-[clamp(2rem,5.2vh,3rem)] h-[clamp(2rem,5.2vh,3rem)] rounded-lg bg-[#F1EFEB] shrink-0 animate-pulse motion-reduce:animate-none" />
+                    <span className="min-w-0 flex-1 space-y-2">
+                      <span className="block h-3 w-28 rounded bg-[#F1EFEB] animate-pulse motion-reduce:animate-none" />
+                      <span className="block h-2.5 w-48 rounded bg-[#F1EFEB] animate-pulse motion-reduce:animate-none" />
                     </span>
                   </div>
                 ))}
@@ -458,44 +484,45 @@ export const LoginScreen: React.FC = () => {
 
             {mounted && (
               <motion.div
-                className="mt-3 space-y-2"
+                className="mt-[clamp(0.75rem,2vh,1.25rem)] space-y-[clamp(0.375rem,1.1vh,0.75rem)]"
                 variants={enterGroup}
                 initial="hidden"
                 animate="shown"
               >
-                {demoAccounts.map((account) => (
-                  <motion.button
-                    key={account.id}
-                    variants={enterItem}
-                    type="button"
-                    id={`login-as-${account.role}`}
-                    onClick={() => enterAs(account.id)}
-                    className="w-full h-[3.75rem] px-3 rounded-xl border border-[#E8E9EE] bg-white shadow-xs hover:border-[#E3B7BC] hover:shadow-[0_8px_18px_-10px_rgba(16,24,40,0.2)] hover:-translate-y-px transition-[border-color,box-shadow,translate] duration-200 cursor-pointer flex items-center gap-3 text-left group"
-                  >
-                    <span className="w-9 h-9 rounded-lg bg-[#F4F5F7] text-[#C8202D] text-[11px] font-bold flex items-center justify-center shrink-0 group-hover:bg-[#C8202D] group-hover:text-white transition-colors duration-200">
-                      {account.initials}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-xs font-bold text-[#17181D] truncate">
-                        {USER_ROLE_LABEL[account.role]}
-                        {branchesOf(account).length > 0 ? ` — ${branchesOf(account).join(' & ')}` : ''}
+                {demoAccounts.map((account) => {
+                  const RoleIcon = DEMO_ROLE[account.role].icon;
+                  return (
+                    <motion.button
+                      key={account.id}
+                      variants={enterItem}
+                      type="button"
+                      id={`login-as-${account.role}`}
+                      onClick={() => enterAs(account.id)}
+                      title={`Sign in as ${account.name}`}
+                      className="w-full h-[clamp(2.875rem,7.2vh,4.25rem)] px-4 rounded-lg border border-[#DAD7D2] bg-white hover:border-[#C9A6A4] hover:shadow-[0_10px_22px_-14px_rgba(26,5,7,0.35)] hover:-translate-y-px transition-[border-color,box-shadow,translate] duration-200 cursor-pointer flex items-center gap-4 text-left group"
+                    >
+                      <span className="w-[clamp(2rem,5.2vh,3rem)] h-[clamp(2rem,5.2vh,3rem)] rounded-lg bg-[#F1EFEB] text-[#55585E] flex items-center justify-center shrink-0 group-hover:bg-[#8E1520] group-hover:text-white transition-colors duration-200">
+                        <RoleIcon className="w-5 h-5" strokeWidth={1.7} />
                       </span>
-                      <span className="block text-[11px] text-[#6B6F76] truncate">
-                        {USER_ROLE_BLURB[account.role]}
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[15px] font-semibold text-[#17181D] truncate">
+                          {USER_ROLE_LABEL[account.role]}
+                        </span>
+                        <span className="block mt-0.5 text-[13px] text-[#6B6F76] truncate">
+                          {DEMO_ROLE[account.role].blurb}
+                        </span>
                       </span>
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-[#C9CCD2] shrink-0 group-hover:text-[#C8202D] group-hover:translate-x-0.5 transition-all duration-200" />
-                  </motion.button>
-                ))}
+                      <ChevronRight className="w-5 h-5 text-[#55585E] shrink-0 group-hover:text-[#8E1520] group-hover:translate-x-0.5 transition-all duration-200" />
+                    </motion.button>
+                  );
+                })}
               </motion.div>
             )}
           </div>
           )}
 
-          <p className="mt-8 text-center text-[11px] text-[#9CA1A9]">
-            Internal weekly restaurant inspection system
-          </p>
         </div>
+      </div>
       </div>
     </div>
     </MotionProvider>

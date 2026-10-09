@@ -11,7 +11,9 @@ import { ArrowRight } from 'lucide-react';
  * corners), one panel header (a neutral icon tile, a title, a caption and an
  * optional way on), and one page header. Colour is kept out of the furniture:
  * the brand red is for actions and the status colours are for states, so
- * neither is spent on decoration.
+ * neither is spent on decoration — with one exception, the brand's diagonals
+ * in the corner of the page header's banner, which are the brand and say
+ * nothing about state.
  */
 
 export const CARD =
@@ -72,8 +74,24 @@ export const Panel: React.FC<{
 
 
 /**
- * The top of a screen: an eyebrow, the title, a line saying what is on it,
- * and the screen's own actions on the right.
+ * The banner's background: a kitchen at work, already faded to white on the
+ * left and cut by the brand's red diagonals on the right. A web-sized copy
+ * of `docs/brand/page-banner-original.png`; re-export from that if it
+ * changes. Set to null and the banner draws its own diagonals instead.
+ */
+const BANNER_PHOTO: string | null = '/brand/page-banner.jpg';
+
+/**
+ * The top of a screen, as a banner: an eyebrow, the title and a line saying
+ * what is on it on the left, and a kitchen and the brand's diagonals behind
+ * the right-hand side, with the screen's own actions over them.
+ *
+ * Nothing else is written over the photograph. A "Safe Food. Happy
+ * Customers." strapline sat in the middle and could not be read against
+ * the kitchen behind it; the buttons have a tray of their own.
+ *
+ * One component for every screen, so the banner is the same everywhere and
+ * changes in one place.
  */
 export const PageHeader: React.FC<{
   eyebrow?: string;
@@ -81,19 +99,69 @@ export const PageHeader: React.FC<{
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
 }> = ({ eyebrow, title, subtitle, actions }) => (
-  <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
-    <div className="min-w-0">
-      {eyebrow && (
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9CA1A9]">{eyebrow}</p>
+  <div className="relative overflow-hidden rounded-2xl bg-white border border-[#E8E9EE] shadow-[0_1px_2px_rgba(16,24,40,0.04),0_8px_24px_-12px_rgba(16,24,40,0.12)]">
+    <BannerArt />
+
+    <div className="relative flex flex-col lg:flex-row lg:items-center gap-5 lg:gap-8 px-5 sm:px-7 py-6 lg:py-7">
+      <div className="min-w-0 lg:flex-1">
+        {eyebrow && (
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9CA1A9]">{eyebrow}</p>
+        )}
+        <h1 className="mt-1.5 text-[26px] md:text-[30px] leading-tight font-bold tracking-tight text-[#17181D]">
+          {title}
+        </h1>
+        {subtitle && <p className="mt-1.5 text-[13px] text-[#6B6F76]">{subtitle}</p>}
+      </div>
+
+      {/*
+        The buttons sit on a white tray over the photograph. On the bare
+        picture a red button vanished into the red diagonal behind it, and
+        no one button colour reads against both the kitchen and the red.
+        Opaque rather than frosted: a backdrop filter would become the
+        containing block for any dialog these buttons open.
+      */}
+      {actions && (
+        <div className="shrink-0 self-start lg:self-center flex flex-wrap items-center gap-2 p-2 rounded-2xl bg-white/95 ring-1 ring-black/5 shadow-[0_10px_28px_-12px_rgba(16,24,40,0.35)]">
+          {actions}
+        </div>
       )}
-      <h1 className="mt-1.5 text-[26px] md:text-[30px] leading-tight font-bold tracking-tight text-[#17181D]">
-        {title}
-      </h1>
-      {subtitle && <p className="mt-1.5 text-[13px] text-[#6B6F76]">{subtitle}</p>}
     </div>
-    {actions && <div className="shrink-0 flex flex-wrap items-center gap-2">{actions}</div>}
   </div>
 );
+
+/**
+ * The banner's background. With the photograph, the photograph alone — it
+ * carries its own fade and diagonals — pinned to its right edge so the red
+ * always shows whatever the banner's width; on a phone it keeps to the right,
+ * faded in from the left, so the title stays on white. Without it, a pale fade, a faint emblem and
+ * the diagonals drawn here. Left out of print either way: a report printed
+ * from a screen wants its heading, not the art.
+ */
+const BannerArt: React.FC = () =>
+  BANNER_PHOTO ? (
+    <div
+      aria-hidden
+      className="no-print pointer-events-none absolute inset-y-0 right-0 w-[42%] sm:w-full [mask-image:linear-gradient(to_right,transparent,black_60%)] sm:[mask-image:none]"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element -- a decorative photograph, not content */}
+      <img src={BANNER_PHOTO} alt="" className="w-full h-full object-cover object-right" />
+    </div>
+  ) : (
+    <div
+      aria-hidden
+      className="no-print pointer-events-none absolute inset-y-0 right-0 w-[34%] sm:w-[50%] lg:w-[46%]"
+    >
+      <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(255,255,255,0)_0%,#FBF1F2_55%,#F6E2E4_100%)]" />
+      {/* eslint-disable-next-line @next/next/no-img-element -- a decorative watermark, not content */}
+      <img
+        src="/brand/gujrat-group-emblem.png"
+        alt=""
+        className="hidden sm:block absolute right-[18%] top-1/2 -translate-y-1/2 w-40 opacity-[0.07] grayscale"
+      />
+      <div className="absolute -right-6 bottom-0 h-full w-40 bg-[#C8202D] [clip-path:polygon(70%_0,100%_0,100%_100%,25%_100%)] opacity-90" />
+      <div className="absolute right-24 bottom-0 h-full w-24 bg-[#8E1520] [clip-path:polygon(85%_0,100%_0,30%_100%,15%_100%)] opacity-80" />
+    </div>
+  );
 
 /** Button looks, as class strings, so links and buttons can share them. */
 export const BUTTON = {

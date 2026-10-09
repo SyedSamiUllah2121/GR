@@ -15,11 +15,11 @@ import {
   Users,
   Wrench,
 } from 'lucide-react';
-import { BrandLogo } from './BrandLogo';
 import { EASE_OUT, t, SPRING } from './motion';
 import { User } from '../types';
 import { Capability, can } from '../services/permissions';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useOutstanding } from '../hooks/useOutstanding';
 
 /**
  * What a row asks of the signed-in account. A list means any one of them is
@@ -50,10 +50,10 @@ interface NavEntry {
   /** True when the current path belongs to this section. */
   isActive: (pathname: string) => boolean;
   /**
-   * Rows are ruled off where the group changes: recording work above,
-   * configuring the system below. A group rather than a flag on the first
-   * row of each, because rows are filtered by role — a flag on "Checklist"
-   * drew no rule at all for anyone who cannot see that row.
+   * Rows are headed by their group: recording work above, configuring the
+   * system below. A group rather than a flag on the first row of each,
+   * because rows are filtered by role — a flag on "Checklist" drew no
+   * heading at all for anyone who cannot see that row.
    */
   group: 'work' | 'setup';
   /** What the signed-in account needs to be shown this row. */
@@ -151,9 +151,8 @@ const NAV: NavEntry[] = [
     ],
   },
   {
-    // Configures the app rather than recording work, so it sits below a rule.
-    // The rule alone says that — a "Setup" heading over two rows was more
-    // label than list.
+    // Configures the app rather than recording work, so it sits under its
+    // own heading
     id: 'sidebar-nav-checklist',
     href: '/checklist',
     label: 'Checklist',
@@ -173,14 +172,19 @@ const NAV: NavEntry[] = [
   },
 ];
 
+/** The heading over each group of rows, as the rail shows it. */
+const GROUP_LABEL: Record<NavEntry['group'], string> = {
+  work: 'Operations',
+  setup: 'Administration',
+};
+
 /**
- * The left rail: the brand and the four screens.
+ * The left rail: the screens, under the header.
  *
- * Deliberately nothing else of use. Sign-out lives in the top bar's user menu
- * and starting an inspection is offered by the screens that list them, so a
- * second copy of either here was only ever something more to read past. The
- * one line at its foot only names the product, so the column ends rather
- * than running out.
+ * Deliberately nothing else of use. The brand, sign-out and starting an
+ * inspection all live in the header, so a second copy of any of them here
+ * was only ever something more to read past. The one line at its foot only
+ * names the product, so the column ends rather than running out.
  *
  * Collapses to an icon-only column. Kept in storage so it survives a reload —
  * a rail someone deliberately narrowed should not spring open again on the
@@ -192,6 +196,17 @@ const COLLAPSE_KEY = 'inspection_log_sidebar_collapsed';
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const user = useCurrentUser();
+
+  /*
+   * The counts beside the rows come from the same source as the header's
+   * strip and bell, so the three always agree: rounds and visits due or late
+   * beside Inspections, open repairs beside Maintenance.
+   */
+  const { visitsDue, visitsLate, openJobs } = useOutstanding(user);
+  const badges: Record<string, { count: number; urgent: boolean }> = {
+    'sidebar-nav-records': { count: visitsDue + visitsLate, urgent: visitsLate > 0 },
+    'sidebar-nav-maintenance': { count: openJobs.length, urgent: false },
+  };
 
   /*
    * Rows the signed-in account cannot use are not shown at all, rather than
@@ -261,50 +276,21 @@ export const Sidebar: React.FC = () => {
        * deepest step. Enough that the rail reads as a surface rather than a
        * flat swatch, not so much that it competes with the page for the eye.
        */
-      className={`no-print relative w-full text-white flex flex-col md:min-h-screen md:sticky md:top-0 md:h-screen shrink-0 select-none z-30 bg-[radial-gradient(140%_45%_at_0%_0%,rgba(255,255,255,0.13),transparent_70%),linear-gradient(180deg,#B51C28_0%,#A21A24_45%,#8E141D_100%)] md:shadow-[inset_-1px_0_0_rgba(0,0,0,0.14),4px_0_24px_-12px_rgba(60,4,10,0.35)] transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+      className={`no-print relative w-full text-white flex flex-col md:sticky md:top-[6.5rem] md:h-[calc(100vh-6.5rem)] shrink-0 select-none z-30 bg-[radial-gradient(140%_45%_at_0%_0%,rgba(255,255,255,0.13),transparent_70%),linear-gradient(180deg,#B51C28_0%,#A21A24_45%,#8E141D_100%)] md:shadow-[inset_-1px_0_0_rgba(0,0,0,0.14),4px_0_24px_-12px_rgba(60,4,10,0.35)] transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
         collapsed ? 'md:w-[4.75rem]' : 'md:w-[16rem]'
       }`}
     >
+      {/*
+        The toggle alone heads the rail now the brand is in the header — in
+        the corner while there is a corner to speak of, on the centre line
+        once the rail is too narrow for a corner to read as placement rather
+        than an accident. A phone has no rail to collapse, so no row at all.
+      */}
       <div
-        /*
-         * Two rows on desktop, reversed so the toggle takes the top one: laid
-         * out side by side, the toggle ate into the width the logo centred
-         * itself in, leaving the mark sitting visibly left of the rail's
-         * centre line. Given its own row it stops competing for that width,
-         * and the logo can centre on the rail itself.
-         *
-         * Where the toggle lands on that row is the one thing the two states
-         * differ on — the corner when there is a corner to speak of, the
-         * centre line once the rail is too narrow for a corner to read as
-         * placement rather than an accident.
-         */
-        className={`px-4 pt-4 pb-3 flex items-center gap-2 md:flex-col-reverse ${
-          collapsed
-            ? 'md:px-2 md:pt-3 md:pb-5 md:gap-3'
-            : 'md:px-5 md:pt-3 md:pb-6 md:gap-2'
+        className={`hidden md:flex pt-3 pb-1 ${
+          collapsed ? 'justify-center px-2' : 'justify-end px-4'
         }`}
       >
-        <Link
-          href="/dashboard"
-          className="block min-w-0 flex-1 cursor-pointer md:w-full md:flex-none transition-opacity hover:opacity-90"
-          id="brand-logo-btn"
-          title="Gujrat Group — Dashboard"
-        >
-          {/*
-            Reversed out of the rail rather than boxed on a white plate. The
-            wordmark goes when the rail narrows — shrunk to 4.75rem it would
-            be an unreadable smudge, so only the mark stays.
-          */}
-          <BrandLogo
-            variant={collapsed ? 'emblem' : 'knockout'}
-            className={
-              collapsed
-                ? 'w-full max-w-[8rem] md:max-w-[2.6rem] md:mx-auto'
-                : 'w-full max-w-[8rem] md:max-w-[12rem] md:mx-auto'
-            }
-          />
-        </Link>
-
         <button
           type="button"
           id="sidebar-collapse-btn"
@@ -313,9 +299,7 @@ export const Sidebar: React.FC = () => {
           aria-controls="main-sidebar"
           title={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
           aria-label={collapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
-          className={`hidden md:flex items-center justify-center w-8 h-8 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors duration-200 cursor-pointer shrink-0 ${
-            collapsed ? '' : 'md:self-end'
-          }`}
+          className="flex items-center justify-center w-8 h-8 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors duration-200 cursor-pointer shrink-0"
         >
           {collapsed ? (
             <PanelLeftOpen className="w-[18px] h-[18px]" />
@@ -333,27 +317,46 @@ export const Sidebar: React.FC = () => {
       <motion.nav
         ref={sectionsRef}
         layoutScroll
-        className={`flex-1 pb-3 md:pb-5 flex md:flex-col gap-1 md:gap-0 overflow-x-auto md:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+        className={`flex-1 py-3 md:pt-0 md:pb-5 flex md:flex-col gap-1 md:gap-0 overflow-x-auto md:overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
           collapsed ? 'px-3 md:px-2.5' : 'px-3 md:px-4'
         }`}
       >
         <div className="flex md:flex-col gap-1 w-full">
-          {entries.map((entry, index) => (
-            <React.Fragment key={entry.id}>
-              {index > 0 && entries[index - 1].group !== entry.group && (
-                <span
-                  className="hidden md:block h-px my-3.5 mx-1 bg-gradient-to-r from-white/0 via-white/25 to-white/0"
-                  aria-hidden
+          {entries.map((entry, index) => {
+            const startsGroup = index === 0 || entries[index - 1].group !== entry.group;
+            return (
+              <React.Fragment key={entry.id}>
+                {/*
+                  Each group under its heading. Collapsed, a heading has no
+                  room, so a rule marks where the group changes instead.
+                */}
+                {startsGroup &&
+                  (collapsed ? (
+                    index > 0 && (
+                      <span
+                        className="hidden md:block h-px my-3.5 mx-1 bg-gradient-to-r from-white/0 via-white/25 to-white/0"
+                        aria-hidden
+                      />
+                    )
+                  ) : (
+                    <p
+                      className={`hidden md:block px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/55 ${
+                        index === 0 ? 'pt-1' : 'pt-6'
+                      }`}
+                    >
+                      {GROUP_LABEL[entry.group]}
+                    </p>
+                  ))}
+                <NavItem
+                  entry={entry}
+                  active={entry.isActive(pathname)}
+                  pathname={pathname}
+                  collapsed={collapsed}
+                  badge={badges[entry.id]}
                 />
-              )}
-              <NavItem
-                entry={entry}
-                active={entry.isActive(pathname)}
-                pathname={pathname}
-                collapsed={collapsed}
-              />
-            </React.Fragment>
-          ))}
+              </React.Fragment>
+            );
+          })}
         </div>
       </motion.nav>
 
@@ -457,7 +460,9 @@ const NavItem: React.FC<{
   active: boolean;
   pathname: string;
   collapsed: boolean;
-}> = ({ entry, active, pathname, collapsed }) => {
+  /** A count to show beside the label, if any. */
+  badge?: { count: number; urgent: boolean };
+}> = ({ entry, active, pathname, collapsed, badge }) => {
   const { href, id, label, icon: Icon, children } = entry;
 
   /*
@@ -510,8 +515,33 @@ const NavItem: React.FC<{
             }`}
           >
             <Icon className="w-[18px] h-[18px]" />
+            {/* Collapsed, the count has no room, so a dot says there is one */}
+            {collapsed && badge && badge.count > 0 && (
+              <span
+                aria-hidden
+                className={`hidden md:block absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[#A21A24] ${
+                  badge.urgent ? 'bg-[#FFC2C7]' : 'bg-white'
+                }`}
+              />
+            )}
           </span>
           <span className={`relative ${collapsed ? 'md:hidden' : ''}`}>{label}</span>
+          {badge && badge.count > 0 && (
+            <span
+              className={`relative ml-auto min-w-[1.75rem] h-6 px-2 rounded-full text-[11px] font-bold tabular-nums flex items-center justify-center ${
+                collapsed ? 'md:hidden' : ''
+              } ${
+                active
+                  ? 'bg-[#FDECEE] text-[#A81823]'
+                  : badge.urgent
+                    ? 'bg-white text-[#A81823]'
+                    : 'bg-black/25 text-white'
+              }`}
+              aria-label={`${badge.count} outstanding`}
+            >
+              {badge.count > 99 ? '99+' : badge.count}
+            </span>
+          )}
         </Link>
 
         {/*

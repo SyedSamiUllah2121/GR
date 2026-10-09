@@ -268,6 +268,42 @@ data, docs and configuration, by anyone.
 
 ### 2026-10-09
 
+- Added the supplied kitchen photo behind every page banner. Removed the
+  "Safe Food. Happy Customers." line, which could not be read over the
+  photo, and put the banner's buttons on a white tray so a red button no
+  longer disappears into the red diagonal.
+- Every screen's heading is now a banner: the page title on the left, "Safe
+  Food. Happy Customers." in the middle, and the brand's red diagonals on the
+  right with the page's buttons over them. Ready to take a kitchen photo.
+  The job detail page and the printable report keep their own headings.
+- Gave the header a soft shadow, so its bottom edge stands out from the page.
+- Removed the dashboard's own black "New inspection" button; the one in the
+  header does the same job on every screen.
+- New app header, in the style of the supplied reference: a maroon status
+  strip (scope, this week's inspections, rounds due and overdue, open
+  repairs, last inspection) over a white header with the logo, search, a
+  New inspection button, the bell and the account. The sidebar now sits
+  under the header with Operations / Administration headings and counts on
+  Inspections and Maintenance. Every count shows only what that person may
+  already see; nothing about who can do what changed.
+- Made the logo on the sign-in page about 40% bigger.
+- The sign-in page now fits on one screen at common laptop and desktop
+  sizes without scrolling, and its two halves line up top and bottom.
+- Redesigned the sign-in page to the supplied mockup: a deep maroon brand
+  panel, serif headings, a warm off-white form, a maroon sign-in button and
+  a "Quick demo access" list with an icon per role. Sign-in itself works
+  exactly as before.
+- Made the logo horizontal: the sidebar and sign-in panel now show the
+  emblem with the logo's own "Gujrat Group of Restaurants" lettering
+  beside it, on a slim white bar. Cut from the supplied artwork, not
+  redrawn.
+- Made the logo sleeker: the sidebar and sign-in panel now show the emblem
+  on a small white tile with "Gujrat Group / of Restaurants" beside it,
+  instead of the whole logo on a large white card.
+- Replaced the logo across the app with the Gujrat Group of Restaurants
+  artwork, used exactly as supplied on a white card (sign-in screen,
+  sidebar, browser tab). The old Royal Gujrat drawings were removed; the
+  full-size original is kept in `docs/brand/`.
 - Renamed the brand from Royal Gujrat to Gujrat Group on the logo, the
   sign-in screen and the sidebar. The emblem and the "Restaurant & Sweets"
   line are unchanged, and the Royal Gujarat branch keeps its name.

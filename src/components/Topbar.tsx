@@ -6,41 +6,57 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import {
   Bell,
+  CalendarCheck,
   CalendarClock,
   Check,
   ChevronDown,
   ChevronRight,
+  ClipboardCheck,
   ClipboardList,
+  Clock,
   LogOut,
   MapPin,
-  PenLine,
   Search,
+  ShieldAlert,
   Store,
   UserCog,
   Wrench,
   X,
 } from 'lucide-react';
-import { Inspection, MaintenanceJob, USER_ROLE_LABEL, branchesOf } from '../types';
-import { getInspections, subscribeToStorage } from '../services/storage';
-import { getJobs, subscribeToMaintenance } from '../services/maintenanceStore';
-import { formatDate, formatDateTime, formatTimeOnly } from '../services/reportModel';
+import { USER_ROLE_LABEL, branchesOf } from '../types';
+import { formatDate } from '../services/reportModel';
 import { signOut, switchBranch, switchableBranches } from '../services/session';
-import { can, visibleInspections, visibleJobs } from '../services/permissions';
-import { assignmentsFor, isOverdueAssignment, scheduleLabel } from '../services/assignments';
+import { can } from '../services/permissions';
 import { mondayStatusFor } from '../services/mondaySchedule';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { useBranches } from '../hooks/useBranches';
-import { activeBranches } from '../services/branchStore';
+import { useOutstanding } from '../hooks/useOutstanding';
+import { BrandLogo } from './BrandLogo';
 import { EASE_OUT, t } from './motion';
 
 /**
- * The bar above every screen: find a record, see what is outstanding, sign out.
+ * The bar across the top of every screen, in two rows.
  *
- * Everything in it reads the same stores the screens do, so the alert count
- * cannot disagree with what the dashboard says needs doing — and everything
- * is filtered by what the signed-in account may see, so a branch manager is
- * not chased about a branch that is not theirs, and an inspector is not
- * offered records they cannot open.
+ *   status strip  where you are and what is outstanding there, at a glance:
+ *                 the scope, this week's inspections, rounds due and late,
+ *                 open repairs and the last inspection. From `md` up only —
+ *                 a phone has no width for it, and the bell says the same.
+ *   header        the brand, search, starting an inspection, the bell, the
+ *                 branch being worked on and the account.
+ *
+ * Everything in it reads `useOutstanding`, the same source the sidebar's
+ * counts use, and that reads the same stores the screens do — so no count up
+ * here can disagree with what the dashboard says needs doing. Everything is
+ * narrowed to what the signed-in account may see first.
+ *
+ * The logo lives here rather than at the top of the sidebar, as it does on
+ * most business software: the header spans the window, so the brand sits at
+ * its left end on every screen, including a phone's.
+ */
+
+/*
+ * From `md` up the strip and header stand 6.5rem tall together (2.25rem and
+ * 4.25rem). The rail and the inspections table's heading row pin themselves
+ * under that height, so change all three together.
  */
 
 const MAX_RESULTS = 6;
@@ -54,81 +70,23 @@ interface SearchHit {
   group: string;
 }
 
-interface Alert {
-  key: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  text: string;
-  tone: 'bad' | 'warn';
-}
-
-/** Today as a plain local ISO date, matching how records store their dates. */
-function todayIso(): string {
-  const now = new Date();
-  return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
-function daysBetween(from: string, to: string): number {
-  const a = new Date(`${from}T00:00:00Z`).getTime();
-  const b = new Date(`${to}T00:00:00Z`).getTime();
-  if (Number.isNaN(a) || Number.isNaN(b)) return 0;
-  return Math.round((b - a) / 86400000);
-}
-
 export const Topbar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
   const user = useCurrentUser();
-  const [allInspections, setInspections] = useState<Inspection[]>(() => getInspections());
-  const [allJobs, setJobs] = useState<MaintenanceJob[]>(() => getJobs());
-  const allBranches = useBranches();
+  const {
+    allInspections,
+    inspections,
+    jobs,
+    branches,
+    alerts,
+    openJobs,
+    visitsDue,
+    visitsLate,
+    thisWeek,
+    latestDate,
+  } = useOutstanding(user);
 
-  useEffect(() => {
-    const refresh = () => setInspections(getInspections());
-    refresh();
-    return subscribeToStorage(refresh);
-  }, []);
-
-  useEffect(() => {
-    const refresh = () => setJobs(getJobs());
-    refresh();
-    return subscribeToMaintenance(refresh);
-  }, []);
-
-  /*
-   * Scoped to the account before anything else looks at it, so neither the
-   * search nor the alert list can leak a branch someone has no business
-   * seeing. Closed branches drop out too: they are not chased for being
-   * overdue.
-   */
-  const inspections = useMemo(
-    () => visibleInspections(user, allInspections),
-    [user, allInspections]
-  );
-
-  const branches = useMemo(() => {
-    const open = activeBranches(allBranches);
-    if (can(user, 'inspections.viewAll')) return open;
-    if (user?.role === 'branch-manager') {
-      const own = branchesOf(user);
-      return open.filter((b) => own.includes(b.name));
-    }
-    // An inspector has no standing at a branch beyond the visit itself
-    return [];
-  }, [user, allBranches]);
-
-  /*
-   * Narrowed exactly as the board is, so the alerts and the search agree with
-   * what the screens behind them will show. The admin and the maintenance manager get
-   * every job; a branch manager gets their own branch's repairs, both links
-   * landing somewhere now open to them; an inspector gets none, having no
-   * standing at a branch beyond the visit itself.
-   */
-  const jobs = useMemo(() => visibleJobs(user, allJobs), [user, allJobs]);
 
   // Which panel, if any, is showing. Only one may be open at a time.
   const [open, setOpen] = useState<'search' | 'alerts' | 'branch' | 'user' | null>(null);
@@ -235,135 +193,6 @@ export const Topbar: React.FC = () => {
     return out.slice(0, 12);
   }, [query, inspections, jobs, branches]);
 
-  const alerts = useMemo<Alert[]>(() => {
-    const today = todayIso();
-    const submitted = inspections.filter((i) => i.status === 'submitted');
-    const out: Alert[] = [];
-
-    const draft = inspections.find((i) => i.status === 'draft');
-    if (draft) {
-      out.push({
-        key: 'draft',
-        href: `/inspections/${draft.id}/checklist`,
-        icon: PenLine,
-        text: `Unfinished inspection at ${draft.branchName}`,
-        tone: 'warn',
-      });
-    }
-
-    /*
-     * The one thing an inspector is here for: the visits handed to them.
-     * Nothing else in this list applies — they hold no branch, so being
-     * overdue is not theirs to answer for.
-     */
-    if (user?.role === 'inspector') {
-      assignmentsFor(user.id, inspections).forEach((visit) => {
-        // A visit booked for a time that has passed is a different message
-        // from one simply waiting, and a worse one
-        const late = isOverdueAssignment(visit);
-        const booked = scheduleLabel(visit, formatDateTime, formatTimeOnly);
-        out.push({
-          key: `assigned-${visit.id}`,
-          href: '/inspections',
-          icon: CalendarClock,
-          text: booked
-            ? `Surprise visit to ${visit.branchName} ${late ? 'was due' : 'due'} ${booked}`
-            : `Surprise visit to ${visit.branchName} waiting to be started`,
-          tone: late ? 'bad' : 'warn',
-        });
-      });
-      return out;
-    }
-
-    /*
-     * A branch manager is chased about one thing: this week's round. The
-     * generic overdue alert below would say the same thing less precisely —
-     * it counts seven days from the last visit of any kind, where the round
-     * is due on the Monday whether or not an inspector called on Thursday.
-     */
-    const ownBranches = branchesOf(user);
-    ownBranches.forEach((branch) => {
-      const monday = mondayStatusFor(branch, inspections);
-      if (!monday.done) {
-        // Named only when there is more than one round to tell apart
-        const where = ownBranches.length > 1 ? `${branch}: ` : '';
-        out.push({
-          key: `monday-${branch}`,
-          href: '/inspections',
-          icon: CalendarClock,
-          text: where + (monday.overdue
-            ? `Monday inspection is ${monday.daysLate} day${
-                monday.daysLate === 1 ? '' : 's'
-              } late`
-            : 'Monday inspection is due today'),
-          tone: monday.overdue ? 'bad' : 'warn',
-        });
-      }
-    });
-
-    // Chasing every branch's cadence is the admin's job — the manager above
-    // has already been told about their own, more precisely.
-    const chased = can(user, 'inspections.viewAll') ? branches : [];
-
-    chased.forEach((b) => {
-      const latest = submitted
-        .filter((i) => i.branchName === b.name)
-        .sort((x, y) => y.date.localeCompare(x.date))[0];
-      if (!latest) {
-        out.push({
-          key: `never-${b.id}`,
-          href: '/inspections/new',
-          icon: CalendarClock,
-          text: `${b.name} has never been inspected`,
-          tone: 'bad',
-        });
-        return;
-      }
-      // Same weekly cadence the reports use
-      const due = new Date(`${latest.date}T00:00:00Z`);
-      due.setUTCDate(due.getUTCDate() + 7);
-      const dueIso = due.toISOString().slice(0, 10);
-      const over = daysBetween(dueIso, today);
-      if (over > 0) {
-        out.push({
-          key: `overdue-${b.id}`,
-          href: '/inspections/new',
-          icon: CalendarClock,
-          text: `${b.name} is ${over} day${over === 1 ? '' : 's'} overdue`,
-          tone: 'bad',
-        });
-      }
-    });
-
-    const openJobs = jobs.filter((j) => j.completedAt === null);
-    const urgent = openJobs.filter((j) => j.priority === 'critical' || j.priority === 'high');
-    if (openJobs.length > 0) {
-      out.push({
-        key: 'jobs',
-        href: '/maintenance/jobs',
-        icon: Wrench,
-        text: `${openJobs.length} maintenance job${
-          openJobs.length === 1 ? '' : 's'
-        } outstanding${urgent.length > 0 ? ` — ${urgent.length} urgent` : ''}`,
-        tone: urgent.length > 0 ? 'bad' : 'warn',
-      });
-    }
-
-    const unsigned = submitted.filter((i) => !i.signature).length;
-    if (unsigned > 0) {
-      out.push({
-        key: 'unsigned',
-        href: '/inspections',
-        icon: PenLine,
-        text: `${unsigned} submitted record${
-          unsigned === 1 ? '' : 's'
-        } with no manager signature`,
-        tone: 'warn',
-      });
-    }
-
-    return out;
-  }, [user, inspections, jobs, branches]);
 
   const go = (href: string) => {
     setOpen(null);
@@ -425,19 +254,80 @@ export const Topbar: React.FC = () => {
     return { text: 'Monday round due today', tone: 'text-[#B4740A]' };
   };
 
+  /*
+   * What the strip says about scope: every branch for those who hold them
+   * all, the branch being worked on for a manager, and for an inspector the
+   * visits they are sent on, which is the whole of their standing.
+   */
+  const scope = can(user, 'inspections.viewAll')
+    ? `All ${branches.length} branches`
+    : activeBranch
+      ? activeBranch
+      : user?.role === 'inspector'
+        ? 'Assigned visits'
+        : 'All branches';
+  const seesInspections = can(user, 'inspections.browse');
+  const seesRepairs = can(user, 'maintenance.view') || can(user, 'maintenance.report');
+  const mayStartVisits = can(user, 'monday.perform');
+
   return (
-    <div
-      ref={barRef}
-      /*
-       * Frosted rather than solid, so the page scrolling under it stays
-       * faintly visible and the bar reads as sitting above the page rather
-       * than as a band cut out of it. The filter only reaches this bar's own
-       * contents — its panels are absolute, and nothing fixed lives in here.
-       */
-      className="no-print sticky top-0 z-20 h-16 bg-white/80 backdrop-blur-xl backdrop-saturate-150 border-b border-[#E8E9EE] shadow-[0_1px_0_rgba(16,24,40,0.02)] flex items-center gap-3 sm:gap-5 px-4 sm:px-6 md:px-8 shrink-0"
-    >
+    <header ref={barRef} className="no-print sticky top-0 z-40 shrink-0">
+      {/* Status strip */}
+      <div className="hidden md:flex h-9 items-center gap-6 px-6 lg:px-8 bg-[#8E1520] text-white text-[12px] font-semibold whitespace-nowrap overflow-hidden">
+        <StripItem icon={MapPin}>{scope}</StripItem>
+        {seesInspections && (
+          <StripItem icon={ClipboardList} href="/inspections">
+            {thisWeek} inspection{thisWeek === 1 ? '' : 's'} this week
+          </StripItem>
+        )}
+        <div className="ml-auto flex items-center gap-6">
+          {seesInspections && (
+            <>
+              <StripItem icon={CalendarCheck} href="/inspections">
+                {visitsDue} due
+              </StripItem>
+              <StripItem icon={ShieldAlert} href="/inspections" alert={visitsLate > 0}>
+                {visitsLate} overdue
+              </StripItem>
+            </>
+          )}
+          {seesRepairs && (
+            <StripItem icon={Wrench} href="/maintenance/jobs">
+              {openJobs.length} open repair{openJobs.length === 1 ? '' : 's'}
+            </StripItem>
+          )}
+          {seesInspections && (
+            <StripItem icon={Clock} className="hidden lg:inline-flex">
+              {latestDate ? `Last inspection ${formatDate(latestDate)}` : 'No inspection yet'}
+            </StripItem>
+          )}
+        </div>
+      </div>
+
+      {/*
+        Solid white rather than frosted: the strip above is solid, and a
+        header the page showed through under a solid band read as two bars
+        that did not belong together.
+
+        The shadow is what separates it from the page: white on the page's
+        pale grey, a hairline alone all but vanished.
+      */}
+      <div className="relative h-16 md:h-[4.25rem] bg-white border-b border-[#E2E4E9] shadow-[0_1px_2px_rgba(16,24,40,0.06),0_8px_20px_-8px_rgba(16,24,40,0.16)] flex items-center gap-3 sm:gap-5 px-4 sm:px-6 lg:px-8">
+      {/* Brand */}
+      <Link
+        href="/dashboard"
+        id="brand-logo-btn"
+        title="Gujrat Group — Dashboard"
+        className="shrink-0 flex items-center gap-4 cursor-pointer transition-opacity hover:opacity-85"
+      >
+        <BrandLogo variant="emblem" bare className="sm:hidden w-10" />
+        <BrandLogo variant="lockup" bare className="hidden sm:flex w-[10.5rem] lg:w-[11.5rem]" />
+        <span aria-hidden className="hidden xl:block w-px h-8 bg-[#E8E9EE]" />
+        <span className="hidden xl:block text-[13px] font-medium text-[#3D4047]">Inspection Log</span>
+      </Link>
+
       {/* Search */}
-      <div className="relative flex-1 max-w-xl">
+      <div className="relative flex-1 max-w-xl lg:mx-auto">
         <Search
           className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors ${
             open === 'search' ? 'text-[#17181D]' : 'text-[#9CA1A9]'
@@ -519,6 +409,21 @@ export const Topbar: React.FC = () => {
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
+        {/*
+          Starting an inspection, from every screen — for the roles the route
+          table lets through to it, and nobody else.
+        */}
+        {mayStartVisits && (
+          <Link
+            id="topbar-new-inspection-btn"
+            href="/inspections/new"
+            className="hidden md:inline-flex items-center gap-2 h-10 px-3 lg:px-4 rounded-xl bg-[#8E1520] hover:bg-[#76101A] text-white text-[13px] font-semibold shadow-[0_6px_16px_-8px_rgba(142,21,32,0.7)] transition-all duration-200 hover:-translate-y-px mr-1"
+            title="New inspection"
+          >
+            <ClipboardCheck className="w-4 h-4 shrink-0" />
+            <span className="hidden lg:inline">New inspection</span>
+          </Link>
+        )}
         {/*
           The branch being worked on, where it can be seen from every screen.
           For a manager with more than one it is also where they switch: it
@@ -750,7 +655,33 @@ export const Topbar: React.FC = () => {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </header>
+  );
+};
+
+/** One reading on the status strip; a link where there is a page behind it. */
+const StripItem: React.FC<{
+  icon: React.ComponentType<{ className?: string }>;
+  href?: string;
+  /** Marks a count that wants attention. */
+  alert?: boolean;
+  className?: string;
+  children: React.ReactNode;
+}> = ({ icon: Icon, href, alert = false, className = '', children }) => {
+  const inner = (
+    <>
+      <Icon className={`w-3.5 h-3.5 shrink-0 ${alert ? 'text-[#FFC2C7]' : 'text-white/75'}`} />
+      <span className="tabular-nums">{children}</span>
+    </>
+  );
+  const base = `inline-flex items-center gap-2 ${className}`;
+  return href ? (
+    <Link href={href} className={`${base} hover:text-white/80 transition-colors`}>
+      {inner}
+    </Link>
+  ) : (
+    <span className={base}>{inner}</span>
   );
 };
 

@@ -48,7 +48,7 @@ import { PriorityBadge } from './PriorityBadge';
 import { StatusPill } from './MaintenanceStatusPill';
 import { ScoreRing } from './ScoreRing';
 import { CountUp, Reveal, Stagger, StaggerItem } from './motion';
-import { Card, Panel, PanelHeader } from './ui';
+import { Card, PageHeader, Panel, PanelHeader } from './ui';
 import { BarList, CHART_COLORS, ScoreDial, StackedMeter, TrendChart, TrendPoint } from './charts';
 
 /** Status palette, the same steps the report and the rings use. */
@@ -217,31 +217,26 @@ export const DashboardScreen: React.FC = () => {
 
   return (
     <div className="p-5 sm:p-6 md:p-8 lg:p-10 flex-1 space-y-6 max-w-[1440px] w-full mx-auto">
-      {/* Page heading */}
-      <Reveal className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#9CA1A9]">
-            {longToday()}
-          </p>
-          <h1 className="mt-1.5 text-[26px] md:text-[30px] leading-tight font-bold tracking-tight text-[#17181D]">
-            {/*
-              A branch manager's dashboard covers their own branches, so it
-              says which — or "Your branches" for a manager who runs two.
-              Calling it "Dashboard" while showing one branch's averages
-              would read as the whole estate doing badly.
-            */}
-            {title}
-          </h1>
-          <p className="mt-1.5 text-[13px] text-[#6B6F76]">
-            {model.empty
+      <Reveal>
+        <PageHeader
+          eyebrow={longToday()}
+          /*
+            A branch manager's dashboard covers their own branches, so it
+            says which — or "Your branches" for a manager who runs two.
+            Calling it "Dashboard" while showing one branch's averages would
+            read as the whole estate doing badly.
+          */
+          title={title}
+          subtitle={
+            model.empty
               ? 'No inspections submitted yet'
               : everyBranch
                 ? `${model.totalInspections} inspection${model.totalInspections === 1 ? '' : 's'} across ${inspectedCount} of ${model.branches.length} branches · latest ${formatDate(model.latestVisitDate)}`
-                : `${model.totalInspections} inspection${model.totalInspections === 1 ? '' : 's'} on record · latest ${formatDate(model.latestVisitDate)}`}
-          </p>
-        </div>
-
-        <div className="shrink-0 flex flex-wrap items-center gap-2">
+                : `${model.totalInspections} inspection${model.totalInspections === 1 ? '' : 's'} on record · latest ${formatDate(model.latestVisitDate)}`
+          }
+          actions={
+            mondays.length > 0 || can(user, 'maintenance.report') ? (
+              <>
           {/*
             The one thing a branch manager has to do this week, on the screen
             they land on. A link rather than the full card the inspections page
@@ -295,17 +290,10 @@ export const DashboardScreen: React.FC = () => {
               <ArrowRight className="w-3.5 h-3.5 shrink-0" />
             </Link>
           )}
-
-          {everyBranch && (
-            <Link
-              href="/inspections/new"
-              className="shrink-0 inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-[#17181D] text-white text-xs font-bold shadow-[0_6px_16px_-8px_rgba(23,24,29,0.6)] transition-all hover:-translate-y-px hover:bg-black"
-            >
-              <ClipboardCheck className="w-4 h-4 shrink-0" />
-              New inspection
-            </Link>
-          )}
-        </div>
+              </>
+            ) : undefined
+          }
+        />
       </Reveal>
 
       {model.empty ? (

@@ -625,7 +625,7 @@ export const RecordsListScreen: React.FC = () => {
         */}
         <div className="overflow-x-auto xl:overflow-x-visible flex-1">
           <table className="w-full text-left border-separate border-spacing-0">
-            <thead className="xl:sticky xl:top-16 z-10">
+            <thead className="xl:sticky xl:top-[6.5rem] z-10">
               <tr>
                 {(
                   [

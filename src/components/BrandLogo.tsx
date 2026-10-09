@@ -7,59 +7,56 @@ import { ORGANISATION } from '../data/user';
 /**
  * The operator's logo.
  *
- * Drawn from a file in `public/brand/` rather than inlined, so the artwork can
- * be replaced without touching code, and sized by the width it is given — a
- * logo has to fill its space, and capping its height instead left the mark
- * floating with the strapline too small to read.
+ * Drawn from files in `public/brand/` rather than inlined, so the artwork can
+ * be replaced without touching code. They are web-sized copies of the Gujrat
+ * Group master artwork, kept at full size in `docs/brand/`. Re-export from
+ * that if the logo changes.
  *
- * Two lockups, because one cannot serve both places:
+ *   full    the whole stacked logo, exactly as supplied, for white grounds
+ *   lockup  the horizontal logo — the same emblem with the same lettering
+ *           set beside it rather than under it — on a white bar, for the
+ *           red rail and the dark sign-in panel
+ *   emblem  the emblem alone on a white tile, for the collapsed rail
  *
- *   horizontal  full colour on a white plate, for light backgrounds
- *   knockout    reversed out in white, sitting straight on the red rail
- *   emblem      the mark alone, for the collapsed rail where no wordmark fits
- *
- * The rail used to carry the full-colour mark on a white card, which read as a
- * heavy slab in a 272px column. Reversing it out is both lighter and the
- * conventional way to put a brand on a coloured ground.
+ * The horizontal file is cut from the master, not redrawn, so the lettering
+ * stays the brand's own. The artwork is black and red, so on the rail it
+ * needs a white ground. Boxing the whole stacked logo on a white card was
+ * tried first and read as a heavy, near-square slab at the top of the rail;
+ * setting the name in the app's own type beside the emblem was lighter but
+ * lost the logo's lettering. The horizontal bar keeps both.
  */
-type Variant = 'horizontal' | 'knockout' | 'emblem';
+type Variant = 'full' | 'lockup' | 'emblem';
 
-/**
- * Sources are tried in order, falling back to the text mark if none loads.
- *
- * Only files that are actually in `public/brand/` are listed: a candidate that
- * is not there costs a 404 on every screen, since the rail draws the logo on
- * all of them. To use the original artwork, add it as a `.png` and put it
- * ahead of the vector rebuild here.
- */
-const SOURCES: Record<Variant, string[]> = {
-  horizontal: ['/brand/royal-gujrat.svg'],
-  knockout: ['/brand/royal-gujrat-knockout.svg'],
-  emblem: ['/brand/royal-gujrat-emblem.svg'],
-};
+const FULL_SRC = '/brand/gujrat-group.png';
+const EMBLEM_SRC = '/brand/gujrat-group-emblem.png';
+const LOCKUP_SRC = '/brand/gujrat-group-horizontal.png';
 
 interface BrandLogoProps {
   variant?: Variant;
-  /** Sets the mark's width — give it a `w-*` class. The artwork fills it. */
+  /**
+   * For `full` and `lockup`, sets the logo's width — give it a `w-*` class.
+   * For `emblem`, positions the tile; its size is fixed.
+   */
   className?: string;
+  /** More room around the lockup, for the sign-in panel. */
+  large?: boolean;
+  /**
+   * The artwork alone, with no white plate or tile — for a white ground such
+   * as the header, where a plate would only be a box drawn round the logo.
+   * Sized by `className` like `full`.
+   */
+  bare?: boolean;
 }
 
 export const BrandLogo: React.FC<BrandLogoProps> = ({
-  variant = 'horizontal',
+  variant = 'full',
   className = '',
+  large = false,
+  bare = false,
 }) => {
-  const sources = SOURCES[variant];
-  const knockout = variant === 'knockout' || variant === 'emblem';
-  const [stage, setStage] = useState(0);
+  const src = variant === 'full' ? FULL_SRC : variant === 'lockup' ? LOCKUP_SRC : EMBLEM_SRC;
+  const [broken, setBroken] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
-
-  /*
-   * Both the mount check below and a late `onError` can report the same
-   * source failing. Advancing past a named index rather than incrementing
-   * makes the second report a no-op — a blind increment skipped the vector
-   * file entirely and fell straight through to the text mark.
-   */
-  const failed = (index: number) => setStage((s) => (s === index ? index + 1 : s));
 
   /*
    * On a server-rendered screen the browser requests the image and gives up on
@@ -70,20 +67,53 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
    */
   useEffect(() => {
     const img = imgRef.current;
-    if (img && img.complete && img.naturalWidth === 0) failed(stage);
-  }, [stage]);
+    if (img && img.complete && img.naturalWidth === 0) setBroken(true);
+  }, [src]);
 
-  /* No artwork at all: a shield and the name, so the chrome stays intact. */
-  if (stage >= sources.length) {
+  const label = `${ORGANISATION.name} ${ORGANISATION.tagline}`;
+
+  if (variant === 'full' || bare) {
+    if (broken) {
+      return (
+        <span className={`flex items-center justify-center gap-2 text-[#CE2130] ${className}`}>
+          <ShieldCheck className="w-5 h-5 shrink-0" />
+          <span className="text-[13px] font-bold tracking-tight whitespace-nowrap">
+            {ORGANISATION.name}
+          </span>
+        </span>
+      );
+    }
     return (
-      <span
-        className={`flex items-center justify-center gap-2 ${
-          knockout ? 'text-white' : 'bg-white rounded-xl px-3 py-3 text-[#CE2130]'
-        } ${className}`}
-      >
-        <ShieldCheck className="w-5 h-5 shrink-0" />
-        <span className="text-[13px] font-bold tracking-tight whitespace-nowrap">
-          {ORGANISATION.name}
+      <span className={`block ${className}`}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- a static brand asset, not content */}
+        <img
+          ref={imgRef}
+          src={src}
+          alt={label}
+          onError={() => setBroken(true)}
+          className="w-full h-auto"
+        />
+      </span>
+    );
+  }
+
+  /* No artwork: the shield stands in on the same tile, so the chrome stays intact. */
+  if (variant === 'emblem') {
+    return (
+      <span className={`flex justify-center ${className}`}>
+        <span className="shrink-0 w-11 h-11 rounded-xl p-1.5 flex items-center justify-center bg-white shadow-[0_6px_16px_-8px_rgba(0,0,0,0.45)]">
+          {broken ? (
+            <ShieldCheck className="w-5 h-5 text-[#CE2130]" />
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element -- a static brand asset, not content */
+            <img
+              ref={imgRef}
+              src={src}
+              alt={label}
+              onError={() => setBroken(true)}
+              className="w-full h-auto"
+            />
+          )}
         </span>
       </span>
     );
@@ -91,19 +121,27 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
 
   return (
     <span
-      className={`flex items-center justify-center ${
-        knockout ? '' : 'bg-white rounded-xl px-3 py-2.5'
+      className={`flex items-center justify-center bg-white shadow-[0_8px_20px_-10px_rgba(0,0,0,0.5)] ${
+        large ? 'rounded-2xl px-6 py-5' : 'rounded-xl px-3.5 py-3'
       } ${className}`}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- a static brand asset, not content */}
-      <img
-        ref={imgRef}
-        key={sources[stage]}
-        src={sources[stage]}
-        alt={`${ORGANISATION.name} — ${ORGANISATION.tagline}`}
-        onError={() => failed(stage)}
-        className="w-full h-auto"
-      />
+      {broken ? (
+        <span className="flex items-center gap-2 text-[#CE2130]">
+          <ShieldCheck className="w-5 h-5 shrink-0" />
+          <span className="text-[13px] font-bold tracking-tight whitespace-nowrap">
+            {ORGANISATION.name}
+          </span>
+        </span>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element -- a static brand asset, not content */
+        <img
+          ref={imgRef}
+          src={src}
+          alt={label}
+          onError={() => setBroken(true)}
+          className="w-full h-auto"
+        />
+      )}
     </span>
   );
 };

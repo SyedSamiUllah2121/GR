@@ -142,12 +142,18 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
           Skip to main content
         </a>
 
-        <div className="min-h-screen bg-[#F6F6F8] flex flex-col md:flex-row text-[#17181D]">
-          {/* Persistent left rail (top bar on mobile) */}
+        {/*
+          The header spans the window, with the rail and the page side by
+          side beneath it. Below `md` the rail becomes a row of sections
+          under the header instead.
+        */}
+        <div className="min-h-screen bg-[#F6F6F8] flex flex-col text-[#17181D]">
+          <Topbar />
+
+          <div className="flex-1 flex flex-col md:flex-row min-w-0">
           <Sidebar />
 
           <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0">
-            <Topbar />
             {/*
               Above the page rather than inside one screen, because the
               consequence is not local to any screen: every board, overview
@@ -182,6 +188,7 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
               {children}
             </motion.div>
           </main>
+          </div>
         </div>
       </ConfirmProvider>
     </ToastProvider>
@@ -194,39 +201,37 @@ export function AppShell({children}: Readonly<{children: React.ReactNode}>) {
  *
  * Deliberately not a spinner: the wait is a few frames, and a spinner that
  * flashes up and goes reads as a stutter rather than as loading. Instead a
- * grey cast of the real furniture — the rail on its own gradient with its
- * rows, the frosted top bar, a heading and the dashboard's cards — so the
+ * grey cast of the real furniture — the strip and header across the top,
+ * the rail on its own gradient with its rows, a heading and the dashboard's
+ * cards — so the
  * page that arrives lands exactly where its outline already was. The pulse
  * stops for anyone whose device asks for less motion.
  */
 const SKELETON = 'animate-pulse motion-reduce:animate-none';
 
 const AppShellFallback: React.FC = () => (
-  <div
-    className="min-h-screen bg-[#F6F6F8] flex flex-col md:flex-row"
-    role="status"
-    aria-label="Loading"
-  >
-    <div className="w-full md:w-[16rem] md:min-h-screen shrink-0 bg-[radial-gradient(140%_45%_at_0%_0%,rgba(255,255,255,0.13),transparent_70%),linear-gradient(180deg,#B51C28_0%,#A21A24_45%,#8E141D_100%)] px-4 pt-4 pb-3 md:pt-14 flex flex-col gap-3 md:gap-2 overflow-hidden">
-      <div className={`h-12 w-32 md:w-40 md:h-16 md:mx-auto md:mb-6 rounded-xl bg-white/10 ${SKELETON}`} />
-      <div className="flex md:flex-col gap-1 md:gap-2">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="h-11 w-32 md:w-auto shrink-0 rounded-xl bg-white/[0.07] flex items-center gap-3 pl-1.5">
-            <span className="w-8 h-8 rounded-lg bg-white/10" />
-            <span className={`h-2.5 w-24 rounded bg-white/15 ${SKELETON}`} />
-          </div>
-        ))}
+  <div className="min-h-screen bg-[#F6F6F8] flex flex-col" role="status" aria-label="Loading">
+    <div className="hidden md:block h-9 bg-[#8E1520]" />
+    <div className="h-16 md:h-[4.25rem] bg-white border-b border-[#E8E9EE] flex items-center gap-5 px-4 sm:px-6 lg:px-8">
+      <div className={`h-9 w-10 sm:w-[10.5rem] rounded-lg bg-[#F4F5F7] ${SKELETON}`} />
+      <div className={`h-10 flex-1 max-w-xl lg:mx-auto rounded-xl bg-[#F4F5F7] ${SKELETON}`} />
+      <div className="ml-auto lg:ml-0 flex items-center gap-2">
+        <div className={`w-10 h-10 rounded-xl bg-[#F4F5F7] ${SKELETON}`} />
+        <div className={`w-8 h-8 rounded-full bg-[#ECEDF0] ${SKELETON}`} />
       </div>
     </div>
-    <div className="flex-1 min-w-0 flex flex-col">
-      <div className="h-16 bg-white/80 border-b border-[#E8E9EE] flex items-center gap-3 px-4 sm:px-6 md:px-8">
-        <div className={`h-10 flex-1 max-w-xl rounded-xl bg-[#F4F5F7] ${SKELETON}`} />
-        <div className="ml-auto flex items-center gap-2">
-          <div className={`w-10 h-10 rounded-xl bg-[#F4F5F7] ${SKELETON}`} />
-          <div className={`w-8 h-8 rounded-full bg-[#ECEDF0] ${SKELETON}`} />
+    <div className="flex-1 flex flex-col md:flex-row min-w-0">
+      <div className="w-full md:w-[16rem] md:h-[calc(100vh-6.5rem)] shrink-0 bg-[radial-gradient(140%_45%_at_0%_0%,rgba(255,255,255,0.13),transparent_70%),linear-gradient(180deg,#B51C28_0%,#A21A24_45%,#8E141D_100%)] px-4 py-3 md:pt-14 flex flex-col gap-3 md:gap-2 overflow-hidden">
+        <div className="flex md:flex-col gap-1 md:gap-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-11 w-32 md:w-auto shrink-0 rounded-xl bg-white/[0.07] flex items-center gap-3 pl-1.5">
+              <span className="w-8 h-8 rounded-lg bg-white/10" />
+              <span className={`h-2.5 w-24 rounded bg-white/15 ${SKELETON}`} />
+            </div>
+          ))}
         </div>
       </div>
-      <div className="p-5 sm:p-6 md:p-8 lg:p-10 space-y-6 max-w-[1440px] w-full mx-auto">
+      <div className="flex-1 min-w-0 p-5 sm:p-6 md:p-8 lg:p-10 space-y-6 max-w-[1440px] w-full mx-auto">
         <div className="space-y-2.5">
           <div className={`h-2.5 w-36 rounded bg-[#E8E9EE] ${SKELETON}`} />
           <div className={`h-8 w-56 rounded-lg bg-[#E4E6EB] ${SKELETON}`} />
