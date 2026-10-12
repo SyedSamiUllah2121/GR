@@ -13,6 +13,10 @@ add it back).
 - `docs/design-notes.md` — why the asset register, schedule, job board and
   asset matching work as they do. Read it before changing those.
 - This file — what you need to work in the code.
+- `Inspection-Log-Project-Documentation.docx` — the full project
+  documentation for owners and managers (version 1.1). When a change
+  affects what it describes, update it too and add a line to its
+  "Changes in version …" section.
 
 ## Rule: keep README.md and CLAUDE.md up to date
 
@@ -305,6 +309,12 @@ data, docs and configuration, by anyone.
   style.
 
 ### 2026-10-12
+
+- Brought the Word project documentation up to version 1.1: new name and
+  logo on the cover, a "Changes in version 1.1" section, and updated
+  sections on roles and permissions, surprise visits, the appliance list,
+  the screens, the function reference and the tests. Contents page numbers
+  recalculated. The README now lists the 14 test suites and the Word file.
 
 - ⚠ Branch managers can now run their own branch's appliance list: add,
   import, edit, withdraw and restore units, give a unit its own service

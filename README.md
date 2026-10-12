@@ -179,6 +179,8 @@ docs/
   design-notes.md Why things work the way they do
   brand/          Full-size originals of the logo and banner photo
 CLAUDE.md         Guardrails and conventions for anyone changing the code
+Inspection-Log-Project-Documentation.docx
+                  The full project documentation, as a Word file
 ```
 
 ### Pages
@@ -204,10 +206,11 @@ CLAUDE.md         Guardrails and conventions for anyone changing the code
 
 ## Tests
 
-`npm test` runs 13 suites in Node with a stand-in for the browser's storage,
+`npm test` runs 14 suites in Node with a stand-in for the browser's storage,
 so no browser is needed. They cover the asset register, the service schedule,
 the job board, permissions, surprise-visit assignment, submitting an
-inspection, full storage and the branch-manager accounts. Each suite runs in
+inspection, full storage, the branch-manager accounts, and moving and
+editing appliances (including what a branch manager may do). Each suite runs in
 its own process so that one cannot affect another.
 
 ## Deployment
@@ -295,3 +298,8 @@ before editing.
   for anyone changing the code, and the file Claude Code reads.
 - [docs/design-notes.md](docs/design-notes.md): the reasoning behind the
   asset register, the service schedule, the job board and asset matching.
+- [Inspection-Log-Project-Documentation.docx](Inspection-Log-Project-Documentation.docx):
+  the full project documentation (version 1.1, 12 October 2026) in plain
+  language: who can do what, the data, every screen and function, the tests
+  and how to deploy. Its "Changes in version 1.1" section lists what changed
+  since 8 October.
