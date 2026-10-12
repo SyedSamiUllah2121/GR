@@ -64,6 +64,15 @@
   #main-sidebar :where(a, button):focus-visible {
     outline-color: #FFFFFF;
   }
+
+  /*
+   * Chrome draws a dropdown arrow on any text box with a suggestion list.
+   * These are free-text boxes, and the arrow made them look like a select;
+   * the suggestions still open as you type or with the down arrow key.
+   */
+  input[list]::-webkit-calendar-picker-indicator {
+    display: none !important;
+  }
 }
 
 /*

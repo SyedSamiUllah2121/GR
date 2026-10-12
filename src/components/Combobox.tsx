@@ -18,7 +18,7 @@ import React, { useId } from 'react';
  * box on any that does not — which is exactly the failure mode you want,
  * because the field still takes the answer.
  *
- * Chrome draws a dropdown arrow on any field with a list. It is hidden: it
+ * Chrome's dropdown arrow on these fields is hidden in `globals.css`: it
  * made a free-text field look like a select, and the suggestions still open
  * as you type (or with the down arrow key).
  */
@@ -54,7 +54,7 @@ export const Combobox: React.FC<{
         placeholder={placeholder}
         aria-label={ariaLabel}
         autoComplete="off"
-        className={`${className ?? ''} [&::-webkit-calendar-picker-indicator]:hidden`}
+        className={className}
       />
       <datalist id={listId}>
         {options.map((option) => (

@@ -306,6 +306,10 @@ data, docs and configuration, by anyone.
 
 ### 2026-10-12
 
+- Actually removed the dropdown arrow from free-text boxes with suggestions.
+  The first attempt (below) did not hide it in Chrome; the arrow is now
+  hidden for every such box across the app.
+
 - The appliance form no longer shows the same name twice. "What it is"
   is the unit's name unless someone chooses "Give it its own name"; the
   separate name box only shows for units already named differently.
