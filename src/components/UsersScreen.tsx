@@ -243,10 +243,6 @@ export const UsersScreen: React.FC = () => {
         })}
       </Stagger>
 
-      <Reveal>
-        <RoleAccess />
-      </Reveal>
-
       <AnimatePresence initial={false}>
         {notice && (
           <motion.div
@@ -360,6 +356,11 @@ export const UsersScreen: React.FC = () => {
           );
         })}
       </Stagger>
+
+      {/* Reference, so it sits under the accounts rather than above them */}
+      <Reveal>
+        <RoleAccess />
+      </Reveal>
 
       {pendingRemoval && (
         <RemovalDialog

@@ -315,6 +315,8 @@ data, docs and configuration, by anyone.
 
 ### 2026-10-12
 
+- Moved the "What each role can do" section to the foot of the Users page,
+  below the account lists, so the accounts come first.
 - The Users page now has a "What each role can do" section: one card per
   role listing what it can and cannot do, so the Main Admin can see an
   account's access before creating it. Wording only; nothing about who can
