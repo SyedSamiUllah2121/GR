@@ -1416,10 +1416,17 @@ const EquipmentDialog: React.FC<{
               id="eq-branch"
               value={draft.branchName}
               onChange={(e) => set('branchName', e.target.value)}
-              disabled={!!item}
-              title={item ? 'An asset cannot be moved between branches' : undefined}
-              className={`${inputClass} disabled:cursor-not-allowed`}
+              className={inputClass}
             >
+              {/*
+                An asset filed under a branch since removed from the list
+                keeps that branch as an option. Without it the box would
+                show the first branch instead, and saving an unrelated
+                correction would quietly move the unit.
+              */}
+              {item && !branches.some((b) => b.name === item.branchName) && (
+                <option value={item.branchName}>{item.branchName}</option>
+              )}
               {branches.map((b) => (
                 <option key={b.id} value={b.name}>
                   {b.name}
@@ -1445,6 +1452,29 @@ const EquipmentDialog: React.FC<{
             </select>
           </div>
         </div>
+
+        {/*
+          A move is said out loud before it is saved: what follows the unit,
+          what stays behind, and that the tag on it still carries the old
+          branch's letters. The number is not changed for them — it is what
+          is printed on the unit — but the new branch's next one is offered.
+        */}
+        {item && draft.branchName !== item.branchName && (
+          <div className="-mt-1 rounded-xl border border-[#F1D9A8] bg-[#FFF8EB] px-4 py-3 text-[12px] text-[#7A4E05] space-y-1.5">
+            <p>
+              <span className="font-bold">Moving from {item.branchName} to {draft.branchName}.</span>{' '}
+              From now on it is listed, inspected and serviced at {draft.branchName}. Jobs
+              already finished stay filed under {item.branchName}, where the work was done.
+            </p>
+            {draft.assetNo && (
+              <p>
+                Its asset number <span className="font-mono">{draft.assetNo}</span> is kept. If
+                the unit is re-tagged, <span className="font-mono">Next free</span> above offers{' '}
+                <span className="font-mono">{nextAssetNo(draft.branchName, draft.category)}</span>.
+              </p>
+            )}
+          </div>
+        )}
 
         {/*
           Directly under the category, because a cadence is the second half

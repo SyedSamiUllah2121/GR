@@ -306,6 +306,14 @@ data, docs and configuration, by anyone.
 
 ### 2026-10-12
 
+- ⚠ Appliances can now be moved to another branch from their Edit form
+  (admin and maintenance manager only, as before for editing). The unit
+  keeps its record, history and asset number; finished jobs stay filed
+  under the old branch, so past month-end reports do not change. A move is
+  refused while the unit has an open job, or when the new branch already
+  has an untagged unit of the same name. Nothing saved was migrated;
+  appliances only change when someone moves one.
+
 - Actually removed the dropdown arrow from free-text boxes with suggestions.
   The first attempt (below) did not hide it in Chrome; the arrow is now
   hidden for every such box across the app.

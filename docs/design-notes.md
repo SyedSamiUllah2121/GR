@@ -41,6 +41,17 @@ is how the master documents number them. **Next free** on the asset form offers
 the next one for the branch and trade; a withdrawn asset's number is never
 reissued, because the estate's paperwork still refers to it.
 
+### Moving a unit to another branch
+
+A unit carried from one kitchen to another keeps its record and its id, so
+its service history follows it; withdrawing it and adding it again would cut
+that history in two. Jobs already finished stay filed under the branch where
+the work was done, so past month-end reports do not change. The move is
+refused while a job on the unit is still open, because that job would send
+somebody to the kitchen the unit has left. The asset number is kept as it is
+printed on the unit; the form offers the new branch's next free number in
+case it is re-tagged.
+
 ### What is recorded, and what is not
 
 Every field comes from the source document or is left blank. There are no

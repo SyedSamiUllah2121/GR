@@ -54,7 +54,10 @@ where it is tracked until it is fixed.
   report a problem on any day.
 - **Appliance register.** The group's real equipment list: 302 assets (air
   conditioners, chillers and electrical equipment), each with its own asset
-  number such as `RG-ACU-008`.
+  number such as `RG-ACU-008`. The admin and the maintenance manager can
+  move an appliance to another branch from its Edit form. It keeps its
+  history, and jobs already finished stay under the old branch. A unit with
+  a job still open has to have that job finished or closed first.
 - **Service schedule.** Regular services fall due by themselves. Air
   conditioning is every 45 days, refrigeration quarterly and electrical every
   six months.

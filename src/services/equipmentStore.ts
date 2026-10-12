@@ -6,6 +6,7 @@ import { assetSegmentFor, assetPrefixFrom, tidy } from './assetOptions';
 import { getBranches } from './branchStore';
 import { isRealIsoDay, isUsableInterval } from './maintenanceSchedule';
 import { generalPlanIdFor } from './maintenancePlanStore';
+import { getJobs, statusOf } from './maintenanceStore';
 
 /**
  * The assets each branch runs.
@@ -482,6 +483,14 @@ export function addEquipment(draft: EquipmentDraft, now: string): SaveEquipmentR
  * The id is left alone even when the name changes, because jobs already point
  * at it — a rename is a correction to what the unit is called, not a claim
  * that it is a different unit.
+ *
+ * The same holds for a move to another branch: a split AC carried from one
+ * kitchen to another is the same unit, and withdrawing it and adding it again
+ * would cut its service history in two. Jobs already finished keep the branch
+ * they name, because that is where the work was done, and the month-end
+ * report for that month must not change after the fact. A unit with a job
+ * still open is refused instead: the job names the old branch, and whoever
+ * is sent out to it would go to a kitchen the unit has left.
  */
 export function updateEquipment(id: string, draft: EquipmentDraft): SaveEquipmentResult {
   const all = getEquipment();
@@ -490,6 +499,38 @@ export function updateEquipment(id: string, draft: EquipmentDraft): SaveEquipmen
 
   const name = draft.name.trim();
   if (!name) return { ok: false, error: 'Give the asset a name' };
+
+  const branchName = draft.branchName.trim() || existing.branchName;
+  if (branchName !== existing.branchName) {
+    const open = getJobs().find((j) => j.equipmentId === id && statusOf(j) !== 'completed');
+    if (open) {
+      return {
+        ok: false,
+        error: `It still has an open job at ${existing.branchName} (“${open.title}”). Finish or close that job first, then move it.`,
+      };
+    }
+    /*
+     * An untagged asset is told apart by branch and name alone, so a second
+     * untagged "Fryer" arriving in a kitchen that has one would be two records
+     * nobody can tell apart — the case `addEquipment` refuses for the same
+     * reason.
+     */
+    if (!tidy(draft.assetNo)) {
+      const clash = all.find(
+        (e) =>
+          e.id !== id &&
+          e.branchName === branchName &&
+          !tidy(e.assetNo) &&
+          e.name.trim().toLowerCase() === name.toLowerCase()
+      );
+      if (clash) {
+        return {
+          ok: false,
+          error: `${branchName} already has an asset called “${name}” — give this one an asset number to tell them apart`,
+        };
+      }
+    }
+  }
 
   const dateProblem = installDateProblem(trimmed(draft.installedOn));
   if (dateProblem) return { ok: false, error: dateProblem };
@@ -500,6 +541,7 @@ export function updateEquipment(id: string, draft: EquipmentDraft): SaveEquipmen
 
   const next: Equipment = {
     ...existing,
+    branchName,
     name,
     category: draft.category,
     /*
