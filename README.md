@@ -54,10 +54,10 @@ where it is tracked until it is fixed.
   report a problem on any day.
 - **Appliance register.** The group's real equipment list: 302 assets (air
   conditioners, chillers and electrical equipment), each with its own asset
-  number such as `RG-ACU-008`. The admin and the maintenance manager can
-  move an appliance to another branch from its Edit form. It keeps its
-  history, and jobs already finished stay under the old branch. A unit with
-  a job still open has to have that job finished or closed first.
+  number such as `RG-ACU-008`. An appliance can be moved to another branch
+  from its Edit form. It keeps its history, and jobs already finished stay
+  under the old branch. A unit with a job still open has to have that job
+  finished or closed first.
 - **Service schedule.** Regular services fall due by themselves. Air
   conditioning is every 45 days, refrigeration quarterly and electrical every
   six months.
@@ -69,7 +69,7 @@ where it is tracked until it is fixed.
 | Role | What they can do |
 | ---- | ---------------- |
 | **Main Admin** | Everything: every branch, every record, user accounts, the checklist and the maintenance board. |
-| **Branch Manager** | Runs their own branch's Monday round and reports repairs there. A manager with two branches switches between them from the header. |
+| **Branch Manager** | Runs their own branch's Monday round and reports repairs there. Adds, imports, edits, withdraws and restores their own branch's appliances, can give one its own service interval, and can move one between branches they run. Category settings and each category's service interval stay with the admin and maintenance manager, because they apply to every branch. A manager with two branches switches between them from the header. |
 | **Maintenance Manager** | Runs the maintenance board for every branch: starts, finishes and reschedules jobs, and reads the month-end report. |
 | **Inspector** | Sees and carries out only the surprise visits assigned to them, and resumes any they started and left for later. |
 

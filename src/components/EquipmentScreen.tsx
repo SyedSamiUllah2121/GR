@@ -105,11 +105,15 @@ import {
   recordGeneralMaintenance,
 } from '../services/generalMaintenance';
 import {
+  assetBranchesFor,
+  canEditEquipment,
   canManageEquipment,
   fixedBranchFor,
   soleMaintenanceBranch,
   visibleEquipment,
 } from '../services/permissions';
+import { switchableBranches } from '../services/session';
+import { User, branchesOf } from '../types';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { useBranches } from '../hooks/useBranches';
 import { activeBranches } from '../services/branchStore';
@@ -434,6 +438,8 @@ export const EquipmentScreen: React.FC = () => {
    */
   const mine = useMemo(() => visibleEquipment(user, all), [user, all]);
   const mayManage = canManageEquipment(user);
+  // Adding and correcting units; a branch manager holds this without the rest.
+  const mayAdd = canEditEquipment(user, null);
   // Named in the heading, so a register covering one branch never reads as the
   // estate. Null where it genuinely covers more than one.
   const scopedTo = useMemo(() => soleMaintenanceBranch(user), [user]);
@@ -656,7 +662,7 @@ export const EquipmentScreen: React.FC = () => {
       ownInterval={overrideOf(item, generalPlanIdFor(item.category))}
       categoryLabelText={categoryLabel(item.category, categories)}
       showCategory={showCategory}
-      mayManage={mayManage}
+      mayEdit={canEditEquipment(user, item)}
       onHistory={() => router.push(`/maintenance/jobs?equipment=${item.id}`)}
       onRecord={() => setRecording(item)}
       onEdit={() => setEditing(item)}
@@ -752,6 +758,35 @@ export const EquipmentScreen: React.FC = () => {
                   <Plus className="w-4 h-4" />
                   <span>{openGroup ? `Add to ${openGroup.label}` : 'Add category'}</span>
                 </button>
+              </>
+            ) : mayAdd ? (
+              /*
+                A branch manager: importing and adding at their own branches,
+                but not the categories. Category settings and a category's
+                cadence are one rule for all nine branches, so changing them
+                from one kitchen would change every other kitchen too.
+              */
+              <>
+                <button
+                  id="import-equipment-btn"
+                  type="button"
+                  onClick={() => setImporting(true)}
+                  className={BUTTON.secondary}
+                >
+                  <Upload className="w-4 h-4 text-[#6B6F76]" />
+                  <span>Import a list</span>
+                </button>
+                {openGroup && (
+                  <button
+                    id="add-category-btn"
+                    type="button"
+                    onClick={() => setEditing({ newIn: openGroup.id })}
+                    className={BUTTON.primary}
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{`Add to ${openGroup.label}`}</span>
+                  </button>
+                )}
               </>
             ) : undefined
           }
@@ -1128,6 +1163,18 @@ export const EquipmentScreen: React.FC = () => {
 // Adding and correcting one asset
 // ---------------------------------------------------------------------------
 
+/**
+ * The branches this person may put a unit at, or `null` for every one.
+ *
+ * A branch manager gets the branches they run — both, for a manager of two,
+ * read from the switcher's list because the signed-in user is narrowed to the
+ * branch being worked on and moving a unit between the two needs both.
+ */
+function allowedAssetBranches(user: User | null): string[] | null {
+  const own = switchableBranches().branches;
+  return assetBranchesFor(user, own.length ? own : branchesOf(user));
+}
+
 const EquipmentDialog: React.FC<{
   item: Equipment | null;
   /** The category this was opened from, for a new asset added inside one. */
@@ -1136,9 +1183,12 @@ const EquipmentDialog: React.FC<{
   onSaved: (name: string) => void;
 }> = ({ item, presetCategory, onClose, onSaved }) => {
   const user = useCurrentUser();
-  const branches = activeBranches(useBranches());
   const categories = useCategories();
   const ownBranch = fixedBranchFor(user);
+  const allowedBranches = allowedAssetBranches(user);
+  const branches = activeBranches(useBranches()).filter(
+    (b) => allowedBranches === null || allowedBranches.includes(b.name)
+  );
   const [plans, setPlans] = useState<MaintenancePlan[]>(() => getPlans());
 
   useEffect(() => {
@@ -1286,6 +1336,10 @@ const EquipmentDialog: React.FC<{
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (allowedBranches !== null && !allowedBranches.includes(draft.branchName)) {
+      setError(`You can only put appliances at ${allowedBranches.join(' or ')}`);
+      return;
+    }
     const result = item
       ? updateEquipment(item.id, draft)
       : addEquipment(draft, new Date().toISOString());
@@ -1482,6 +1536,9 @@ const EquipmentDialog: React.FC<{
           a checkbox and a number, because there are genuinely three answers
           and the middle one is not the absence of the other two: follow the
           estate, keep your own interval, or be on no cadence at all.
+
+          A branch manager sees this too: it is this one unit's interval, not
+          the category's, so it changes nothing at any other branch.
         */}
         <div className={`${insetClass} space-y-3`}>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -1865,6 +1922,7 @@ const ImportDialog: React.FC<{
   onDone: (message: string) => void;
 }> = ({ onClose, onDone }) => {
   const categories = useCategories();
+  const allowedBranches = allowedAssetBranches(useCurrentUser());
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [skipped, setSkipped] = useState<{ line: number; reason: string }[]>([]);
@@ -1936,7 +1994,7 @@ const ImportDialog: React.FC<{
     });
     setUnrecognised(unknownAt);
 
-    const result = importEquipment(rows, new Date().toISOString());
+    const result = importEquipment(rows, new Date().toISOString(), allowedBranches);
     if (!result.ok || !result.result) {
       setError(result.error ?? 'Could not import that list');
       return;
@@ -1987,6 +2045,11 @@ const ImportDialog: React.FC<{
             as they stand. The Status column is kept in the register&rsquo;s own wording and
             read at the same time: “Serviced 25 Aug 2026” sets the status and the date.
           </p>
+          {allowedBranches !== null && (
+            <p className="text-[11px] text-[#7A4E05] mt-1.5">
+              Lines for {allowedBranches.join(' and ')} only. Any other branch is skipped.
+            </p>
+          )}
           <p className="text-[11px] text-[#6B6F76] mt-1.5">
             An asset already on record is corrected rather than added twice, matched on
             its asset number, so a corrected register can be pasted again.
@@ -2740,7 +2803,8 @@ const AssetRow: React.FC<{
   categoryLabelText: string;
   /** Off inside a category's own list, where every row carries the same one. */
   showCategory: boolean;
-  mayManage: boolean;
+  /** Correct, withdraw or restore this unit — a branch manager may, at their own branch. */
+  mayEdit: boolean;
   onHistory: () => void;
   onRecord: () => void;
   onEdit: () => void;
@@ -2752,7 +2816,7 @@ const AssetRow: React.FC<{
   ownInterval,
   categoryLabelText,
   showCategory,
-  mayManage,
+  mayEdit,
   onHistory,
   onRecord,
   onEdit,
@@ -2917,7 +2981,7 @@ const AssetRow: React.FC<{
         >
           <History className="w-3.5 h-3.5" />
         </button>
-        {mayManage &&
+        {mayEdit &&
           (item.active ? (
             <>
               <button

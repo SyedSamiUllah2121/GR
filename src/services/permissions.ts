@@ -86,10 +86,25 @@ export type Capability =
    * branch manager: an interval is an estate-wide commitment about how often
    * the contractor comes, and a branch quietly setting its own chillers to
    * twelve months would be a decision about budget taken by someone who does
-   * not hold it. They see their own branch's register and what is due on it,
-   * which is what acting on it requires.
+   * not hold it. A branch manager now holds `equipment.editOwn` below, which
+   * covers their own units (their own intervals included) but not the
+   * category rules every branch shares.
    */
   | 'equipment.manage'
+  /**
+   * The register at their own branches: add, import, correct, withdraw and
+   * restore appliances there, give one of them its own service interval, and
+   * move one between branches they run. The people standing in the kitchen
+   * are the ones who know a unit has arrived, been relabelled or been carried
+   * next door. (Asked for by the business on 2026-10-12, over the budget
+   * reason above, for their own units only.)
+   *
+   * Narrower than `equipment.manage` in one way that is not a matter of
+   * scope: the categories and a category's cadence are one rule for all nine
+   * branches, so changing them from one kitchen would change every kitchen.
+   * Those stay with `equipment.manage`.
+   */
+  | 'equipment.editOwn'
   /** Create, edit and reorder the checklist itself. */
   | 'checklist.manage'
   /** Add, edit and withdraw user accounts. */
@@ -142,11 +157,13 @@ const GRANTS: Record<UserRole, Capability[]> = {
   // on any day, not only inspection day, since equipment does not wait for
   // the round. Not the checklist, not other branches, not accounts, not a
   // submitted result once it is signed, and not the running of the repair.
+  // Their own appliances, yes — everything but the estate-wide categories.
   'branch-manager': [
     'dashboard.viewOwnBranch',
     'inspections.browse',
     'monday.perform',
     'maintenance.report',
+    'equipment.editOwn',
   ],
 
   /*
@@ -424,6 +441,33 @@ export function visibleEquipment(user: User | null, all: Equipment[]): Equipment
 /** Whether they may add, correct, import or withdraw assets and edit plans. */
 export function canManageEquipment(user: User | null): boolean {
   return can(user, 'equipment.manage');
+}
+
+/**
+ * Whether they may add an asset (`item` null), or correct, withdraw or
+ * restore this one.
+ *
+ * Everything for whoever manages the register; for a branch manager, only a
+ * unit at a branch they run.
+ */
+export function canEditEquipment(user: User | null, item: Equipment | null): boolean {
+  if (canManageEquipment(user)) return true;
+  if (!can(user, 'equipment.editOwn') || !user) return false;
+  return item === null || branchesOf(user).includes(item.branchName);
+}
+
+/**
+ * The branches a person may put an asset at, or move one to. `null` means
+ * every open branch.
+ *
+ * Takes the account's full list of branches rather than reading it off the
+ * user: the signed-in user is narrowed to the branch chosen in the switcher,
+ * and a manager of two branches moving a unit between them needs both.
+ */
+export function assetBranchesFor(user: User | null, ownBranches: string[]): string[] | null {
+  if (canManageEquipment(user)) return null;
+  if (!can(user, 'equipment.editOwn')) return [];
+  return ownBranches;
 }
 
 /**

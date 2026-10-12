@@ -197,9 +197,15 @@ the board and marked on the job. The distinction is not cosmetic: the
 problems and services in separate columns, or a branch that looks after its
 equipment would read as a branch that keeps breaking it.
 
-A Branch Manager reads their own branch's register and sees what is due on it,
-but cannot change it: an interval is an estate-wide commitment about how often
-the contractor comes, and is the admin's and the Maintenance Manager's to set.
+A Branch Manager runs their own branch's register: they add, import, correct,
+withdraw and restore units there, give a unit its own interval, and move a
+unit between branches they run. Until 2026-10-12 they could only read it, on
+the grounds that an interval is a budget commitment; the business chose to
+give branches their own units. What they still cannot touch is the
+categories and a category's cadence, because those are one rule for all nine
+branches and changing them from one kitchen would change every kitchen. Their
+import skips any line for another branch, and any line whose asset number is
+on record elsewhere, so a pasted number cannot take a neighbour's unit.
 
 A Maintenance Manager has the maintenance module in full — the board, the
 overview, the month-end report, and starting, ending, re-timing, reopening,

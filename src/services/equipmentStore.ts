@@ -750,7 +750,15 @@ export interface ImportResult {
  */
 export function importEquipment(
   rows: EquipmentDraft[],
-  now: string
+  now: string,
+  /**
+   * The branches this import may write to, or `null` for every one. A branch
+   * manager's paste is held to their own branches both ways: a line naming
+   * another branch is skipped, and so is a line whose asset number belongs to
+   * a unit elsewhere — otherwise pasting a neighbour's number under your own
+   * branch would quietly take their unit.
+   */
+  allowedBranches: string[] | null = null
 ): { ok: boolean; result?: ImportResult; error?: string } {
   const all = getEquipment();
   const byId = new Map(all.map((e) => [e.id, e]));
@@ -811,6 +819,19 @@ export function importEquipment(
     seenThisImport.add(id);
 
     const existing = byId.get(id);
+    if (allowedBranches !== null) {
+      if (!allowedBranches.includes(row.branchName)) {
+        skipped.push({ line: index + 1, reason: `${row.branchName} is not one of your branches` });
+        return;
+      }
+      if (existing && !allowedBranches.includes(existing.branchName)) {
+        skipped.push({
+          line: index + 1,
+          reason: `${trimmed(row.assetNo) ?? name} is on record at ${existing.branchName}`,
+        });
+        return;
+      }
+    }
     const record: Equipment = {
       id,
       branchName: row.branchName,

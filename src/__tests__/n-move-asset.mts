@@ -82,4 +82,58 @@ ok('moving the second one in beside the first is refused', !clash.ok);
 note('refusal', clash.error);
 ok('the refusal says to give it an asset number', (clash.error ?? '').includes('asset number'));
 
+section('who may add, correct and move a unit');
+const { getUsers } = await import('../services/userStore.ts');
+const { canEditEquipment, canManageEquipment, assetBranchesFor } = await import('../services/permissions.ts');
+const { branchesOf } = await import('../types.ts');
+const users = getUsers();
+const admin = users.find((u) => u.role === 'admin')!;
+const maint = users.find((u) => u.role === 'job-manager')!;
+const inspector = users.find((u) => u.role === 'inspector')!;
+const twoBranch = users.find((u) => u.role === 'branch-manager' && branchesOf(u).length === 2)!;
+const oneBranch = users.find((u) => u.role === 'branch-manager' && branchesOf(u).length === 1)!;
+const theirs = getEquipment().find((e) => e.active && branchesOf(oneBranch).includes(e.branchName))!;
+const notTheirs = getEquipment().find((e) => e.active && !branchesOf(oneBranch).includes(e.branchName))!;
+
+ok('the admin may add and correct any unit', canEditEquipment(admin, null) && canEditEquipment(admin, notTheirs));
+ok('the maintenance manager may too', canEditEquipment(maint, null) && canEditEquipment(maint, notTheirs));
+ok('a branch manager may add a unit', canEditEquipment(oneBranch, null));
+ok('a branch manager may correct a unit at their branch', canEditEquipment(oneBranch, theirs));
+ok('but not one at a branch they do not run', !canEditEquipment(oneBranch, notTheirs));
+ok('a branch manager still does not set the estate-wide category rules', !canManageEquipment(oneBranch));
+ok('an inspector may not add or correct units', !canEditEquipment(inspector, null) && !canEditEquipment(inspector, theirs));
+
+check('the admin may put a unit at any branch', assetBranchesFor(admin, []), null);
+check(
+  'a manager of two branches may put one at either of them, and nowhere else',
+  assetBranchesFor(twoBranch, branchesOf(twoBranch)),
+  branchesOf(twoBranch)
+);
+check('an inspector may put one nowhere', assetBranchesFor(inspector, []), []);
+
+section("a branch manager's import stays at their own branches");
+const { importEquipment } = await import('../services/equipmentStore.ts');
+const own = branchesOf(oneBranch);
+const neighbour = getEquipment().find((e) => e.active && e.assetNo && !own.includes(e.branchName))!;
+const row = (branchName: string, assetNo: string | null, name: string) =>
+  ({ branchName, name, category: neighbour.category, assetNo, assetType: name }) as any;
+const imported = importEquipment(
+  [
+    row(own[0], null, 'Imported Fryer'),
+    row(neighbour.branchName, null, 'Not Mine'),
+    row(own[0], neighbour.assetNo!, 'Taken Over'),
+  ],
+  '2026-10-12T08:00:00.000Z',
+  own
+);
+ok('the import runs', imported.ok);
+check('the line for their own branch is added', imported.result?.added, 1);
+check('the other two are skipped', imported.result?.skipped.map((s) => s.line), [2, 3]);
+note('reasons', imported.result?.skipped.map((s) => s.reason));
+check(
+  "the neighbour's unit was not taken over",
+  getEquipment().find((e) => e.id === neighbour.id)!.branchName,
+  neighbour.branchName
+);
+
 process.exit(report());

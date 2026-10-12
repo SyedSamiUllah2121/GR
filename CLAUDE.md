@@ -306,6 +306,15 @@ data, docs and configuration, by anyone.
 
 ### 2026-10-12
 
+- ⚠ Branch managers can now run their own branch's appliance list: add,
+  import, edit, withdraw and restore units, give a unit its own service
+  interval, and move a unit between branches they run. Category settings
+  and each category's interval stay with the admin and maintenance
+  manager, because one change there affects all nine branches. A branch
+  manager's import skips lines for other branches and asset numbers on
+  record elsewhere. Nothing saved changes; it only widens what branch
+  manager accounts may do from now on.
+
 - ⚠ Appliances can now be moved to another branch from their Edit form
   (admin and maintenance manager only, as before for editing). The unit
   keeps its record, history and asset number; finished jobs stay filed
