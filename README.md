@@ -1,7 +1,7 @@
-# Inspection Log — Royal Gujrat
+# Inspection Log — Gujrat Group
 
 A web app for running food-safety inspections and equipment maintenance
-across a restaurant group of nine branches in Abu Dhabi.
+across Gujrat Group of Restaurants, nine branches in Abu Dhabi.
 
 Every branch is inspected against the same checklist each week. Anything that
 fails is scored, signed off and kept on record, and a broken piece of
@@ -21,7 +21,11 @@ where it is tracked until it is fixed.
   and which are late.
 - **Surprise visits.** The admin books an unannounced visit and an inspector
   carries it out. The app can choose the branch and the inspector itself,
-  spreading visits evenly across branches and inspectors.
+  spreading visits evenly across branches and inspectors. A visit the
+  inspector starts and leaves for later stays listed as **In progress**
+  until it is submitted: the inspector can **Resume** it with their answers
+  kept, and the admin can resume it or **Discard** it to free the branch.
+  A branch has only one unfinished surprise visit at a time.
 - **One standard checklist.** It has 76 checks in nine categories: staff
   hygiene, premises, handwashing, kitchen hygiene, dry storage, chilled
   storage, dishwashing, documentation and pest control. Each check is graded
@@ -30,6 +34,17 @@ where it is tracked until it is fixed.
 - **Score, review and sign.** A finished inspection gets a percentage score.
   The person who did it reviews and signs it, and it becomes a printable
   report.
+
+**Around the app**
+
+- **Header.** A red strip across the top shows the scope, this week's
+  inspections, rounds due and overdue, open repairs and the last
+  inspection. Below it are the logo, search, the **New inspection** button
+  (for those who may start one), notifications and the account menu.
+- **Sidebar.** Pages are grouped under Operations and Administration, with
+  counts beside Inspections and Maintenance.
+- **Page banners.** Each main page opens with a banner over a kitchen photo,
+  with that page's buttons on the right.
 
 **Maintenance**
 
@@ -51,9 +66,9 @@ where it is tracked until it is fixed.
 | Role | What they can do |
 | ---- | ---------------- |
 | **Main Admin** | Everything: every branch, every record, user accounts, the checklist and the maintenance board. |
-| **Branch Manager** | Runs their own branch's Monday round and reports repairs there. A manager with two branches switches between them from the top bar. |
+| **Branch Manager** | Runs their own branch's Monday round and reports repairs there. A manager with two branches switches between them from the header. |
 | **Maintenance Manager** | Runs the maintenance board for every branch: starts, finishes and reschedules jobs, and reads the month-end report. |
-| **Inspector** | Sees and carries out only the surprise visits assigned to them. |
+| **Inspector** | Sees and carries out only the surprise visits assigned to them, and resumes any they started and left for later. |
 
 ## Run it on your computer
 
@@ -141,9 +156,14 @@ src/
   app/            One folder per page (dashboard, inspections, maintenance,
                   checklist, users, login)
   components/     The screens (*Screen.tsx) and shared pieces
-    ui.tsx          Cards, panels, page headers and buttons
+    ui.tsx          Cards, panels, the page banner and buttons
+    Topbar.tsx      The status strip and header
+    Sidebar.tsx     The side menu
+    BrandLogo.tsx   The logo
     charts.tsx      Charts and their colours
     motion.tsx      Animation timing
+  hooks/          Live data for screens; useOutstanding feeds the header
+                  and sidebar counts
   services/       All the logic and storage, one store per kind of record
     permissions.ts  The only place that decides who may do what
     session.ts      Sign-in and the current user
@@ -151,8 +171,10 @@ src/
                   service plans and accounts
   types.ts        Shared types and the list of branches
   __tests__/      Test suites (run with npm test)
+public/brand/     Logo files and the banner photo, sized for the web
 docs/
   design-notes.md Why things work the way they do
+  brand/          Full-size originals of the logo and banner photo
 CLAUDE.md         Guardrails and conventions for anyone changing the code
 ```
 
@@ -243,6 +265,14 @@ Changing wording, colours, layout or icons does not count.
 6. **Read the reasoning first.** Many rules exist because the opposite was
    tried and went wrong. The comments in the code and
    [docs/design-notes.md](docs/design-notes.md) explain why.
+
+### Every change: keep this README and CLAUDE.md up to date
+
+Any change to the app, big or small, updates this README and
+[CLAUDE.md](CLAUDE.md) in the same commit wherever they no longer match:
+what the app does, who can do what, pages, sign-in, setup, the folder
+layout and the workflows above. CLAUDE.md also gets a line in its
+**Project history** for every change.
 
 ### Working with Claude Code
 

@@ -174,7 +174,7 @@ const DialogFrame: React.FC<{
     role="dialog"
     aria-modal="true"
     aria-labelledby={titleId}
-    className="fixed inset-0 z-50 bg-[#17181D]/45 backdrop-blur-[2px] flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+    className="fixed inset-0 z-50 bg-[#17181D]/45 backdrop-blur-[2px] flex items-start sm:items-center-safe justify-center p-4 overflow-y-auto"
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     transition={{ duration: t(0.2) }}

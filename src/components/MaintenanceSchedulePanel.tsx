@@ -509,7 +509,7 @@ const PlanDialog: React.FC<{
       role="dialog"
       aria-modal="true"
       aria-labelledby="maintenanceschedulepanel-dialog-1-title"
-      className="fixed inset-0 z-50 bg-[#17181D]/45 backdrop-blur-[2px] flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-[#17181D]/45 backdrop-blur-[2px] flex items-start sm:items-center-safe justify-center p-4 overflow-y-auto"
     >
       {/*
         The panel settles in; the fixed backdrop around it does not move, so

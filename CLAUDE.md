@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# Inspection Log (Royal Gujrat)
+# Inspection Log (Gujrat Group)
 
 Weekly food-safety and service inspection app for a nine-branch restaurant
 estate, with a maintenance board and appliance register. Next.js 16 (App
@@ -13,6 +13,22 @@ add it back).
 - `docs/design-notes.md` — why the asset register, schedule, job board and
   asset matching work as they do. Read it before changing those.
 - This file — what you need to work in the code.
+
+## Rule: keep README.md and CLAUDE.md up to date
+
+**Every change to the project updates `README.md` and this file in the same
+commit, wherever the change makes them out of date.** A change is not done
+while either file still describes the old behaviour.
+
+- **README.md** is for people who use or run the app. Update it when a
+  change affects what the app does, who can do what, the pages, sign-in,
+  setup, commands, the folder layout or the workflows table.
+- **CLAUDE.md** is for whoever changes the code. Update the sections a
+  change affects (where things are, UI conventions, element ids,
+  guardrails) and always add a line to **Project history** below.
+- If a change genuinely affects neither file beyond the history line, say
+  so in the final message rather than skipping the check silently.
+- Write both in plain words, as the rest of each file is written.
 
 ## Guardrails: changing system logic
 
@@ -140,7 +156,9 @@ suite with `npx tsx src/__tests__/m-branch-managers.mts`.
 Everything is in the browser's `localStorage` (session in `sessionStorage`).
 Each store under `src/services/` owns its keys, reads through
 `ensureEstate()` first, and dispatches its own change event. Hooks under
-`src/hooks/` subscribe to those events.
+`src/hooks/` subscribe to those events. `useOutstanding` is the one source
+for what is outstanding (the header's status strip, the bell and the
+sidebar's counts all read it), narrowed to what the account may see.
 
 Consequences to keep in mind:
 
@@ -168,7 +186,15 @@ Consequences to keep in mind:
 - `src/app/` — routes only. Each `page.tsx` renders one screen component.
 - `src/components/` — screens (`*Screen.tsx`) and shared pieces.
   - `ui.tsx` — `Card`, `Panel`, `PanelHeader`, `PageHeader`, `BUTTON` classes.
-    Build new screens from these.
+    Build new screens from these. `PageHeader` is the banner at the top of
+    every screen, over the kitchen photo (`BANNER_PHOTO`); its buttons sit
+    on a white tray so they read over the photo.
+  - `Topbar.tsx` — the red status strip and the white header (logo,
+    search, New inspection, bell, branch switcher, account). `Sidebar.tsx`
+    sits under it.
+  - `BrandLogo.tsx` — the logo in its variants (`full`, `lockup`,
+    `emblem`, and `bare` for white grounds). Files are in `public/brand/`;
+    full-size originals are in `docs/brand/`.
   - `charts.tsx` — `TrendChart`, `BarList`, `StackedMeter`, `ScoreDial` and
     `CHART_COLORS`.
   - `motion.tsx` — `Reveal`, `Stagger`, `StaggerItem`, `CountUp`, `TEMPO`,
@@ -203,7 +229,13 @@ Consequences to keep in mind:
 
 - **Colours.** Brand red `#C8202D` is for actions and alerts only. Status
   colours are green `#157F4B`, amber `#B4740A` and red `#C8202D`. Text is
-  `#17181D`, secondary text `#6B6F76`, muted text `#9CA1A9`.
+  `#17181D`, secondary text `#6B6F76`, muted text `#9CA1A9`. The sidebar and
+  the header's status strip share the red gradient `#B51C28` to `#8E141D`.
+  The sign-in page uses maroon `#8E1520` and a serif (`font-serif`, Source
+  Serif 4) from its mockup; the rest of the app does not.
+- **Header height.** From `md` up the status strip and header stand 6.5rem
+  tall. The sidebar and the inspections table's heading row pin under that
+  height, so change all three together.
 - **Surfaces.** Cards are white, `rounded-2xl`, with a `#E8E9EE` border and
   a soft shadow. Use `Card` or `CARD` from `ui.tsx`.
 - **Charts.** Use the colours in `CHART_COLORS`; they were checked for
@@ -233,6 +265,12 @@ Consequences to keep in mind:
 - **Element ids.** The end-to-end journeys depend on them
   (`#login-submit-btn`, `#topbar-branch`, `#checklist-review-btn`,
   `#user-form-save` and so on). Do not rename or remove ids.
+  `#brand-logo-btn` now lives on the header's logo, and the one
+  "New inspection" button is `#topbar-new-inspection-btn`.
+  `#records-new-inspection-btn` was removed on 2026-10-09 (nothing used
+  it). Surprise-visit rows carry `#assignment-start-<id>`,
+  `#assignment-resume-<id>`, `#assignment-discard-<id>` and
+  `#assignment-cancel-<id>`.
 
 ## Code style
 
@@ -266,8 +304,20 @@ data, docs and configuration, by anyone.
   pulled from the other remote), add entries for them first, in the same
   style.
 
+### 2026-10-12
+
+- Fixed tall dialogs (such as editing an appliance) cutting off their top
+  on a laptop screen, which hid the appliance's name and type so they could
+  not be edited. Dialogs now sit in the middle only when they fit, and
+  otherwise start at the top and scroll.
+- Added the project documentation as a Word file at the top of the repo,
+  uploaded through GitHub.
+
 ### 2026-10-09
 
+- Added the rule that every change also updates `README.md` and this file
+  where they go out of date, and brought both up to date with today's
+  changes (new name and logo, header, banners, resumable surprise visits).
 - ⚠ Fixed surprise visits vanishing after "continue later". A started visit
   now stays in the inspector's list with Resume (answers and start time
   kept), and in the Super Admin's list marked In progress with Discard, so a

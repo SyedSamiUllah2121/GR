@@ -1040,7 +1040,7 @@ const ReportProblemDialog: React.FC<{
       role="dialog"
       aria-modal="true"
       aria-labelledby="maintenancescreen-dialog-1-title"
-      className="fixed inset-0 z-50 bg-[#17181D]/45 backdrop-blur-[2px] flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-[#17181D]/45 backdrop-blur-[2px] flex items-start sm:items-center-safe justify-center p-4 overflow-y-auto"
     >
       {/*
         Wider than a dialog usually wants to be, because this one is a form and

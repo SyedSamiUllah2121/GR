@@ -1585,7 +1585,7 @@ const RemoveBranchDialog: React.FC<{
   return (
     <div
       ref={dialogRef}
-      className="fixed inset-0 z-50 bg-[#17181D]/50 backdrop-blur-[2px] flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-[#17181D]/50 backdrop-blur-[2px] flex items-start sm:items-center-safe justify-center p-4 overflow-y-auto"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
