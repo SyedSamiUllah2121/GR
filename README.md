@@ -202,7 +202,7 @@ Inspection-Log-Project-Documentation.docx
 | `/maintenance/schedule` | Service schedule |
 | `/maintenance/report` | Month-end report |
 | `/checklist` | Edit the inspection checklist |
-| `/users` | Manage accounts |
+| `/users` | Manage accounts, and see what each role can and cannot do |
 
 ## Tests
 

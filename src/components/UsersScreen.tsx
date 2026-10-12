@@ -6,6 +6,7 @@ import {
   AlertCircle,
   AlertTriangle,
   Check,
+  ChevronDown,
   KeyRound,
   Mail,
   Pencil,
@@ -20,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import {
+  USER_ROLE_ACCESS,
   USER_ROLE_BLURB,
   USER_ROLE_KEYS,
   USER_ROLE_LABEL,
@@ -241,6 +243,10 @@ export const UsersScreen: React.FC = () => {
         })}
       </Stagger>
 
+      <Reveal>
+        <RoleAccess />
+      </Reveal>
+
       <AnimatePresence initial={false}>
         {notice && (
           <motion.div
@@ -366,6 +372,84 @@ export const UsersScreen: React.FC = () => {
     </div>
   );
 };
+
+/**
+ * What each role can and cannot do, side by side, so the admin can see what
+ * an account will be able to do before handing one out.
+ *
+ * A `details` element, open to begin with: the first visit is when it is
+ * needed, and after that it can be folded away without anything to remember.
+ * The words come from USER_ROLE_ACCESS in types.ts; the rules themselves live
+ * in services/permissions.ts.
+ */
+const RoleAccess: React.FC = () => (
+  <details
+    open
+    id="users-role-access"
+    className="group bg-white border border-[#E8E9EE] rounded-2xl shadow-[0_1px_2px_rgba(16,24,40,0.04),0_2px_8px_-2px_rgba(16,24,40,0.06)] overflow-hidden"
+  >
+    <summary className="list-none [&::-webkit-details-marker]:hidden px-5 sm:px-6 py-4 flex items-center gap-3 cursor-pointer select-none">
+      <span className="w-9 h-9 rounded-xl bg-[#F4F5F7] text-[#17181D] flex items-center justify-center shrink-0">
+        <Shield className="w-[18px] h-[18px]" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-bold text-[#17181D]">What each role can do</span>
+        <span className="block text-xs text-[#6B6F76] mt-0.5">
+          What an account of each kind can see and do once it signs in
+        </span>
+      </span>
+      <ChevronDown className="w-4 h-4 text-[#6B6F76] shrink-0 transition-transform group-open:rotate-180" />
+    </summary>
+
+    <div className="border-t border-[#F0F1F4] grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 md:divide-x divide-[#F0F1F4]">
+      {ROLE_ORDER.map((role) => {
+        const Icon = ROLE_ICON[role];
+        const { can, cannot } = USER_ROLE_ACCESS[role];
+        return (
+          <div
+            key={role}
+            className="min-w-0 px-5 sm:px-6 py-5 border-b border-[#F0F1F4] xl:border-b-0"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg bg-[#F4F5F7] text-[#17181D] flex items-center justify-center shrink-0">
+                <Icon className="w-4 h-4" />
+              </span>
+              <h3 className="text-[14px] font-bold text-[#17181D]">{USER_ROLE_LABEL[role]}</h3>
+            </div>
+
+            <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.12em] text-[#157F4B]">
+              Can
+            </p>
+            <ul className="mt-2 space-y-2">
+              {can.map((line) => (
+                <li key={line} className="flex gap-2 text-[12px] leading-snug text-[#17181D]">
+                  <Check className="w-3.5 h-3.5 mt-px shrink-0 text-[#157F4B]" />
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
+
+            <p className="mt-4 text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B6F76]">
+              Cannot
+            </p>
+            {cannot.length === 0 ? (
+              <p className="mt-2 text-[12px] text-[#6B6F76]">Nothing is off-limits.</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {cannot.map((line) => (
+                  <li key={line} className="flex gap-2 text-[12px] leading-snug text-[#6B6F76]">
+                    <X className="w-3.5 h-3.5 mt-px shrink-0 text-[#9CA1A9]" />
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </details>
+);
 
 /** A square icon button, for the quiet actions at the end of a row. */
 const ROW_ACTION =

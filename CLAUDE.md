@@ -215,6 +215,11 @@ Consequences to keep in mind:
 
 - Four roles: `admin`, `branch-manager`, `job-manager` (shown as Maintenance
   Manager) and `inspector`.
+- The Users page shows what each role can and cannot do, from
+  `USER_ROLE_ACCESS` in `types.ts`. It is wording only; the rules are in
+  `permissions.ts`. **Any change to a role's permissions must update
+  `USER_ROLE_ACCESS` in the same commit**, or the admin is shown access
+  that is not real.
 - A user's sign-in name is stored in `email`. It can be an email address or a
   plain username. Matching ignores case and spaces; passwords must match
   exactly.
@@ -309,6 +314,11 @@ data, docs and configuration, by anyone.
   style.
 
 ### 2026-10-12
+
+- The Users page now has a "What each role can do" section: one card per
+  role listing what it can and cannot do, so the Main Admin can see an
+  account's access before creating it. Wording only; nothing about who can
+  do what changed.
 
 - Brought the Word project documentation up to version 1.1: new name and
   logo on the cover, a "Changes in version 1.1" section, and updated

@@ -459,6 +459,76 @@ export const USER_ROLE_BLURB: Record<UserRole, string> = {
   inspector: 'Surprise visits assigned to them, at any branch',
 };
 
+/**
+ * What each role can and cannot do, in plain words, for the admin reading the
+ * Users screen.
+ *
+ * Words only. What a person may actually do is decided in
+ * services/permissions.ts and nowhere else, so when a rule there changes, this
+ * has to be changed with it, or the admin is shown access somebody does not
+ * have (or misses access they do).
+ */
+export const USER_ROLE_ACCESS: Record<UserRole, { can: string[]; cannot: string[] }> = {
+  admin: {
+    can: [
+      'See every branch, inspection and the dashboard',
+      'Run Monday rounds and book surprise visits, choosing the branch and inspector or letting the system choose',
+      'Reopen and change a signed inspection',
+      'Edit the checklist',
+      'Add, edit, reset and withdraw accounts, and add or close branches',
+      'Run the whole maintenance board: start, finish, re-time, reopen and delete jobs',
+      'Manage appliances, categories and service intervals at every branch',
+      'Change system settings, such as automatic surprise visits',
+    ],
+    cannot: [],
+  },
+  'branch-manager': {
+    can: [
+      'See the dashboard and inspections for their own branches',
+      'Start, fill in, sign and submit their branch’s weekly Monday round, and print its report',
+      'Report a repair on any day and follow it on the board',
+      'Add, import, edit, withdraw and restore appliances at their branches, and give a unit its own service interval',
+      'Mark general maintenance as done on their appliances',
+      'Switch between branches and move appliances between them, if they run two',
+    ],
+    cannot: [
+      'See other branches',
+      'Change an inspection once it is signed',
+      'Start or close repair jobs',
+      'Change category settings or a category’s service interval, which apply to every branch',
+      'Edit the checklist, accounts or branches',
+    ],
+  },
+  'job-manager': {
+    can: [
+      'Run the maintenance board at every branch: start, finish, re-time, reopen and delete jobs',
+      'Close a job with a note, cost and photos, which updates the appliance list',
+      'Manage appliances, categories and service intervals at every branch',
+      'Read the maintenance overview and the month-end report',
+      'Open an inspection only where it raised a job',
+    ],
+    cannot: [
+      'See the dashboard or browse inspections',
+      'Carry out inspections',
+      'Edit the checklist, accounts or branches',
+    ],
+  },
+  inspector: {
+    can: [
+      'See and carry out only the surprise visits assigned to them, at any branch',
+      'Start a visit, leave it for later and resume it, then sign and submit it',
+      'Report a repair at a branch they have been sent to, and follow it',
+    ],
+    cannot: [
+      'Choose their own branch or visit',
+      'Delete a visit they were given',
+      'Run Monday rounds or see the dashboard',
+      'Start or close repair jobs',
+      'Edit the checklist, appliances or accounts',
+    ],
+  },
+};
+
 export interface User {
   id: string;
   name: string;
