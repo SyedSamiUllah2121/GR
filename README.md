@@ -68,7 +68,7 @@ where it is tracked until it is fixed.
 
 | Role | What they can do |
 | ---- | ---------------- |
-| **Main Admin** | Everything: every branch, every record, user accounts, the checklist and the maintenance board. |
+| **Main Admin** | Everything: every branch, every record, user accounts, the checklist and the maintenance board. Can create further Main Admins; the last one can never be withdrawn, and nobody can withdraw or demote their own account. |
 | **Branch Manager** | Runs their own branch's Monday round and reports repairs there. Adds, imports, edits, withdraws and restores their own branch's appliances, can give one its own service interval, and can move one between branches they run. Category settings and each category's service interval stay with the admin and maintenance manager, because they apply to every branch. A manager with two branches switches between them from the header. |
 | **Maintenance Manager** | Runs the maintenance board for every branch: starts, finishes and reschedules jobs, and reads the month-end report. |
 | **Inspector** | Sees and carries out only the surprise visits assigned to them, and resumes any they started and left for later. |
@@ -206,11 +206,12 @@ Inspection-Log-Project-Documentation.docx
 
 ## Tests
 
-`npm test` runs 14 suites in Node with a stand-in for the browser's storage,
+`npm test` runs 15 suites in Node with a stand-in for the browser's storage,
 so no browser is needed. They cover the asset register, the service schedule,
 the job board, permissions, surprise-visit assignment, submitting an
 inspection, full storage, the branch-manager accounts, and moving and
-editing appliances (including what a branch manager may do). Each suite runs in
+editing appliances (including what a branch manager may do), and the rules
+for having more than one Main Admin. Each suite runs in
 its own process so that one cannot affect another.
 
 ## Deployment

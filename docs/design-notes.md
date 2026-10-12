@@ -221,8 +221,13 @@ closing the job is refused with a message rather than quietly losing the record.
 The role is stored under its older key, `job-manager`. Only the name changed —
 renaming the key would have stranded accounts already saved in a browser.
 
-The admin creates Branch Manager, Maintenance Manager and Inspector accounts
-from `/users`. A second Main Admin is not something that screen mints.
+The admin creates Main Admin, Branch Manager, Maintenance Manager and
+Inspector accounts from `/users`. Until 2026-10-12 a second Main Admin was not
+something that screen minted, because an admin can withdraw the account that
+made it; the business asked for more than one. Two guards replace the
+refusal: the last active Main Admin can never be withdrawn or demoted, and
+nobody can withdraw or demote their own account, so an admin cannot lock
+themselves out by mistake.
 
 ## Starting from nothing
 

@@ -475,12 +475,14 @@ export const USER_ROLE_ACCESS: Record<UserRole, { can: string[]; cannot: string[
       'Run Monday rounds and book surprise visits, choosing the branch and inspector or letting the system choose',
       'Reopen and change a signed inspection',
       'Edit the checklist',
-      'Add, edit, reset and withdraw accounts, and add or close branches',
+      'Add, edit, reset and withdraw accounts, including other Main Admins, and add or close branches',
       'Run the whole maintenance board: start, finish, re-time, reopen and delete jobs',
       'Manage appliances, categories and service intervals at every branch',
       'Change system settings, such as automatic surprise visits',
     ],
-    cannot: [],
+    cannot: [
+      'Withdraw or demote their own account, or the last Main Admin',
+    ],
   },
   'branch-manager': {
     can: [

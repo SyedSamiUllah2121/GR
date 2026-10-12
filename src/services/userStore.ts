@@ -459,14 +459,16 @@ function validate(draft: UserDraft, users: User[], ignoreId?: string): string | 
 }
 
 /**
- * The roles the admin creates accounts in.
+ * The roles the admin creates accounts in: all four.
  *
- * Every role except their own: a second main admin is not something this
- * screen mints, because an account that can then withdraw the account that
- * made it is not a thing to hand out from a form. The seeded admin account
- * can still be edited, which is how its own name and password are changed.
+ * Main Admin was left out until 2026-10-12, on the grounds that a second
+ * admin can withdraw the one that made it. The business asked for more than
+ * one admin, so it is offered, with two guards in place of the refusal: the
+ * last active Main Admin can never be withdrawn or demoted (`removeUser`,
+ * `updateUser`), and nobody can withdraw or demote their own account, so an
+ * admin cannot lock themselves out by mistake.
  */
-export const MANAGED_ROLES: UserRole[] = ['branch-manager', 'job-manager', 'inspector'];
+export const MANAGED_ROLES: UserRole[] = ['admin', 'branch-manager', 'job-manager', 'inspector'];
 
 /** "a Branch Manager, a Maintenance Manager or an Inspector" — for a refusal
  *  to name. Built from USER_ROLE_LABEL, so renaming a role renames it here. */
@@ -516,11 +518,25 @@ export function addUser(input: UserDraft): SaveUserResult {
   return { ok: true, user };
 }
 
-export function updateUser(id: string, input: UserDraft): SaveUserResult {
+/**
+ * Corrects an account. `actingUserId` is whoever is signed in: an admin may
+ * not take the Main Admin role off their own account, and nobody may take it
+ * off the last active Main Admin.
+ */
+export function updateUser(id: string, input: UserDraft, actingUserId?: string): SaveUserResult {
   const all = getUsers();
   const draft = tidied(input);
   const existing = all.find((u) => u.id === id);
   if (!existing) return { ok: false, error: 'That account no longer exists' };
+
+  if (existing.role === 'admin' && draft.role !== 'admin') {
+    if (id === actingUserId) {
+      return { ok: false, error: 'You cannot take the Main Admin role off your own account' };
+    }
+    if (activeUsers(all).filter((u) => u.role === 'admin').length <= 1) {
+      return { ok: false, error: 'Keep at least one Main Admin — nobody else can manage accounts' };
+    }
+  }
 
   const problem = validate(draft, all, id);
   if (problem) return { ok: false, error: problem };
@@ -564,12 +580,18 @@ export interface RemoveUserResult {
  * Deleted outright when it has never touched an inspection; deactivated
  * otherwise, so the records it submitted still name a real person. Refuses
  * to remove the last admin — an operator with no admin cannot manage anything
- * ever again, including creating a replacement.
+ * ever again, including creating a replacement — and refuses an account
+ * withdrawing itself (`actingUserId` is whoever is signed in), so an admin
+ * cannot lock themselves out by mistake.
  */
-export function removeUser(id: string): RemoveUserResult {
+export function removeUser(id: string, actingUserId?: string): RemoveUserResult {
   const all = getUsers();
   const user = all.find((u) => u.id === id);
   if (!user) return { ok: false, error: 'That account no longer exists' };
+
+  if (id === actingUserId) {
+    return { ok: false, error: 'You cannot withdraw your own account — another Main Admin can' };
+  }
 
   if (user.role === 'admin' && activeUsers(all).filter((u) => u.role === 'admin').length <= 1) {
     return { ok: false, error: 'Keep at least one Main Admin — nobody else can manage accounts' };

@@ -315,6 +315,12 @@ data, docs and configuration, by anyone.
 
 ### 2026-10-12
 
+- ⚠ The Main Admin can now create more Main Admin accounts from the Users
+  page (it warns that a Main Admin has full control). Two guards: the last
+  active Main Admin can never be withdrawn or demoted, and nobody can
+  withdraw or demote their own account. Existing accounts are unchanged;
+  remember an account only exists in the browser it was made in.
+
 - Moved the "What each role can do" section to the foot of the Users page,
   below the account lists, so the accounts come first.
 - The Users page now has a "What each role can do" section: one card per

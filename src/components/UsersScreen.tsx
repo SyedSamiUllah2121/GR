@@ -136,7 +136,7 @@ export const UsersScreen: React.FC = () => {
   const save = () => {
     if (!editing) return;
     const result = editing.user
-      ? updateUser(editing.user.id, editing.draft)
+      ? updateUser(editing.user.id, editing.draft, signedInAs?.id)
       : addUser(editing.draft);
 
     if (!result.ok) {
@@ -160,7 +160,7 @@ export const UsersScreen: React.FC = () => {
   const confirmRemoval = () => {
     if (!pendingRemoval) return;
     const { user } = pendingRemoval;
-    const result = removeUser(user.id);
+    const result = removeUser(user.id, signedInAs?.id);
     setPendingRemoval(null);
 
     if (!result.ok) {
@@ -277,6 +277,7 @@ export const UsersScreen: React.FC = () => {
           key={editing.user?.id ?? 'new'}
           draft={editing.draft}
           editingExisting={editing.user}
+          isSelf={!!editing.user && editing.user.id === signedInAs?.id}
           branches={branches.map((b) => b.name)}
           error={formError}
           onChange={(draft) => setEditing({ ...editing, draft })}
@@ -310,11 +311,7 @@ export const UsersScreen: React.FC = () => {
                     </h3>
                     <p className="text-xs text-[#6B6F76] mt-0.5">{USER_ROLE_BLURB[role]}</p>
                   </div>
-                  {/*
-                    Only the two roles the admin creates get an Add button. A
-                    second main admin is not something this screen mints — the
-                    one that exists is edited, not replaced.
-                  */}
+                  {/* Every role the admin creates accounts in gets an Add button */}
                   {MANAGED_ROLES.includes(role) && (
                     <button
                       type="button"
@@ -538,7 +535,8 @@ const UserRow: React.FC<{
         <Pencil className="w-3.5 h-3.5" />
       </button>
 
-      {user.active ? (
+      {/* Never on your own row: another admin withdraws you, you do not */}
+      {user.active && isSelf ? null : user.active ? (
         <button
           type="button"
           onClick={onRemove}
@@ -583,12 +581,14 @@ const IconField: React.FC<{
 const UserForm: React.FC<{
   draft: UserDraft;
   editingExisting: User | null;
+  /** The signed-in admin's own account, whose role is not theirs to change. */
+  isSelf: boolean;
   branches: string[];
   error: string | null;
   onChange: (draft: UserDraft) => void;
   onSave: () => void;
   onCancel: () => void;
-}> = ({ draft, editingExisting, branches, error, onChange, onSave, onCancel }) => (
+}> = ({ draft, editingExisting, isSelf, branches, error, onChange, onSave, onCancel }) => (
   <Reveal>
     <form
       id="user-form"
@@ -627,11 +627,11 @@ const UserForm: React.FC<{
           <div>
             <span className={LABEL}>Role</span>
 
-            {editingExisting?.role === 'admin' ? (
+            {isSelf && editingExisting?.role === 'admin' ? (
               /*
-               * The main admin's own account. Its role is not up for changing
-               * here — demoting the only admin would leave nobody able to
-               * manage anything, this screen included.
+               * The signed-in admin's own account. Its role is not up for
+               * changing here — an admin demoting themselves would lose this
+               * screen the moment they saved. Another admin can change it.
                */
               <>
                 <p className="inline-flex items-center gap-2 h-10 px-3.5 rounded-xl bg-[#F4F5F7] text-[12px] font-bold text-[#17181D]">
@@ -647,7 +647,7 @@ const UserForm: React.FC<{
                * role can reach — the consequence of the choice is read at the
                * moment of making it.
                */
-              <div className="grid gap-2.5 sm:grid-cols-3">
+              <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
                 {MANAGED_ROLES.map((role) => {
                   const Icon = ROLE_ICON[role];
                   const selected = draft.role === role;
@@ -698,6 +698,19 @@ const UserForm: React.FC<{
                   );
                 })}
               </div>
+            )}
+            {/*
+              Said at the moment of choosing: a Main Admin can do everything,
+              including to the account that made them.
+            */}
+            {draft.role === 'admin' && !(isSelf && editingExisting?.role === 'admin') && (
+              <p className="mt-2.5 flex items-start gap-2 text-[11px] leading-snug text-[#7A4E05] bg-[#FFF8EB] border border-[#F1D9A8] rounded-lg px-3 py-2">
+                <AlertTriangle className="w-3.5 h-3.5 mt-px shrink-0" />
+                <span>
+                  A Main Admin has full control: every branch, the checklist, settings and all
+                  accounts, including yours. Only give this to someone you trust with that.
+                </span>
+              </p>
             )}
           </div>
 
