@@ -1183,6 +1183,16 @@ const EquipmentDialog: React.FC<{
     () => !item || (item.assetType ?? '') === item.name
   );
 
+  /**
+   * Whether the separate name field is on screen.
+   *
+   * Almost every asset on the register is called exactly what it is, and two
+   * boxes showing "Split AC" twice read as a mistake. So the name field only
+   * appears for an asset that already has a name of its own, or when somebody
+   * asks for one; otherwise the type is the name and there is one box.
+   */
+  const [showName, setShowName] = useState(() => !nameFollowsType);
+
   const set = <K extends keyof EquipmentDraft>(key: K, value: EquipmentDraft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
@@ -1303,9 +1313,10 @@ const EquipmentDialog: React.FC<{
           Type first, then name. The type is the field with the answers in
           it, it fills the name in on the way past, and it is what somebody
           adding a fryer actually has in mind — asking for a name first makes
-          them invent one before they have said what the thing is.
+          them invent one before they have said what the thing is. The name
+          box itself stays hidden until it would say something different.
         */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 gap-4 ${showName ? 'sm:grid-cols-2' : ''}`}>
           <div>
             <label htmlFor="eq-type" className={labelClass}>
               What it is
@@ -1318,23 +1329,46 @@ const EquipmentDialog: React.FC<{
               placeholder="e.g. Split AC, Kulfi Freezer"
               className={inputClass}
             />
+            {!showName && (
+              <button
+                type="button"
+                onClick={() => setShowName(true)}
+                className="mt-1.5 text-[11px] font-semibold text-[#6B6F76] hover:text-[#17181D] underline underline-offset-2 cursor-pointer"
+              >
+                Staff call it something else? Give it its own name
+              </button>
+            )}
           </div>
-          <div>
-            <label htmlFor="eq-name" className={labelClass}>
-              Called on the floor
-            </label>
-            <input
-              id="eq-name"
-              type="text"
-              value={draft.name}
-              onChange={(e) => {
-                setNameFollowsType(false);
-                set('name', e.target.value);
-              }}
-              placeholder={draft.assetType || 'Same as what it is'}
-              className={inputClass}
-            />
-          </div>
+          {showName && (
+            <div>
+              <label htmlFor="eq-name" className={labelClass}>
+                Called on the floor
+              </label>
+              <input
+                id="eq-name"
+                type="text"
+                value={draft.name}
+                autoFocus={nameFollowsType}
+                onChange={(e) => {
+                  setNameFollowsType(false);
+                  set('name', e.target.value);
+                }}
+                placeholder={draft.assetType || 'Same as what it is'}
+                className={inputClass}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setNameFollowsType(true);
+                  set('name', draft.assetType ?? '');
+                  setShowName(false);
+                }}
+                className="mt-1.5 text-[11px] font-semibold text-[#6B6F76] hover:text-[#17181D] underline underline-offset-2 cursor-pointer"
+              >
+                Use what it is as the name
+              </button>
+            </div>
+          )}
         </div>
 
         {/*

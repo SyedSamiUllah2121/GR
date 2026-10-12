@@ -306,6 +306,14 @@ data, docs and configuration, by anyone.
 
 ### 2026-10-12
 
+- The appliance form no longer shows the same name twice. "What it is"
+  is the unit's name unless someone chooses "Give it its own name"; the
+  separate name box only shows for units already named differently.
+  Nothing saved changes.
+- Removed the dropdown arrow from the appliance form's type, make, capacity
+  and location boxes. They are free-text boxes; suggestions still appear
+  as you type.
+
 - Fixed tall dialogs (such as editing an appliance) cutting off their top
   on a laptop screen, which hid the appliance's name and type so they could
   not be edited. Dialogs now sit in the middle only when they fit, and
